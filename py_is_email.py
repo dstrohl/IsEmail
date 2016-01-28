@@ -1,6 +1,6 @@
 import re
 from collections import deque
-from .meta_data import *
+from meta_data import *
 
 '''
 class BrokenRange(object):
@@ -209,7 +209,8 @@ class AddressClass(object):
 
 class AddressItem(object):
 
-    def __init__(self):
+    def __init__(self, threashold=None):
+        self._threashold = threashold or 0
         self._elements = {}
         self._responses = []
         self._max_code = 0
@@ -224,6 +225,41 @@ class AddressItem(object):
 
     def __int__(self):
         return self._max_code
+
+    def responses(self, max_code=None, min_code=None, response_type='string_list'):
+        """
+
+        :param max_code:
+        :type max_code:
+        :param min_code:
+        :type min_code:
+        :param response_type: 'string_list'|'code_list'|'detailed_string'|'key_list'
+        :type response_type: str
+        :return:
+        :rtype:
+        """
+        min_code = min_code or self._threashold
+        max_code = max_code or ISEMAIL_MAX_THREASHOLD
+
+        if response_type == 'code_list':
+            return self._responses
+        elif response_type == 'string_list':
+            tmp_ret = []
+            for i, pos in self._responses:
+                tmp_ret.append(META_LOOKUP.diags[i]['description'])
+            return tmp_ret
+        elif response_type == 'key_list':
+            tmp_ret = []
+            for i, pos in self._responses:
+                tmp_ret.append(META_LOOKUP.diags[i]['key'])
+            return tmp_ret
+
+
+    def __getitem__(self, item):
+        try:
+            return self._elements[item]
+        except KeyError:
+            return 'Unknown / Unfound'
 
 class NoElementError(Exception):
     def __init__(self, is_email_obj, popped_text=None, fail_flag=None, position=None):
@@ -274,7 +310,7 @@ def _opt(method, **kwargs):
     method = _make_meth(method)
     return dict(
         meth='_get_opt',
-        args=method,
+        args=(method,),
         kwargs=kwargs)
 
 def _c(*args):
@@ -305,7 +341,7 @@ def _c(*args):
     opp = _make_meth(opp)
 
     return dict(
-        method='_get_count',
+        meth='_get_count',
         args=[],
         kwargs=dict(
             min_count=min_count,
@@ -384,13 +420,13 @@ class IsEmail(object):
             if fail_flag is not None:
                 self._add_response(response_code=fail_flag)
             raise
-        
+
         if pass_flag is not None:
             self._add_response(response_code=pass_flag)
-        
+
         if element_code is not None:
             self._add_element(element_code=element_code, element=tmp_ret)
-        
+
         self._position += len(tmp_ret)
         return tmp_ret
     '''
@@ -401,9 +437,14 @@ class IsEmail(object):
         return self._data
 
     def _add_response(self, response_code, position=None):
+        if position is None:
+            position == self._raw_length - len(self._rem_email)
+        if isinstance(response_code, str):
+            response_code = META_LOOKUP.diags[response_code]['value']
         self._data.add_response(response_code, position)
 
     def _add_element(self, element_code, element):
+        element = ''.join(element)
         self._data.add_element(element_code, element)
 
     def get_addr_spec(self, addr_in):
@@ -415,9 +456,12 @@ class IsEmail(object):
         self._rem_email = deque(str(addr_in))
 
         if '@' not in self._data.raw_email:
-            self._add_response(ISEMAIL_ERR_NODOMAIN, 0)
+            self._add_response('ERR_NODOMAIN', 0)
         else:
-            self._get(_and('local_part', '1*@', 'domain_part'))
+            try:
+                self._get(_and('local_part', '1*@', 'domain_part'))
+            except NoElementError:
+                pass
 
     def _get_local_part(self):
         """
@@ -426,8 +470,7 @@ class IsEmail(object):
         try:
             self._get(_or('dot_atom', 'quoted_string', 'obs_local_part'))
         except NoElementError as err:
-            raise NoElementError(self, fail_flag=ISEMAIL_ERR_NOLOCALPART)
-
+            self._add_response('ERR_NOLOCALPART')
         # self._add_element(ISEMAIL_COMPONENT_LOCALPART, tmp_ret)
         # return tmp_ret
 
@@ -435,8 +478,12 @@ class IsEmail(object):
         """
             dot-atom / address-literal / obs-domain
         """
-        tmp_ret = self._get(_or('dot_atom', 'address_literal', 'domain_literal', 'obs_domain'))
-        self._add_element(ISEMAIL_COMPONENT_DOMAIN, tmp_ret)
+        try:
+            tmp_ret = self._get(_or('dot_atom', 'address_literal', 'domain_literal', 'obs_domain'))
+            self._add_element(ISEMAIL_COMPONENT_DOMAIN, tmp_ret)
+        except NoElementError:
+            self._add_response('ERR_NODOMAIN')
+
 
     def _get_dot_atom(self):
         """
@@ -729,7 +776,7 @@ class IsEmail(object):
     def _get_set(self, char_set, count=0):
         tmp_ret = []
         for i in range(len(self._rem_email)):
-            if self._rem_email[i] in char_set:
+            if self._rem_email[0] in char_set:
                 tmp_ret.append(self._rem_email.popleft())
                 if count-1 == i:
                     break
@@ -742,12 +789,16 @@ class IsEmail(object):
         return tmp_ret
 
     def _get(self, opp):
+        opp = _make_meth(opp)
+        '''
         if isinstance(opp, str):
             tmp_meth = getattr(self, opp)
             return tmp_meth()
+
         else:
-            tmp_meth = getattr(self, opp['meth'])
-            return tmp_meth(*opp['args'], **opp['kwargs'])
+        '''
+        tmp_meth = getattr(self, opp['meth'])
+        return tmp_meth(*opp['args'], **opp['kwargs'])
 
     def _get_and(self, *args, count=1):
         tmp_ret_list = []
@@ -758,7 +809,8 @@ class IsEmail(object):
                 except NoElementError:
                     raise NoElementError(self, popped_text=tmp_ret_list)
                 else:
-                    tmp_ret_list.append(tmp_ret)
+                    if tmp_ret is not None:
+                        tmp_ret_list.extend(tmp_ret)
 
             if count-1 == i:
                 break

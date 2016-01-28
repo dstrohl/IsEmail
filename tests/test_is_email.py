@@ -1,10 +1,11 @@
 import unittest
 # from .old_test_data import TESTS
 # from CompIntel.helpers.IsEmail.meta import META_DICT
-from CompIntel.helpers.IsEmail.py_is_email import is_email
+from py_is_email import is_email
+from meta_data import *
 import xml.etree.ElementTree as ET
 
-from CompIntel.helpers.IsEmail.meta import IsEmailMetaData
+from meta import IsEmailMetaData
 
 IS_EMAIL_META = IsEmailMetaData()
 
@@ -59,9 +60,11 @@ class TestIsEmail(unittest.TestCase):
                 # print(tmp_res)
                 tmp_res_text = TEST_META[int(tmp_res)]
 
+
                 if tmp_res != tmp_res_text:
 
-                    msg = ['\n%s  =>  local: %s  /  domain:  %s\n' % (test_address, tmp_parse[0], tmp_parse[1])]
+                    msg = ['\n%s  =>  local: %s  /  domain:  %s\n' % (test_address, tmp_res[ISEMAIL_COMPONENT_LOCALPART], tmp_res[ISEMAIL_COMPONENT_DOMAIN])]
+                    msg.append('Diags returned: %s' % tmp_res.responses(response_type='key_list'))
                     msg.append('Should be : %s\nReturned  : %s\n' % (test_diag, tmp_res_text))
                     msg.append('----------------------------------------------------')
                     msg.append(IS_EMAIL_META[test_diag].short_string())
