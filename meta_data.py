@@ -141,79 +141,72 @@ ISEMAIL_ERR_CR_NO_LF = 150
 '''
 
 # function control
-ISEMAIL_THRESHOLD = 16
+ISEMAIL_MIN_THRESHOLD = 16
 ISEMAIL_MAX_THREASHOLD = 255
 
-# Email components
-ISEMAIL_COMPONENT_LOCALPART = 0
-ISEMAIL_COMPONENT_DOMAIN = 1
-
-# Email context
-ISEMAIL_COMPONENT_LITERAL = 2
-ISEMAIL_CONTEXT_COMMENT = 3
-ISEMAIL_CONTEXT_FWS = 4
-ISEMAIL_CONTEXT_QUOTEDSTRING = 5
-ISEMAIL_CONTEXT_QUOTEDPAIR = 6
-
 # Miscellaneous string constants
-ISEMAIL_STRING_AT = '@'
-ISEMAIL_STRING_BACKSLASH = '\\'
-ISEMAIL_STRING_DOT = '.'
-ISEMAIL_STRING_DQUOTE = '"'
-ISEMAIL_STRING_OPENPARENTHESIS = '('
-ISEMAIL_STRING_CLOSEPARENTHESIS = ')'
-ISEMAIL_STRING_OPENSQBRACKET = '['
-ISEMAIL_STRING_CLOSESQBRACKET = ']'
-ISEMAIL_STRING_HYPHEN = '-'
-ISEMAIL_STRING_COLON = ':'
-ISEMAIL_STRING_DOUBLECOLON = '::'
-ISEMAIL_STRING_SP = ' '
-ISEMAIL_STRING_HTAB = "\t"
-ISEMAIL_STRING_CR = "\r"
-ISEMAIL_STRING_LF = "\n"
-ISEMAIL_STRING_IPV6TAG = 'ipv6:'
 
-# US-ASCII visible characters not valid for atext (http:#tools.ietf.org/html/rfc5322#section-3.2.3)
-ISEMAIL_SET_SPECIALS = '()<>[]:;@\\,."'
-ISEMAIL_SET_WSP = ' \t'
-ISEMAIL_SET_CRLF = '\r\n'
-ISEMAIL_SET_OBS_NO_WS_CTL = make_char_str((1, 8), 11, 12, (14, 31), 127)
-ISEMAIL_SET_CTEXT = make_char_str((33, 39), (42, 91), 93, 126, ISEMAIL_SET_OBS_NO_WS_CTL)
-ISEMAIL_SET_OBS_CTEXT = ISEMAIL_SET_OBS_NO_WS_CTL
-ISEMAIL_SET_OBS_QTEXT = ISEMAIL_SET_OBS_NO_WS_CTL
-ISEMAIL_SET_QTEXT = make_char_str(33, (35, 91), (93, 126), ISEMAIL_SET_OBS_QTEXT)
-ISEMAIL_SET_VTEXT = make_char_str((33, 126))
-ISEMAIL_SET_OBS_DTEXT = ISEMAIL_SET_OBS_NO_WS_CTL
-ISEMAIL_SET_DCONTENT = make_char_str((33, 90), (94, 126))
-ISEMAIL_SET_DTEXT = make_char_str(ISEMAIL_SET_DCONTENT, ISEMAIL_SET_OBS_DTEXT)
-ISEMAIL_SET_OBS_QP = make_char_str(0, ISEMAIL_SET_OBS_NO_WS_CTL, '\r', '\n' )
-ISEMAIL_SET_LTR_STR = make_char_str((68, 90), (48, 57), (97, 122))
-ISEMAIL_SET_ATEXT = make_char_str(ISEMAIL_SET_LTR_STR, "!#$%&'*+-=?^_`{|}~")
-ISEMAIL_SET_DIGIT = '1234567890'
-ISEMAIL_SET_HEXDIG = '1234567890abcdefABCDEF'
-ISEMAIL_SET_IPV4_12 = '12'
-ISEMAIL_SET_IPV4_05 = '012345'
-ISEMAIL_SET_IPV4_04 = '01234'
-ISEMAIL_SET_IPV4_19 = '123456789'
-ISEMAIL_SET_COUNT = '1234567890*'
+obs_no_ws_ctl = make_char_str((1, 8), 11, 12, (14, 31), 127)
 
-
-# State Flags
-ISEMAIL_ELEMENT_BEG_ALL = 0
-ISEMAIL_ELEMENT_BEG_ELEMENT = 1
-ISEMAIL_ELEMENT_IN_ELEMENT = 2
+ISEMAIL_CONSTANTS = dict(
+    AT='@',
+    BACKSLASH='\\',
+    DOT='.',
+    DQUOTE='"',
+    OPENPARENTHESIS='(',
+    CLOSEPARENTHESIS=')',
+    OPENSQBRACKET='[',
+    CLOSESQBRACKET=']',
+    HYPHEN='-',
+    COLON=':',
+    DOUBLECOLON='::',
+    SP=' ',
+    HTAB="\t",
+    CR="\r",
+    LF="\n",
+    IPV6TAG='ipv6:',
+    
+    # US-ASCII visible characters not valid for atext (http:#tools.ietf.org/html/rfc5322#section-3.2.3)
+    
+    SPECIALS='()<>[]:;@\\,."',
+    WSP=' \t',
+    CRLF='\r\n',
+    OBS_NO_WS_CTL=make_char_str((1, 8), 11, 12, (14, 31), 127),
+    CTEXT=make_char_str((33, 39), (42, 91), 93, 126, obs_no_ws_ctl),
+    OBS_CTEXT=obs_no_ws_ctl,
+    OBS_QTEXT=obs_no_ws_ctl,
+    QTEXT=make_char_str(33, (35, 91), (93, 126), obs_no_ws_ctl),
+    VTEXT=make_char_str((33, 126)),
+    OBS_DTEXT=obs_no_ws_ctl,
+    DCONTENT=make_char_str((33, 90), (94, 126)),
+    DTEXT=make_char_str((33, 90), (94, 126), obs_no_ws_ctl),
+    OBS_QP=make_char_str(0, obs_no_ws_ctl, '\r', '\n'),
+    LTR_STR=make_char_str((68, 90), (48, 57), (97, 122)),
+    ATEXT=make_char_str((68, 90), (48, 57), (97, 122), "!#$%&'*+-=?^_`{|}~"),
+    DIGIT='1234567890',
+    HEXDIG='1234567890abcdefABCDEF',
+    IPV4_12='12',
+    IPV4_05='012345',
+    IPV4_04='01234',
+    IPV4_19='123456789',
+    REPEAT_FLAGS='1234567890*',
+)
 
 # Element types
-ISEMAIL_ELEMENT_LOCAL_DOT_ATOM = 0
 
-ISEMAIL_DOMAIN_LIT_NONE = 0
-ISEMAIL_DOMAIN_LIT_UNK = 1
-ISEMAIL_DOMAIN_LIT_IPV4 = 4
-ISEMAIL_DOMAIN_LIT_IPV6 = 6
-ISEMAIL_DOMAIN_LIT_GEN = 99
+ISEMAIL_ELEMENT_LOCALPART = 'local_part'
+ISEMAIL_ELEMENT_LOCAL_COMMENT = 'comment'
+ISEMAIL_ELEMENT_LOCAL_QUOTEDSTRING = 'local_quoted_string'
 
-ISEMAIL_IP_REGEX = re.compile(r'(?P<address>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
-ISEMAIL_IP_REGEX_GOOD_CHAR = re.compile(r'^[0-9A-Fa-f]{0,4}$')
+ISEMAIL_ELEMENT_DOMAINPART = 'domain_part'
+ISEMAIL_ELEMENT_DOMAIN_COMMENT = 'domain_comment'
+ISEMAIL_ELEMENT_DOMAIN_QUOTEDSTRING = 'domain_quoted_string'
+ISEMAIL_ELEMENT_DOMAIN_LIT_IPV4 = 'domain_ipv4_literal'
+ISEMAIL_ELEMENT_DOMAIN_LIT_IPV6 = 'domain_ipv6_literal'
+ISEMAIL_ELEMENT_DOMAIN_LIT_GEN = 'domain_general_literal'
+
+# ISEMAIL_IP_REGEX = re.compile(r'(?P<address>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
+# ISEMAIL_IP_REGEX_GOOD_CHAR = re.compile(r'^[0-9A-Fa-f]{0,4}$')
 
 
 ISEMAIL_MAX_COUNT = 9999
@@ -753,28 +746,28 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD'],
     ),
-    RFC5321_TLDNUMERIC=dict(
+    RFC5321_TLD_NUMERIC=dict(
         value=10,
         category='RFC5321',
         description="Address is valid but the Top Level Domain begins with a number",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD-format'],
     ),
-    RFC5321_QUOTEDSTRING=dict(
+    RFC5321_QUOTED_STRING=dict(
         value=11,
         category='RFC5321',
         description="Address is valid but contains a quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
-    RFC5321_ADDRESSLITERAL=dict(
+    RFC5321_ADDRESS_LITERAL=dict(
         value=12,
         category='RFC5321',
         description="Address is valid but at a literal address not a domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=(ISEMAIL_META_REFERENCES['address-literal'], ISEMAIL_META_REFERENCES['address-literal-IPv4'])
     ),
-    RFC5321_IPV6DEPRECATED=dict(
+    RFC5321_IPV6_DEPRECATED=dict(
         value=13,
         category='DEPREC',
         description="Address is valid but contains a :: that only elides one zero group. All implementations must accept"
@@ -796,7 +789,7 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
-    DEPREC_LOCALPART=dict(
+    DEPREC_LOCAL_PART=dict(
         value=33,
         category='DEPREC',
         description="The local part is in a deprecated form",
@@ -852,84 +845,84 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
     ),
-    RFC5322_TOOLONG=dict(
+    RFC5322_TOO_LONG=dict(
         value=66,
         category='RFC5322',
         description="Address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['mailbox-maximum'],
     ),
-    RFC5322_LOCAL_TOOLONG=dict(
+    RFC5322_LOCAL_TOO_LONG=dict(
         value=67,
         category='RFC5322',
         description="The local part of the address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part-maximum'],
     ),
-    RFC5322_DOMAIN_TOOLONG=dict(
+    RFC5322_DOMAIN_TOO_LONG=dict(
         value=68,
         category='RFC5322',
         description="The domain part is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-maximum'],
     ),
-    RFC5322_LABEL_TOOLONG=dict(
+    RFC5322_LABEL_TOO_LONG=dict(
         value=69,
         category='RFC5322',
         description="The domain part contains an element that is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['label'],
     ),
-    RFC5322_DOMAINLITERAL=dict(
+    RFC5322_DOMAIN_LITERAL=dict(
         value=70,
         category='RFC5322',
         description="The domain literal is not a valid RFC 5321 address literal",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-literal'],
     ),
-    RFC5322_DOMLIT_OBSDTEXT=dict(
+    RFC5322_DOM_LIT_OBS_DTEXT=dict(
         value=71,
         category='RFC5322',
         description="The domain literal is not a valid RFC 5321 address literal and it contains obsolete characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-dtext'],
     ),
-    RFC5322_IPV6_GRPCOUNT=dict(
+    RFC5322_IPV6_GRP_COUNT=dict(
         value=72,
         category='RFC5322',
         description="The IPv6 literal address contains the wrong number of groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-    RFC5322_IPV6_2X2XCOLON=dict(
+    RFC5322_IPV6_2X2X_COLON=dict(
         value=73,
         category='RFC5322',
         description="The IPv6 literal address contains too many :: sequences",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-    RFC5322_IPV6_BADCHAR=dict(
+    RFC5322_IPV6_BAD_CHAR=dict(
         value=74,
         category='RFC5322',
         description="The IPv6 address contains an illegal group of characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-    RFC5322_IPV6_MAXGRPS=dict(
+    RFC5322_IPV6_MAX_GRPS=dict(
         value=75,
         category='RFC5322',
         description="The IPv6 address has too many groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-    RFC5322_IPV6_COLONSTRT=dict(
+    RFC5322_IPV6_COLON_STRT=dict(
         value=76,
         category='RFC5322',
         description="IPv6 address starts with a single colon",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-    RFC5322_IPV6_COLONEND=dict(
+    RFC5322_IPV6_COLON_END=dict(
         value=77,
         category='RFC5322',
         description="IPv6 address ends with a single colon",
@@ -943,21 +936,21 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['dtext'],
     ),
-    ERR_NOLOCALPART=dict(
+    ERR_NO_LOCAL_PART=dict(
         value=130,
         category='ERR',
         description="Address has no local part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
-    ERR_NODOMAIN=dict(
+    ERR_NO_DOMAIN_PART=dict(
         value=131,
         category='ERR',
         description="Address has no domain part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=(ISEMAIL_META_REFERENCES['addr-spec'], ISEMAIL_META_REFERENCES['mailbox'])
     ),
-    ERR_CONSECUTIVEDOTS=dict(
+    ERR_CONSECUTIVE_DOTS=dict(
         value=132,
         category='ERR',
         description="The address may not contain consecutive dots",
@@ -1016,7 +1009,7 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['qtext'],
     ),
-    ERR_BACKSLASHEND=dict(
+    ERR_BACKSLASH_END=dict(
         value=140,
         category='ERR',
         description="The address can't end with a backslash",
@@ -1046,35 +1039,35 @@ ISEMAIL_DIAG_RESPONSES = dict(
             ISEMAIL_META_REFERENCES['domain-RFC5322'],
             ISEMAIL_META_REFERENCES['domain-RFC5321'])
     ),
-    ERR_DOMAINHYPHENSTART=dict(
+    ERR_DOMAIN_HYPHEN_START=dict(
         value=143,
         category='ERR',
         description="A domain or subdomain cannot begin with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
-    ERR_DOMAINHYPHENEND=dict(
+    ERR_DOMAIN_HYPHEN_END=dict(
         value=144,
         category='ERR',
         description="A domain or subdomain cannot end with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
-    ERR_UNCLOSEDQUOTEDSTR=dict(
+    ERR_UNCLOSE_DQUOTED_STR=dict(
         value=145,
         category='ERR',
         description="Unclosed quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
-    ERR_UNCLOSEDCOMMENT=dict(
+    ERR_UNCLOSED_COMMENT=dict(
         value=146,
         category='ERR',
         description="Unclosed comment",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
-    ERR_UNCLOSEDDOMLIT=dict(
+    ERR_UNCLOSED_DOM_LIT=dict(
         value=147,
         category='ERR',
         description="Domain literal is missing its closing bracket",
@@ -1101,6 +1094,13 @@ ISEMAIL_DIAG_RESPONSES = dict(
         description="Address contains a carriage return that is not followed by a line feed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['CFWS'], ISEMAIL_META_REFERENCES['CRLF'])
+    ),
+    ERR_NO_DOMAIN_SEP=dict(
+        value=151,
+        category='ERR',
+        description="Address does not contain a domain seperator (@ sign)",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
 )
 

@@ -56,156 +56,6 @@ def broken_range(*ranges):
  '''
 # /*.mixed. function is_email(email, checkDNS = False, errorlevel = False, &parsedata = array()) {
 
-'''
-class ElementClass(object):
-    def __init__(self, parent, element_type):
-        self.atoms = []
-        self.element_type = element_type
-        self.parent = parent
-        # self.length = 0
-        self.elements = 0
-
-    def __iadd__(self, item):
-        # self.length += 1
-        self.parent.length += 1
-        self.parent.element_len += 1
-        self.atoms.append(item)
-
-    def __str__(self):
-        return ''.join(self.atoms)
-
-    def __bool__(self):
-        return bool(self.atoms)
-
-    def __getitem__(self, item):
-        return self.atoms[item]
-
-    def __len__(self):
-        return len(self.atoms)
-
-class AddressClass(object):
-    def __init__(self, raw_email):
-
-        self.component = ISEMAIL_COMPONENT_LOCALPART
-        self.responses = []
-        self.response_positions = []
-        self.element_stack = []
-        self.element_len = 0
-        self.element_count = 0
-        self.element = None
-
-        self.raw_email = raw_email
-        self.local_part = []
-        self.local_string = ''
-
-        self.domain_part = []
-        self.domain_string = ''
-
-        self.domain_literal = 0
-        self.display_name = ''
-        self.length = 0
-        self.part_types = {}
-        self.part = self.local_part
-        self.context_prior = -1
-
-    def set_at(self):
-        self.component = ISEMAIL_COMPONENT_DOMAIN
-        self.element_count = 0
-        self.element_len = 0
-        self.element_stack = []
-
-    def max_response(self):
-        if self.responses:
-            return max(self.responses)
-        else:
-            return ISEMAIL_VALID
-
-    def push_element(self, element_type):
-        self.element_stack.append(self.element)
-        self.context_prior = int(self.context)
-        self.element = self.new_element(element_type)
-
-    def pop_element(self):
-        self.context_prior = int(self.context)
-        self.element = self.element_stack.pop()
-
-    def new_element(self, element_type):
-        tmp_element = ElementClass(self, element_type)
-        self.elements.append(tmp_element)
-        self.inc_elements()
-        return tmp_element
-
-    @property
-    def elements(self):
-        if self.component == ISEMAIL_COMPONENT_DOMAIN:
-            return self.domain_part
-        else:
-            return self.local_part
-
-    @property
-    def context(self):
-        return self.element.element_type
-
-    @property
-    def state(self):
-        if self.element_count == 0:
-            return ISEMAIL_ELEMENT_BEG_ALL
-        elif self.element_len == 0:
-            return ISEMAIL_ELEMENT_BEG_ELEMENT
-        else:
-            return ISEMAIL_ELEMENT_IN_ELEMENT
-
-    def response_by_state(self, response_dict):
-        tmp_state = self.state
-        if tmp_state in response_dict:
-            self.add_response(response_dict[tmp_state])
-        return tmp_state
-
-    def inc_elements(self):
-        self.element_count += 1
-        self.element_len = 0
-
-    def add_response(self, response_code, position=None):
-        self.responses.append(response_code)
-        if position is None:
-            position = self.length
-        if isinstance(position, str):
-            if position[0] == '-':
-                position = self.length - len(position)
-            elif position[0] == '+':
-                position = self.length + len(position)
-        self.response_positions.append(position)
-
-
-    @property
-    def local_str(self):
-        return ''.join(self.local_part)
-
-    @property
-    def domain_str(self):
-        return ''.join(self.domain_part)
-
-    def __iadd__(self, item):
-        if isinstance(item, int):
-            self.add_response(item)
-        else:
-            self.element += item
-
-    def __str__(self):
-        return '%s@%s' % (self.local_str, self.domain_str)
-
-    def __getitem__(self, item):
-        return self.elements[item]
-
-    def __len__(self):
-        if self.domain_part:
-            return self.length + 1
-        else:
-            return self.length
-
-    def __int__(self):
-        return self.max_response()
-'''
 
 class AddressItem(object):
 
@@ -214,9 +64,18 @@ class AddressItem(object):
         self._elements = {}
         self._responses = []
         self._max_code = 0
+        self.local_part = None
+        self.domain_part = None
 
     def add_element(self, element_code, element):
-        self._elements[element_code] = element
+        if element_code == ISEMAIL_ELEMENT_LOCALPART:
+            self.local_part = element
+        elif element_code == ISEMAIL_ELEMENT_DOMAINPART:
+            self.local_part = element
+        elif element_code in self._elements:
+            self._elements[element_code].append(element)
+        else:
+            self._elements[element_code] = [element]
 
     def add_response(self, response_code, position):
 
@@ -254,25 +113,20 @@ class AddressItem(object):
                 tmp_ret.append(META_LOOKUP.diags[i]['key'])
             return tmp_ret
 
-
     def __getitem__(self, item):
         try:
             return self._elements[item]
         except KeyError:
             return 'Unknown / Unfound'
 
+
 class NoElementError(Exception):
-    def __init__(self, is_email_obj, popped_text=None, fail_flag=None, position=None):
+    def __init__(self, is_email_obj, popped_text=None, fail_flag=None, position=None, next_char=None):
         if popped_text is not None:
             is_email_obj._rem_email.extendleft(popped_text)
         if fail_flag is not None:
             is_email_obj._add_response(response_code=fail_flag, position=position)
-
-
-# AND = 'and'
-# OR = 'or'
-# OPT = 'opt'
-
+        self.next_char = next_char
 
 
 def _meth(meth_name, **kwargs):
@@ -281,12 +135,14 @@ def _meth(meth_name, **kwargs):
         args=[],
         kwargs=kwargs)
 
+
 def _char(char_set, **kwargs):
     kwargs['char_set'] = char_set
     return dict(
-        meth='_get_set',
+        meth='_get_char',
         args=[],
         kwargs=kwargs)
+
 
 def _and(*methods, **kwargs):
     tmp_methods = []
@@ -297,6 +153,7 @@ def _and(*methods, **kwargs):
         args=tmp_methods,
         kwargs=kwargs)
 
+
 def _or(*methods, **kwargs):
     tmp_methods = []
     for m in methods:
@@ -306,12 +163,18 @@ def _or(*methods, **kwargs):
         args=tmp_methods,
         kwargs=kwargs)
 
-def _opt(method, **kwargs):
-    method = _make_meth(method)
-    return dict(
-        meth='_get_opt',
-        args=(method,),
-        kwargs=kwargs)
+
+def _opt(opp, **kwargs):
+    opp = _make_meth(opp)
+    if opp['meth'] == '_get_char':
+        opp['kwargs']['optional'] = True
+        return opp
+    else:
+        return dict(
+            meth='_get_opt',
+            args=(opp,),
+            kwargs=kwargs)
+
 
 def _c(*args):
 
@@ -340,14 +203,35 @@ def _c(*args):
 
     opp = _make_meth(opp)
 
+    if opp['meth'] == '_get_char':
+        opp['kwargs']['min_count'] = min_count
+        opp['kwargs']['max_count'] = max_count
+        return opp
+    else:
+        return dict(
+            meth='_get_count',
+            args=[],
+            kwargs=dict(
+                min_count=min_count,
+                max_count=max_count,
+                opp=opp
+            )
+        )
+
+
+def _m(opp, on_fail=None, on_pass=None, element_name=None, return_string=False):
+    opp = _make_meth(opp)
+
+
     return dict(
-        meth='_get_count',
+        meth='_get_mark',
         args=[],
         kwargs=dict(
-            min_count=min_count,
-            max_count=max_count,
-            opp=opp
-        )
+            opp=_make_meth(opp),
+            on_fail=on_fail,
+            on_pass=on_pass,
+            element_name=element_name,
+            return_string=return_string)
     )
 
 
@@ -363,47 +247,34 @@ def _make_meth(method, **kwargs):
                 tmp_and_set.append(_make_meth(c))
             return _and(*tmp_and_set)
 
-        elif method[0] in ISEMAIL_SET_COUNT:
+        elif method[0] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
             # if it has a counter in front: 1*2
-            if method[1] in ISEMAIL_SET_COUNT:
-                if method[2] in ISEMAIL_SET_COUNT:
+            if method[1] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
+                if method[2] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
                     return _c(method[:3], method[3:])
                 else:
                     return _c(method[:2], method[2:])
             else:
                 return _c(method[:1], method[1:])
-        elif method [0] == '[' and method[-1] == ']':
+        elif method[0] == '[' and method[-1] == ']':
             # if it is in square brackets:  [blah]
             tmp_opp = _make_meth(method[1:-1])
             return _opt(tmp_opp, **kwargs)
 
         else:
             # this is a string set
-            return _char(method)
+            try:
+                return _char(ISEMAIL_CONSTANTS[method])
+            except KeyError:
+                return _char(method)
     else:
         return method
 
 
+class ParseEmail(object):
 
-
-'''
-class Get(object):
-    def __call__(self, func_name, max_count=1):
-        self.func_name = func_name
-        self.max_count=max_count
-
-class And(object):
-    def __call__(self, methods):
-        self.methods = methods
-
-class Or(And):
-    pass
-
-class Opt(And):
-    pass
-
-'''
-class IsEmail(object):
+    def __init__(self):
+        pass
 
     def _setup(self):
         self._data = AddressItem()
@@ -455,11 +326,14 @@ class IsEmail(object):
         self._data.raw_email = addr_in
         self._rem_email = deque(str(addr_in))
 
+        local_part = _m('local_part', on_fail='ERR_NOLOCALPART')
+        domain_part = _m('domain_part', on_fail='ERR_NODOMAINPART')
+
         if '@' not in self._data.raw_email:
-            self._add_response('ERR_NODOMAIN', 0)
+            self._add_response('ERR_NODOMAIN_SEP', 0)
         else:
             try:
-                self._get(_and('local_part', '1*@', 'domain_part'))
+                self._get(_and(local_part, '1*@', domain_part))
             except NoElementError:
                 pass
 
@@ -467,22 +341,20 @@ class IsEmail(object):
         """
             dot-atom / quoted-string / obs-local-part
         """
-        try:
-            self._get(_or('dot_atom', 'quoted_string', 'obs_local_part'))
-        except NoElementError as err:
-            self._add_response('ERR_NOLOCALPART')
-        # self._add_element(ISEMAIL_COMPONENT_LOCALPART, tmp_ret)
-        # return tmp_ret
+        dot_atom = _m('dot_atom', element_name=ISEMAIL_ELEMENT_LOCALPART)
+        quoted_string = _m('quoted_string', on_pass='RFC5321_QUOTED_STRING')
+        obs_local_part = _m('obs_local_part', on_pass='DEPREC_LOCAL_PART')
+
+        self._get(_or(dot_atom, quoted_string, obs_local_part))
+
+
+
 
     def get_domain_part(self, max_count=1):
         """
             dot-atom / address-literal / obs-domain
         """
-        try:
-            tmp_ret = self._get(_or('dot_atom', 'address_literal', 'domain_literal', 'obs_domain'))
-            self._add_element(ISEMAIL_COMPONENT_DOMAIN, tmp_ret)
-        except NoElementError:
-            self._add_response('ERR_NODOMAIN')
+        return self._get(_or('dot_atom', 'address_literal', 'domain_literal', 'obs_domain'))
 
 
     def _get_dot_atom(self):
@@ -727,24 +599,24 @@ class IsEmail(object):
         return tmp_ret
 
     def _get_wsp(self):
-        return self._get_set(ISEMAIL_SET_WSP)
+        return self._get_char(ISEMAIL_SET_WSP)
 
     def _get_ctext(self):
-        tmp_ret = self._get_set(ISEMAIL_SET_CTEXT)
+        tmp_ret = self._get_char(ISEMAIL_SET_CTEXT)
         self._add_element(ISEMAIL_CONTEXT_COMMENT, tmp_ret)
 
     def _get_qtext(self):
-        return self._get_set(ISEMAIL_SET_QTEXT)
+        return self._get_char(ISEMAIL_SET_QTEXT)
 
     def _get_atext(self):
-        return self._get_set(ISEMAIL_SET_ATEXT)
+        return self._get_char(ISEMAIL_SET_ATEXT)
 
     def _get_specials(self):
-        return self._get_set(ISEMAIL_SET_SPECIALS)
+        return self._get_char(ISEMAIL_SET_SPECIALS)
 
 
     def _get_obs_no_ws_ctl(self):
-        return self._get_set(ISEMAIL_SET_OBS_NO_WS_CTL)
+        return self._get_char(ISEMAIL_SET_OBS_NO_WS_CTL)
     _get_obs_qtext = _get_obs_no_ws_ctl
     _get_obs_ctext = _get_obs_no_ws_ctl
 
@@ -765,38 +637,38 @@ class IsEmail(object):
                 break
             try:
                 tmp_ret = self._get(opp)
-            except NoElementError:
-                if i < min_count:
-                    raise NoElementError(self, popped_text=tmp_ret_list)
+            except NoElementError as err:
+                if i < min_count-1:
+                    raise NoElementError(self, popped_text=tmp_ret_list, next_char=err.next_char)
             else:
                 tmp_ret_list.append(tmp_ret)
         return tmp_ret_list
 
-
-    def _get_set(self, char_set, count=0):
-        tmp_ret = []
-        for i in range(len(self._rem_email)):
-            if self._rem_email[0] in char_set:
-                tmp_ret.append(self._rem_email.popleft())
-                if count-1 == i:
+    def _get_char(self, char_set, min_count=0, max_count=None, optional=False):
+        tmp_next_char = ''
+        try:
+            tmp_ret = []
+            for i in range(len(self._rem_email)):
+                tmp_next_char = self._rem_email[0]
+                if max_count is not None and i > max_count-1:
                     break
+                if tmp_next_char in char_set:
+                    tmp_ret.append(self._rem_email.popleft())
+                elif i < min_count-1:
+                    raise NoElementError(self, next_char=tmp_next_char, popped_text=tmp_ret)
+                else:
+                    break
+            if tmp_ret:
+                self._position += len(tmp_ret)
+                return tmp_ret
             else:
-                break
-        if tmp_ret:
-            self._position += len(tmp_ret)
-        else:
-            raise NoElementError(self)
-        return tmp_ret
+                raise NoElementError(self, next_char=tmp_next_char)
+        except NoElementError:
+            if not optional:
+                raise NoElementError(self, next_char=tmp_next_char)
 
     def _get(self, opp):
         opp = _make_meth(opp)
-        '''
-        if isinstance(opp, str):
-            tmp_meth = getattr(self, opp)
-            return tmp_meth()
-
-        else:
-        '''
         tmp_meth = getattr(self, opp['meth'])
         return tmp_meth(*opp['args'], **opp['kwargs'])
 
@@ -806,8 +678,8 @@ class IsEmail(object):
             for arg in args:
                 try:
                     tmp_ret = self._get(arg)
-                except NoElementError:
-                    raise NoElementError(self, popped_text=tmp_ret_list)
+                except NoElementError as err:
+                    raise NoElementError(self, popped_text=tmp_ret_list, next_char=err.next_char)
                 else:
                     if tmp_ret is not None:
                         tmp_ret_list.extend(tmp_ret)
@@ -820,12 +692,13 @@ class IsEmail(object):
         return tmp_ret_list
 
     def _get_or(self, *args, count=0):
+        next_char = None
         for arg in args:
             try:
                 return self._get(arg)
-            except NoElementError:
-                pass
-        raise NoElementError(self)
+            except NoElementError as err:
+                next_char = err.next_char
+        raise NoElementError(self, next_char=next_char)
 
     def _get_opt(self, arg, count=0):
         """
@@ -844,6 +717,23 @@ class IsEmail(object):
             return self._get(arg)
         except NoElementError:
             return []
+
+    def _get_mark(self, opp, on_fail=None, on_pass=None, element_name=None, return_string=False):
+        try:
+            tmp_ret = self._get(opp)
+        except NoElementError:
+            if on_fail is not None:
+                self._add_response(on_fail)
+            raise
+
+        if on_pass is not None:
+            self._add_response(on_pass)
+
+        if element_name is not None:
+            self._add_element(element_name, tmp_ret)
+
+        if return_string:
+            return tmp_ret
 
 
 is_email = IsEmail()
