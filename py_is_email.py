@@ -237,7 +237,7 @@ def _m(opp, on_fail=None, on_pass=None, element_name=None, return_string=False):
 
 def _make_meth(method, **kwargs):
     if isinstance(method, str):
-        if '_get_%s' % method in IsEmail.__dict__:
+        if '_get_%s' % method in ParseEmail.__dict__:
             return _meth(method, **kwargs)
 
         elif method[0] == '"' and method[-1] == '"':
@@ -322,35 +322,40 @@ class ParseEmail(object):
         """
             local-part "@" domain
         """
-        self._raw_length = len(addr_in)
-        self._data.raw_email = addr_in
-        self._rem_email = deque(str(addr_in))
+        if addr_in is not None and addr_in != '':
 
-        local_part = _m('local_part', on_fail='ERR_NOLOCALPART')
-        domain_part = _m('domain_part', on_fail='ERR_NODOMAINPART')
+            self._raw_length = len(addr_in)
+            self._data.raw_email = addr_in
+            self._rem_email = deque(str(addr_in))
 
-        if '@' not in self._data.raw_email:
-            self._add_response('ERR_NODOMAIN_SEP', 0)
+            local_part = _m('local_part', on_fail='ERR_NO_LOCAL_PART', element_name=ISEMAIL_ELEMENT_LOCALPART)
+            domain_part = _m('domain_part', on_fail='ERR_NO_DOMAIN_PART', element_name=ISEMAIL_ELEMENT_DOMAINPART)
+
+            if '@' not in self._data.raw_email:
+                self._add_response('ERR_NO_DOMAIN_SEP', 0)
+            else:
+                try:
+                    self._get(_and(local_part, '1*@', domain_part))
+                except NoElementError:
+                    pass
         else:
-            try:
-                self._get(_and(local_part, '1*@', domain_part))
-            except NoElementError:
-                pass
+            self._add_response('ERR_EMPTY_ADDRESS', 0)
+
 
     def _get_local_part(self):
         """
             dot-atom / quoted-string / obs-local-part
         """
-        dot_atom = _m('dot_atom', element_name=ISEMAIL_ELEMENT_LOCALPART)
-        quoted_string = _m('quoted_string', on_pass='RFC5321_QUOTED_STRING')
-        obs_local_part = _m('obs_local_part', on_pass='DEPREC_LOCAL_PART')
+        dot_atom = _m('dot_atom', element_name=ISEMAIL_ELEMENT_LOCALPART, return_string=True)
+        quoted_string = _m('quoted_string', on_pass='RFC5321_QUOTED_STRING', return_string=True)
+        obs_local_part = _m('obs_local_part', on_pass='DEPREC_LOCAL_PART', return_string=True)
 
         self._get(_or(dot_atom, quoted_string, obs_local_part))
 
 
 
 
-    def get_domain_part(self, max_count=1):
+    def _get_domain_part(self, max_count=1):
         """
             dot-atom / address-literal / obs-domain
         """
@@ -361,70 +366,83 @@ class ParseEmail(object):
         """
         [CFWS] dot-atom-text [CFWS]
         """
-        tmp_ret = self._get(_and('[cfws]', 'dot_atom_text', '[cfws]'))
+        dot_atom_text = _m('dot_atom_text', return_string=True)
+        cfws = _m('[cfws]', return_string=False)
+        tmp_ret = self._get(_and(cfws, dot_atom_text, cfws))
         return tmp_ret
 
     def _get_quoted_string(self):
         """
             [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
         """
-        self._get(_and(
-                '[cfws]', '"',
-                _c('*', _and('[fws]', 'qcontent')),
-                '[fws]', '"', '[cfws]'))
+        dquote_start = _m('"', return_string=False)
+        fws = _m('[fws]', return_string=False)
+        cfws = _m('[cfws]', return_string=False)
+        dquote_end = _m('"', on_fail='UNCLOSED_QUOTED_STR', return_string=False)
+        qcontent = _m('qcontent', return_string=True)
+
+        qs = _and(cfws, dquote_start, _c('*', _and(fws, qcontent)), fws, dquote_end, cfws)
+        return self._get(_m(qs, on_pass='QUOTED_STR', return_string=True))
 
     def _get_obs_local_part(self):
         """
             word *("." word)
         """
-        tmp_ret = self._get(_and('word', _c('*', _and('.', 'word'))))
-        self._add_element(ISEMAIL_COMPONENT_LOCALPART, tmp_ret)
+        return self._get(_and('word', _c('*', _and('.', 'word'))))
 
     def _get_cfws(self):
         """
             (1*([FWS] comment) [FWS]) / FWS
         """
-        self._get(_or(
-            _c('1*', _and('[fws]', 'comment', '[fws]')),
-            'fws'))
+        comment = _m('comment', return_string=True)
+        opt_fws = _m('[fws]', return_string=False)
+        fws = _m('fws', return_string=False)
+
+        return self._get(_or(_c('1*', _and(opt_fws, comment, opt_fws)), fws))
 
     def _get_fws(self):
         """
         ([*WSP CRLF] 1*WSP) /  obs-FWS
         """
-        self._get(_or(_and(_opt(_and(_c('*','wsp'), 'crlf')),_c('1*','wsp')),'obs_fws'))
+        obs_fws = _m('obs_fws', on_pass='DEPREC_FWS')
+        return self._get(_or(_and(_opt(_and(_c('*', 'wsp'), 'crlf')), _c('1*', 'wsp')), obs_fws))
 
     def _get_obs_fws(self):
         """
             1*([CRLF] WSP)
         """
-        self._get(_c('1*',_and('[crlf]', 'wsp')))
+        return self._get(_c('1*',_and('[crlf]', 'wsp')))
 
     def _get_ccontent(self):
         """
         ctext / quoted-pair / comment
         """
-        tmp_ret = self._get(_or('ctext', 'quoted_pair', 'comment'))
-        self._add_element(ISEMAIL_CONTEXT_COMMENT, tmp_ret)
+        ctext = _m('ctext', return_string=True)
+        quoted_pair = _m('quoted_pair', return_string=True, on_pass='QUOTED_PAIR')
+        comment = _m('comment', return_string=True)
+        tmp_ret = self._get(_or(ctext, quoted_pair, comment))
+        return tmp_ret
+
 
     def _get_comment(self):
         """
          "(" *([FWS] ccontent) [FWS] ")"
         """
-        self._get(_and(
+        fws = _m('[fws]', return_string=False)
+        close_quote = _m(')', on_fail='UNCLOSED_COMMENT')
+        return self._get(_and(
             '(',
-            _c('*', _and('[fws]', 'ccontent', '[fws]')),
-            ')')
+            _c('*', _and(fws, 'ccontent', fws)),
+            close_quote)
             )
 
     def _get_dot_atom_text(self):
         """
         1*atext *("." 1*atext)
         """
-        tmp_ret = self._get(_and('atext', _and('.', 'atext')))
-        self._add_element(ISEMAIL_COMPONENT_LOCALPART, tmp_ret)
+        return self._get(_and('atext', _and('.', 'atext')))
 
-    def get_qcontent(self):
+    def _get_qcontent(self):
         """
             qtext / quoted-pair
         """
@@ -437,15 +455,14 @@ class ParseEmail(object):
         """
         return self._get(_or(_and('\\',_or('vchar', 'wsp')), 'obs_gp'))
 
-
     def _get_obs_gp(self):
         """
         "\" (%d0 / obs-NO-WS-CTL / LF / CR)
         """
-        tmp_ret = self._get(_and('\\', ISEMAIL_SET_OBS_QP))
+        tmp_ret = self._get(_and('\\', 'OBS_QP'))
         if tmp_ret:
-            self._add_element(ISEMAIL_CONTEXT_COMMENT, tmp_ret)
-            self._add_response(ISEMAIL_SET_OBS_QP)
+            self._add_element(ISEMAIL_ELEMENT_LOCAL_QUOTEDSTRING, tmp_ret)
+            self._add_response('OBS_QP')
 
     def _get_word(self, max_count=1):
         """
@@ -465,7 +482,7 @@ class ParseEmail(object):
         [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
         """
         tmp_ret = self._get(_and('[cfws]', '[', _and('[fws]','dtext'), '[fws]', ']', '[cfws]'))
-        self._add_response(ISEMAIL_RFC5322_DOMAINLITERAL)
+        self._add_response('DOMAIN_LITERAL')
         return tmp_ret
 
     def _get_dtext(self):
@@ -476,7 +493,7 @@ class ParseEmail(object):
 
             obs-dtext       =   obs-NO-WS-CTL / quoted-pair
         """
-        tmp_ret = self._get(_or(ISEMAIL_SET_DTEXT, 'quoted_pair'))
+        tmp_ret = self._get(_or('DTEXT', 'quoted_pair'))
         return tmp_ret
 
     def _get_obs_domain(self):
@@ -484,7 +501,6 @@ class ParseEmail(object):
         atom *("." atom)
         """
         tmp_ret = self._get(_and('atom', _c('*', _and('.', 'atom'))))
-        self._add_element(ISEMAIL_COMPONENT_LOCALPART, tmp_ret)
 
     def _get_address_literal(self):
         """
@@ -494,7 +510,7 @@ class ParseEmail(object):
         :return:
         """
         tmp_ret = self._get(_and('[', _or('ipv4_address_literal', 'ipv6_address_literal', 'general_address_literal'), ']'))
-        self._add_response(ISEMAIL_RFC5321_ADDRESSLITERAL)
+        self._add_response('RFC5321_ADDRESS_LITERAL')
         return tmp_ret
 
     def _get_ipv4_address_literal(self):
@@ -503,8 +519,8 @@ class ParseEmail(object):
         """
         tmp_ret = self._get(_and('snum', _c('3', _and('.', 'snum'))))
         if tmp_ret:
-            self._add_element(ISEMAIL_DOMAIN_LIT_IPV4)
-            self._add_response(ISEMAIL_DOMAIN_LIT_IPV4)
+            self._add_element(ISEMAIL_ELEMENT_DOMAIN_LIT_IPV4)
+            self._add_response('DOMAIN_LIT_IPV4')
 
     def _get_snum(self):
         """
@@ -513,12 +529,12 @@ class ParseEmail(object):
                 ; value in the range 0 through 255
         """
         tmp_ret = self._get(_or(
-            ISEMAIL_SET_IPV4_19,
-            _and(ISEMAIL_SET_IPV4_19, ISEMAIL_SET_DIGIT),
+            'IPV4_19',
+            _and('IPV4_19', 'DIGIT'),
             _or(
-                _and('1', ISEMAIL_SET_DIGIT, ISEMAIL_SET_DIGIT),
-                _and('2', ISEMAIL_SET_IPV4_04, ISEMAIL_SET_DIGIT),
-                _and('2', '5', ISEMAIL_SET_IPV4_05),
+                _and('1', 'DIGIT', 'DIGIT'),
+                _and('2', 'IPV4_04', 'DIGIT'),
+                _and('2', '5', 'IPV4_05'),
             )))
         return tmp_ret
 
@@ -526,7 +542,7 @@ class ParseEmail(object):
         """
             "IPv6:" IPv6-addr
         """
-        tmp_ret = self._get(_and('IPv6:', 'ipv6_addr'))
+        return self._get(_and('IPv6:', 'ipv6_addr'))
 
     def _get_ipv6_addr(self):
         """
@@ -536,7 +552,8 @@ class ParseEmail(object):
 
         # TODO: Validate IPv6 Address
 
-        self._add_element(ISEMAIL_DOMAIN_LIT_IPV6, tmp_ret)
+        self._add_element(ISEMAIL_ELEMENT_DOMAIN_LIT_IPV6, tmp_ret)
+        return tmp_ret
 
     def _get_ipv6_full(self):
         """
@@ -562,7 +579,7 @@ class ParseEmail(object):
         """
         IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
         """
-        return self._get(_and('ipv6_hex', _c(5, _and(':', 'ipv6_hex')),'ipv4_address_literal'))
+        return self._get(_and('ipv6_hex', _c(5, _and(':', 'ipv6_hex')), 'ipv4_address_literal'))
 
     def _get_ipv6v4_comp(self):
         """
@@ -580,43 +597,44 @@ class ParseEmail(object):
     def _get_ipv6_hex(self):
         tmp_ret = self._get(
             _or(
-                _c(1, ISEMAIL_SET_HEXDIG),
-                _c(2, ISEMAIL_SET_HEXDIG),
-                _c(3, ISEMAIL_SET_HEXDIG),
-                _c(4, ISEMAIL_SET_HEXDIG))
+                _c(1, 'HEXDIG'),
+                _c(2, 'HEXDIG'),
+                _c(3, 'HEXDIG'),
+                _c(4, 'HEXDIG'))
         )
         return tmp_ret
 
-    def get_general_address_literal(self):
+    def _get_general_address_literal(self):
         """
         Ldh-str ":" 1*dcontent
         """
         tmp_ret = self._get(_and(
-            _c('*', ISEMAIL_SET_LTR_STR),
+            _c('*', 'LTR_STR'),
             ':',
             _c('*', 'dcontent')
         ))
         return tmp_ret
 
+    '''
     def _get_wsp(self):
-        return self._get_char(ISEMAIL_SET_WSP)
+        return self._get_char('WSP')
 
     def _get_ctext(self):
-        tmp_ret = self._get_char(ISEMAIL_SET_CTEXT)
-        self._add_element(ISEMAIL_CONTEXT_COMMENT, tmp_ret)
+        tmp_ret = self._get_char('CTEXT')
+        self._add_element(ISEMAIL_ELEMENT_DOMAIN_COMMENT, tmp_ret)
 
     def _get_qtext(self):
-        return self._get_char(ISEMAIL_SET_QTEXT)
+        return self._get_char('QTEXT')
 
     def _get_atext(self):
-        return self._get_char(ISEMAIL_SET_ATEXT)
+        return self._get_char('ATEXT')
 
     def _get_specials(self):
-        return self._get_char(ISEMAIL_SET_SPECIALS)
+        return self._get_char('SPECIALS')
 
 
     def _get_obs_no_ws_ctl(self):
-        return self._get_char(ISEMAIL_SET_OBS_NO_WS_CTL)
+        return self._get_char('OBS_NO_WS_CTL')
     _get_obs_qtext = _get_obs_no_ws_ctl
     _get_obs_ctext = _get_obs_no_ws_ctl
 
@@ -624,11 +642,13 @@ class ParseEmail(object):
         """
         %x21-7E            ; visible (printing) characters
         """
-        tmp_ret = self._get(_c('*', ISEMAIL_SET_VTEXT))
-        self._add_element(ISEMAIL_CONTEXT_COMMENT, tmp_ret)
+        tmp_ret = self._get(_c('*', 'VTEXT'))
+        self._add_element(ISEMAIL_ELEMENT_DOMAIN_COMMENT, tmp_ret)
+        return tmp_ret
 
     def _get_crlf(self):
-        return self._get(ISEMAIL_SET_CRLF)
+        return self._get('CRLF')
+    '''
 
     def _get_count(self, min_count, max_count, opp):
         tmp_ret_list = []
@@ -736,4 +756,4 @@ class ParseEmail(object):
             return tmp_ret
 
 
-is_email = IsEmail()
+is_email = ParseEmail()

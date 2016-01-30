@@ -11,8 +11,57 @@ Date       Diagnoses    Version Notes
 -->
 <meta version="3.03">
 """
-
-
+'''
+old_methods = [
+    '_get_fws',
+    '_get_ctext',
+    '_get_atext',
+    '_get_qtext',
+    '_get_specials',
+    '_get_obs_no_ws_ctl',
+    '_get_obs_ctext',
+    '_get_obs_qtext',
+    '_get_vchar',
+    '_get_crlf',
+]
+'''
+parser_methods = [
+    '_get_quoted_string',
+    '_get_domain_part',
+    '_get_comment',
+    '_get_obs_local_part',
+    '_get_ipv4_address_literal',
+    '_get_obs_fws',
+    '_get_ipv6_address_literal',
+    '_get_and',
+    '_get_dot_atom',
+    '_get_ipv6v4_full',
+    '_get_count',
+    '_get_domain_literal',
+    '_get_local_part',
+    '_get_mark',
+    '_get_char',
+    '_get_ipv6_addr',
+    '_get_obs_domain',
+    '_get_snum',
+    '_get_obs_gp',
+    '_get_dot_atom_text',
+    '_get_ipv6_hex',
+    '_get_ipv6v4_comp',
+    '_get_quoted_pair',
+    '_get_general_address_literal',
+    '_get_dtext',
+    '_get_or',
+    '_get_ipv6_comp',
+    '_get_atom',
+    '_get_cfws',
+    '_get_ccontent',
+    '_get_opt',
+    '_get_word',
+    '_get_address_literal',
+    '_get_ipv6_full',
+    '_get_qcontent',
+    '_get_wsp',]
 
 def make_char_str(*chars_in):
     tmp_ret = []
@@ -25,6 +74,150 @@ def make_char_str(*chars_in):
             for c in range(char[0], char[1]):
                 tmp_ret.append(chr(c))
     return ''.join(tmp_ret)
+
+def _meth(meth_name, **kwargs):
+    return dict(
+        meth='_get_%s' % meth_name,
+        args=[],
+        kwargs=kwargs)
+
+
+def _char(char_set, **kwargs):
+    kwargs['char_set'] = char_set
+    return dict(
+        meth='_get_char',
+        args=[],
+        kwargs=kwargs)
+
+
+def _and(*methods, **kwargs):
+    tmp_methods = []
+    for m in methods:
+        tmp_methods.append(_make_meth(m))
+    return dict(
+        meth='_get_and',
+        args=tmp_methods,
+        kwargs=kwargs)
+
+
+def _or(*methods, **kwargs):
+    tmp_methods = []
+    for m in methods:
+        tmp_methods.append(_make_meth(m))
+    return dict(
+        meth='_get_or',
+        args=tmp_methods,
+        kwargs=kwargs)
+
+
+def _opt(opp, **kwargs):
+    opp = _make_meth(opp)
+    if opp['meth'] == '_get_char':
+        opp['kwargs']['optional'] = True
+        return opp
+    else:
+        return dict(
+            meth='_get_opt',
+            args=(opp,),
+            kwargs=kwargs)
+
+
+def _c(*args):
+
+    if len(args) == 1:
+        min_count = ISEMAIL_MIN_COUNT
+        max_count = ISEMAIL_MAX_COUNT
+        opp = args[0]
+    else:
+        opp = args[1]
+        first_arg = args[0]
+        if isinstance(first_arg, int) or first_arg.isdigit():
+            min_count = first_arg
+            max_count = first_arg
+        else:
+            if '*' in first_arg:
+                min_count, max_count = first_arg.split('*')
+                if min_count == '':
+                    min_count = ISEMAIL_MIN_COUNT
+                if max_count == '':
+                    max_count = ISEMAIL_MAX_COUNT
+            else:
+                raise AttributeError('"*" not in %s' % first_arg)
+
+        min_count = int(min_count)
+        max_count = int(max_count)
+
+    opp = _make_meth(opp)
+
+    if opp['meth'] == '_get_char':
+        opp['kwargs']['min_count'] = min_count
+        opp['kwargs']['max_count'] = max_count
+        return opp
+    else:
+        return dict(
+            meth='_get_count',
+            args=[],
+            kwargs=dict(
+                min_count=min_count,
+                max_count=max_count,
+                opp=opp
+            )
+        )
+
+
+def _m(opp, on_fail=None, on_pass=None, element_name=None, return_string=False):
+    opp = _make_meth(opp)
+
+
+    return dict(
+        meth='_get_mark',
+        args=[],
+        kwargs=dict(
+            opp=_make_meth(opp),
+            on_fail=on_fail,
+            on_pass=on_pass,
+            element_name=element_name,
+            return_string=return_string)
+    )
+
+
+
+def _make_meth(method, **kwargs):
+    if isinstance(method, str):
+        if '_get_%s' % method in parser_methods:
+            return _meth(method, **kwargs)
+
+        elif method[0] == '"' and method[-1] == '"':
+            # if it is a quoted string:  "do this"
+            tmp_and_set = []
+            for c in method[1:-1]:
+                tmp_and_set.append(_make_meth(c))
+            return _and(*tmp_and_set)
+
+        elif method[0] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
+            # if it has a counter in front: 1*2
+            if method[1] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
+                if method[2] in ISEMAIL_CONSTANTS['REPEAT_FLAGS']:
+                    return _c(method[:3], method[3:])
+                else:
+                    return _c(method[:2], method[2:])
+            else:
+                return _c(method[:1], method[1:])
+        elif method[0] == '[' and method[-1] == ']':
+            # if it is in square brackets:  [blah]
+            tmp_opp = _make_meth(method[1:-1])
+            return _opt(tmp_opp, **kwargs)
+
+        else:
+            # this is a string set
+            try:
+                return _char(ISEMAIL_CONSTANTS[method])
+            except KeyError:
+                return _char(method)
+    else:
+        return method
+
+
 
 
 """
@@ -165,9 +358,9 @@ ISEMAIL_CONSTANTS = dict(
     CR="\r",
     LF="\n",
     IPV6TAG='ipv6:',
-    
+
     # US-ASCII visible characters not valid for atext (http:#tools.ietf.org/html/rfc5322#section-3.2.3)
-    
+
     SPECIALS='()<>[]:;@\\,."',
     WSP=' \t',
     CRLF='\r\n',
@@ -212,6 +405,277 @@ ISEMAIL_ELEMENT_DOMAIN_LIT_GEN = 'domain_general_literal'
 ISEMAIL_MAX_COUNT = 9999
 ISEMAIL_MIN_COUNT = 0
 
+
+
+
+EMAIL_PARSER_RULES = dict(
+
+    addr_spec=_and(
+        # local-part "@" domain
+        _m('local_part', on_fail='ERR_NO_LOCAL_PART', element_name=ISEMAIL_ELEMENT_LOCALPART),
+        '1@',
+        _m('domain_part', on_fail='ERR_NO_DOMAIN_PART', element_name=ISEMAIL_ELEMENT_DOMAINPART)),
+
+    local_part=_or(
+        _m('dot_atom', element_name=ISEMAIL_ELEMENT_LOCALPART, return_string=True),
+        _m('quoted_string', on_pass='RFC5321_QUOTED_STRING', return_string=True),
+        _m('obs_local_part', on_pass='DEPREC_LOCAL_PART', return_string=True)),
+
+    domain_part=_or(
+        # dot-atom / address-literal / obs-domain
+        'dot_atom', 'address_literal', 'domain_literal', 'obs_domain'),
+
+    dot_atom=_and(
+        # [CFWS] dot-atom-text [CFWS]
+        _m('[cfws]', return_string=False),
+        _m('dot_atom_text', return_string=True),
+        _m('[cfws]', return_string=False)),
+
+    quoted_string=_m(
+        # [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+        _and(
+            _m('[cfws]', return_string=False),
+            _m('"', return_string=False),
+            _c('*', _and(
+                    'fws',
+                    _m('qcontent', return_string=True))),
+            _m('[fws]', return_string=False),
+            _m('"', on_fail='UNCLOSED_QUOTED_STR', return_string=False),
+            _m('[cfws]', return_string=False)),
+        on_pass='QUOTED_STR', return_string=True),
+
+    obs_local_part=_and(
+        # word *("." word)
+        'word',
+        _c('*', _and(
+            '.',
+            'word'))),
+
+    cfws=_or(
+        # (1*([FWS] comment) [FWS]) / FWS
+        _c('1*', _and(
+            _m('[fws]', return_string=False),
+            _m('comment', return_string=True),
+            _m('[fws]', return_string=False))),
+        _m('fws', return_string=False)),
+
+    fws=_or(
+        # ([*WSP CRLF] 1*WSP) /  obs-FWS
+        _and(
+            _opt(
+                _and(
+                    _c('*', 'wsp'),
+                    'crlf')),
+            _c('1*', 'wsp')),
+        _m('obs_fws', on_pass='DEPREC_FWS')),
+
+    obs_fws=_c(
+        # 1*([CRLF] WSP)
+        '1*',
+        _and(
+            '[crlf]',
+            'wsp')),
+
+    ccontent=_or(
+        # ctext / quoted-pair / comment
+        _m('ctext', return_string=True),
+        _m('quoted_pair', return_string=True, on_pass='QUOTED_PAIR'),
+        _m('comment', return_string=True)),
+
+    comment=_and(
+        #  "(" *([FWS] ccontent) [FWS] ")"
+        '(',
+        _c('*',
+           _and(
+                _m('[fws]', return_string=False),
+                'ccontent',
+                _m('[fws]', return_string=False))),
+        _m(')', on_fail='UNCLOSED_COMMENT')),
+
+    dot_atom_text=_and(
+        # 1*atext *("." 1*atext)
+        'atext',
+        _and(
+            '.',
+            'atext')),
+
+    qcontent=_or(
+        # qtext / quoted-pair
+        'qtext',
+        'quoted_pair'),
+
+    quoted_pair=_or(
+        # ("\" (VCHAR / WSP)) / obs-qp
+        _and(
+            '\\',
+            _or(
+                'vchar',
+                'wsp')),
+        'obs_gp'),
+
+    obs_gp=_and(
+        # "\" (%d0 / obs-NO-WS-CTL / LF / CR)
+        '\\',
+        _m('OBS_QP', element_name=ISEMAIL_ELEMENT_LOCAL_QUOTEDSTRING, on_pass='OBS_QP')),
+
+    word=_or(
+        # atom / quoted-string
+        'atom', 'quoted_string'),
+
+    atom=_and(
+        # [CFWS] 1*atext [CFWS]
+        _opt('cfws'),
+        'atext',
+        '[cfws]'),
+
+    domain_literal=_m(
+        # [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+        _and(
+            '[cfws]',
+            '[',
+            _and(
+                '[fws]',
+                'dtext'),
+            '[fws]',
+            ']',
+            '[cfws]'),
+        on_pass='DOMAIN_LITERAL'),
+
+    dtext=_or(
+        #    %d33-90 /          ; Printable US-ASCII
+        #    %d94-126 /         ;  characters not including
+        #    obs-dtext          ;  "[", "]", or "\"
+
+        #    obs-dtext       =   obs-NO-WS-CTL / quoted-pair
+        'DTEXT',
+        'quoted_pair'),
+
+    obs_domain=_and(
+        # atom *("." atom)
+        'atom',
+        _c('*',
+           _and(
+                '.',
+                'atom'))),
+
+    address_literal=
+        """
+            "[" ( IPv4-address-literal /
+            IPv6-address-literal /
+            General-address-literal ) "]"
+        :return:
+        """
+        tmp_ret = self._get(_and('[', _or('ipv4_address_literal', 'ipv6_address_literal', 'general_address_literal'), ']'))
+        self._add_response('RFC5321_ADDRESS_LITERAL')
+        return tmp_ret
+
+    ipv4_address_literal=
+        """
+            Snum 3("."  Snum)
+        """
+        tmp_ret = self._get(_and('snum', _c('3', _and('.', 'snum'))))
+        if tmp_ret:
+            self._add_element(ISEMAIL_ELEMENT_DOMAIN_LIT_IPV4)
+            self._add_response('DOMAIN_LIT_IPV4')
+
+    snum=
+        """
+            1*3DIGIT
+                ; representing a decimal integer
+                ; value in the range 0 through 255
+        """
+        tmp_ret = self._get(_or(
+            'IPV4_19',
+            _and('IPV4_19', 'DIGIT'),
+            _or(
+                _and('1', 'DIGIT', 'DIGIT'),
+                _and('2', 'IPV4_04', 'DIGIT'),
+                _and('2', '5', 'IPV4_05'),
+            )))
+        return tmp_ret
+
+    ipv6_address_literal=
+        """
+            "IPv6:" IPv6-addr
+        """
+        return self._get(_and('IPv6:', 'ipv6_addr'))
+
+    ipv6_addr=
+        """
+            IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
+        """
+        tmp_ret = self._get(_or('ipv6_full', 'ipv6_comp', 'ipv6v4_full', 'ipv6v4_comp'))
+
+        # TODO: Validate IPv6 Address
+
+        self._add_element(ISEMAIL_ELEMENT_DOMAIN_LIT_IPV6, tmp_ret)
+        return tmp_ret
+
+    ipv6_full=
+        """
+        IPv6-hex 7(":" IPv6-hex)
+        """
+        return self._get(_and('ipv6_hex', _c(7, _and(':', 'ipv6_hex'))))
+
+    ipv6_comp=
+        """
+        [IPv6-hex *5(":" IPv6-hex)] "::" [IPv6-hex *5(":" IPv6-hex)]
+
+              ; The "::" represents at least 2 16-bit groups of
+              ; zeros.  No more than 6 groups in addition to the
+              ; "::" may be present.
+        """
+        return self._get(_and(
+            'ipv6_hex', _c('*5', _and(':', 'ipv6_hex')),
+            '::',
+            'ipv6_hex', _c('*5', _and(':', 'ipv6_hex')))),
+
+
+    ipv6v4_full=
+        """
+        IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
+        """
+        return self._get(_and('ipv6_hex', _c(5, _and(':', 'ipv6_hex')), 'ipv4_address_literal'))
+
+    ipv6v4_comp=
+        """
+        [IPv6-hex *3(":" IPv6-hex)] "::" [IPv6-hex *3(":" IPv6-hex) ":"] IPv4-address-literal
+              ; The "::" represents at least 2 16-bit groups of
+              ; zeros.  No more than 4 groups in addition to the
+              ; "::" and IPv4-address-literal may be present.
+        """
+        return self._get(_and(
+            'ipv6_hex', _c('*2', _and(':', 'ipv6_hex')),
+            '::',
+            'ipv6_hex', _c('*2', _and(':', 'ipv6_hex')),'ipv4_address_literal')),
+
+
+    ipv6_hex=
+        tmp_ret = self._get(
+            _or(
+                _c(1, 'HEXDIG'),
+                _c(2, 'HEXDIG'),
+                _c(3, 'HEXDIG'),
+                _c(4, 'HEXDIG'))
+        )
+        return tmp_ret
+
+    general_address_literal=
+        """
+        Ldh-str ":" 1*dcontent
+        """
+        tmp_ret = self._get(_and(
+            _c('*', 'LTR_STR'),
+            ':',
+            _c('*', 'dcontent')
+        ))
+        return tmp_ret
+
+
+
+)
+
+
 '''
 class MetaInfo(object):
     def __init__(self, **kwargs):
@@ -251,6 +715,8 @@ class MetaLookup(object):
         self.diags = MetaList(diags)
         self.ref = MetaList(references)
 
+    def __getitem__(self, item):
+        return self.diags[item]
 
 # <Categories>
 ISEMAIL_RESP_CATEGORIES = dict(
@@ -1053,7 +1519,7 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
-    ERR_UNCLOSE_DQUOTED_STR=dict(
+    ERR_UNCLOSED_QUOTED_STR=dict(
         value=145,
         category='ERR',
         description="Unclosed quoted string",
@@ -1102,6 +1568,14 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
+    ERR_EMPTY_ADDRESS=dict(
+        value=255,
+        category='ERR',
+        description="Empty Address Passed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+
 )
 
 META_LOOKUP = MetaLookup(

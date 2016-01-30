@@ -29,12 +29,15 @@ Date       Tests        Version Notes
 							g dash dash a.com no longer has an MX record.
 2011-07-14 All		3.04	Changed my link to http://isemail.info
 2013-11-29 #71		3.05	Changed RFC5321 to DEPREC
-2016-01-28 All		4.00	During conversion to python,
-							Added in additional diag codes that can be returned as well as validation for
-							local/domain strings, removed "" from strings for easier reading.
+2016-01-28 All		4.00	(During conversion to python)
+							- Added additional diag codes that can be returned
+							- Added data for validation of element parsing.
+							- Removed "ISEMAIL_" from strings for easier reading.
+							- Added "_" between words in some diag codes for readability.
+
 
 -->
-<tests version="3.05">
+<tests version="4.00">
 	<description>
 		<p><strong>New test set</strong></p>
 		<p>This test set is designed to replace and extend the coverage of the original set but with fewer tests.</p>
@@ -42,40 +45,43 @@ Date       Tests        Version Notes
 	</description>
 	<test id="1">
 		<address>test@iana.org</address>
+        <arrowstr/>
 		<category>VALID_CATEGORY</category>
-		<diagnosis>VALID</diagnosis>
+		<diagnosis pos="0">VALID</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
-		<localpart>test</localpart>
-		<domainpart>iana.org</domainpart>
+        <elements>
+    		<localpart>test</localpart>
+	    	<domainpart>iana.org</domainpart>
+        </elements>
 	</test>
 	<test id="2">
 		<address/>
+        <arrowstr>^</arrowstr>
 		<category>ERR</category>
-		<diagnosis>ERR_NODOMAIN</diagnosis>
-		<diagnosis>ERR_NOLOCALPART</diagnosis>
+		<diagnosis>ERR_EMPTY_ADDRESS</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="3">
 		<address>test</address>
 		<category>ERR</category>
-		<diagnosis>ERR_NODOMAIN</diagnosis>
+		<diagnosis pos="4">ERR_NO_DOMAIN_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="4">
 		<address>@</address>
 		<category>ERR</category>
-		<diagnosis>ERR_NOLOCALPART</diagnosis>
-        <diagnosis>ERR_NODOMAIN</diagnosis>
+		<diagnosis pos="0">ERR_NO_LOCAL_PART</diagnosis>
+        <diagnosis pos="1">ERR_NO_DOMAIN_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="5">
 		<address>test@</address>
 		<category>ERR</category>
-		<diagnosis>ERR_NODOMAIN</diagnosis>
+		<diagnosis pos="5">ERR_NO_DOMAIN_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -89,17 +95,18 @@ Date       Tests        Version Notes
 	</test>
 	<test id="7">
 		<address>@io</address>
+        <arrowstr>^  ^</arrowstr>
 		<comment>io. currently has an MX-record (Feb 2011)</comment>
 		<category>ERR</category>
-		<diagnosis>ERR_NOLOCALPART</diagnosis>
-        <diagnosis>RFC5321_TLD</diagnosis>
+		<diagnosis pos="0">ERR_NO_LOCAL_PART</diagnosis>
+        <diagnosis pos="3">RFC5321_TLD</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="8">
 		<address>@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_NOLOCALPART</diagnosis>
+		<diagnosis>ERR_NO_LOCAL_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -116,8 +123,10 @@ Date       Tests        Version Notes
 		<diagnosis>VALID</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
-        <localpart>test</localpart>
-        <domainpart>about.museum</domainpart>
+        <elements>
+            <localpart>test</localpart>
+            <domainpart>about.museum</domainpart>
+        </elements>
 	</test>
 	<test id="11">
 		<address>a@iana.org</address>
@@ -146,8 +155,10 @@ Date       Tests        Version Notes
 		<diagnosis>VALID</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
-        <localpart>test.test</localpart>
-        <domainpart>iana.org</domainpart>
+        <elements>
+            <localpart>test.test</localpart>
+            <domainpart>iana.org</domainpart>
+        </elements>
 	</test>
 	<test id="15">
 		<address>.test@iana.org</address>
@@ -155,8 +166,10 @@ Date       Tests        Version Notes
 		<diagnosis>ERR_DOT_START</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
-        <localpart/>
-        <domainpart>iana.org</domainpart>
+        <elements>
+            <localpart/>
+            <domainpart>iana.org</domainpart>
+        </elements>
 	</test>
 	<test id="16">
 		<address>test.@iana.org</address>
@@ -164,21 +177,23 @@ Date       Tests        Version Notes
 		<diagnosis>ERR_DOT_END</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
-        <localpart/>
-        <domainpart>iana.org</domainpart>
+        <elements>
+            <localpart/>
+            <domainpart>iana.org</domainpart>
+        </elements>
 	</test>
 	<test id="17">
 		<address>test..iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_CONSECUTIVEDOTS</diagnosis>
-        <diagnosis>ERR_NODOMAIN</diagnosis>
+		<diagnosis>ERR_CONSECUTIVE_DOTS</diagnosis>
+        <diagnosis>ERR_NO_DOMAIN_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="18">
 		<address>test_exa-mple.com</address>
 		<category>ERR</category>
-		<diagnosis>ERR_NODOMAIN</diagnosis>
+		<diagnosis>ERR_NO_DOMAIN_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -213,14 +228,14 @@ Date       Tests        Version Notes
 	<test id="23">
 		<address>test@iana.123</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_TLDNUMERIC</diagnosis>
+		<diagnosis>RFC5321_TLD_NUMERIC</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="24">
 		<address>test@255.255.255.255</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_TLDNUMERIC</diagnosis>
+		<diagnosis>RFC5321_TLD_NUMERIC</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -234,7 +249,7 @@ Date       Tests        Version Notes
 	<test id="26">
 		<address>abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghiklmn@iana.org</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_LOCAL_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_LOCAL_TOO_LONG</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -248,7 +263,7 @@ Date       Tests        Version Notes
 	<test id="28">
 		<address>test@abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghiklm.com</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_LABEL_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_LABEL_TOO_LONG</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -262,14 +277,14 @@ Date       Tests        Version Notes
 	<test id="30">
 		<address>test@-iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_DOMAINHYPHENSTART</diagnosis>
+		<diagnosis>ERR_DOMAIN_HYPHEN_START</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="31">
 		<address>test@iana-.com</address>
 		<category>ERR</category>
-		<diagnosis>ERR_DOMAINHYPHENEND</diagnosis>
+		<diagnosis>ERR_DOMAIN_HYPHEN_END</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -305,7 +320,7 @@ Date       Tests        Version Notes
 	<test id="36">
 		<address>test@iana..com</address>
 		<category>ERR</category>
-		<diagnosis>ERR_CONSECUTIVEDOTS</diagnosis>
+		<diagnosis>ERR_CONSECUTIVE_DOTS</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -326,35 +341,35 @@ Date       Tests        Version Notes
 	<test id="39">
 		<address>abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghiklm@abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_TOO_LONG</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="40">
 		<address>a@abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefg.hij</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_TOO_LONG</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="41">
 		<address>a@abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghikl.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefg.hijk</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAIN_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_TOO_LONG</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="42">
 		<address>"test"@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="43">
 		<address>""@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -368,28 +383,28 @@ Date       Tests        Version Notes
 	<test id="45">
 		<address>"\a"@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="46">
 		<address>"\""@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="47">
 		<address>"\"@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDQUOTEDSTR</diagnosis>
+		<diagnosis>ERR_UNCLOSED_QUOTED_STR</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="48">
 		<address>"\\"@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -403,7 +418,7 @@ Date       Tests        Version Notes
 	<test id="50">
 		<address>"test@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDQUOTEDSTR</diagnosis>
+		<diagnosis>ERR_UNCLOSED_QUOTED_STR</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -431,21 +446,21 @@ Date       Tests        Version Notes
 	<test id="54">
 		<address>"test"."test"@iana.org</address>
 		<category>DEPREC</category>
-		<diagnosis>DEPREC_LOCALPART</diagnosis>
+		<diagnosis>DEPREC_LOCAL_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="55">
 		<address>"test\ test"@iana.org</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_QUOTEDSTRING</diagnosis>
+		<diagnosis>RFC5321_QUOTED_STRING</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="56">
 		<address>"test".test@iana.org</address>
 		<category>DEPREC</category>
-		<diagnosis>DEPREC_LOCALPART</diagnosis>
+		<diagnosis>DEPREC_LOCAL_PART</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -467,7 +482,7 @@ Date       Tests        Version Notes
 		<address>"abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghj"@iana.org</address>
 		<comment>Quotes are still part of the length restriction</comment>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_LOCAL_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_LOCAL_TOO_LONG</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
@@ -475,14 +490,14 @@ Date       Tests        Version Notes
 		<address>"abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefg\h"@iana.org</address>
 		<comment>Quoted pair is still part of the length restriction</comment>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_LOCAL_TOOLONG</diagnosis>
+		<diagnosis>RFC5322_LOCAL_TOO_LONG</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="61">
 		<address>test@[255.255.255.255]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -496,154 +511,154 @@ Date       Tests        Version Notes
 	<test id="63">
 		<address>test@[255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="64">
 		<address>test@[255.255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="65">
 		<address>test@[255.255.255.256]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="66">
 		<address>test@[1111:2222:3333:4444:5555:6666:7777:8888]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="67">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:7777]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_GRPCOUNT</diagnosis>
+		<diagnosis>RFC5322_IPV6_GRP_COUNT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="68">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:7777:8888]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="69">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:7777:8888:9999]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_GRPCOUNT</diagnosis>
+		<diagnosis>RFC5322_IPV6_GRP_COUNT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="70">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:7777:888G]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_BADCHAR</diagnosis>
+		<diagnosis>RFC5322_IPV6_BAD_CHAR</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="71">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666::8888]</address>
 		<category>DEPREC</category>
-		<diagnosis>RFC5321_IPV6DEPRECATED</diagnosis>
+		<diagnosis>RFC5321_IPV6_DEPRECATED</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="72">
 		<address>test@[IPv6:1111:2222:3333:4444:5555::8888]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="73">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666::7777:8888]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_MAXGRPS</diagnosis>
+		<diagnosis>RFC5322_IPV6_MAX_GRPS</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="74">
 		<address>test@[IPv6::3333:4444:5555:6666:7777:8888]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_COLONSTRT</diagnosis>
+		<diagnosis>RFC5322_IPV6_COLON_STRT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="75">
 		<address>test@[IPv6:::3333:4444:5555:6666:7777:8888]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="76">
 		<address>test@[IPv6:1111::4444:5555::8888]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_2X2XCOLON</diagnosis>
+		<diagnosis>RFC5322_IPV6_2X2X_COLON</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="77">
 		<address>test@[IPv6:::]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="78">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_GRPCOUNT</diagnosis>
+		<diagnosis>RFC5322_IPV6_GRP_COUNT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="79">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:255.255.255.255]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="80">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666:7777:255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_GRPCOUNT</diagnosis>
+		<diagnosis>RFC5322_IPV6_GRP_COUNT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="81">
 		<address>test@[IPv6:1111:2222:3333:4444::255.255.255.255]</address>
 		<category>RFC5321</category>
-		<diagnosis>RFC5321_ADDRESSLITERAL</diagnosis>
+		<diagnosis>RFC5321_ADDRESS_LITERAL</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="82">
 		<address>test@[IPv6:1111:2222:3333:4444:5555:6666::255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_MAXGRPS</diagnosis>
+		<diagnosis>RFC5322_IPV6_MAX_GRPS</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="83">
 		<address>test@[IPv6:1111:2222:3333:4444:::255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_2X2XCOLON</diagnosis>
+		<diagnosis>RFC5322_IPV6_2X2X_COLON</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
 	<test id="84">
 		<address>test@[IPv6::255.255.255.255]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_COLONSTRT</diagnosis>
+		<diagnosis>RFC5322_IPV6_COLON_STRT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -698,7 +713,7 @@ Date       Tests        Version Notes
 	<test id="91">
 		<address>((comment)test@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDCOMMENT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_COMMENT</diagnosis>
 		<source>Michael Rushton</source>
 		<sourcelink>http://squiloople.com/tag/email/</sourcelink>
 	</test>
@@ -789,70 +804,70 @@ Date       Tests        Version Notes
 	<test id="102">
 		<address>test@iana.org-</address>
 		<category>ERR</category>
-		<diagnosis>ERR_DOMAINHYPHENEND</diagnosis>
+		<diagnosis>ERR_DOMAIN_HYPHEN_END</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="103">
 		<address>"test@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDQUOTEDSTR</diagnosis>
+		<diagnosis>ERR_UNCLOSED_QUOTED_STR</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="104">
 		<address>(test@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDCOMMENT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_COMMENT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="105">
 		<address>test@(iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDCOMMENT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_COMMENT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="106">
 		<address>test@[1.2.3.4</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDDOMLIT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_DOM_LIT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="107">
 		<address>"test\"@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDQUOTEDSTR</diagnosis>
+		<diagnosis>ERR_UNCLOSED_QUOTED_STR</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="108">
 		<address>(comment\)test@iana.org</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDCOMMENT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_COMMENT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="109">
 		<address>test@iana.org(comment\)</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDCOMMENT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_COMMENT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="110">
 		<address>test@iana.org(comment\</address>
 		<category>ERR</category>
-		<diagnosis>ERR_BACKSLASHEND</diagnosis>
+		<diagnosis>ERR_BACKSLASH_END</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="112">
 		<address>test@[RFC-5322-domain-literal]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
@@ -874,35 +889,35 @@ Date       Tests        Version Notes
 		<address>test@[RFC-5322-\&#x2407;-domain-literal]</address>
 		<comment>obs-dtext <strong>and</strong> obs-qp</comment>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMLIT_OBSDTEXT</diagnosis>
+		<diagnosis>RFC5322_DOM_LIT_OBS_DTEXT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="116">
 		<address>test@[RFC-5322-\&#x2409;-domain-literal]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMLIT_OBSDTEXT</diagnosis>
+		<diagnosis>RFC5322_DOM_LIT_OBS_DTEXT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="117">
 		<address>test@[RFC-5322-\]-domain-literal]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMLIT_OBSDTEXT</diagnosis>
+		<diagnosis>RFC5322_DOM_LIT_OBS_DTEXT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="118">
 		<address>test@[RFC-5322-domain-literal\]</address>
 		<category>ERR</category>
-		<diagnosis>ERR_UNCLOSEDDOMLIT</diagnosis>
+		<diagnosis>ERR_UNCLOSED_DOM_LIT</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="119">
 		<address>test@[RFC-5322-domain-literal\</address>
 		<category>ERR</category>
-		<diagnosis>ERR_BACKSLASHEND</diagnosis>
+		<diagnosis>ERR_BACKSLASH_END</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
@@ -910,14 +925,14 @@ Date       Tests        Version Notes
 		<address>test@[RFC 5322 domain literal]</address>
 		<comment>Spaces are FWS in a domain literal</comment>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
 	<test id="121">
 		<address>test@[RFC-5322-domain-literal] (comment)</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_DOMAINLITERAL</diagnosis>
+		<diagnosis>RFC5322_DOMAIN_LITERAL</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
@@ -1204,7 +1219,7 @@ Date       Tests        Version Notes
 	<test id="159">
 		<address>test@[IPv6:1::2:]</address>
 		<category>RFC5322</category>
-		<diagnosis>RFC5322_IPV6_COLONEND</diagnosis>
+		<diagnosis>RFC5322_IPV6_COLON_END</diagnosis>
 		<source>Dominic Sayers</source>
 		<sourcelink>http://isemail.info</sourcelink>
 	</test>
