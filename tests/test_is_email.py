@@ -1,7 +1,7 @@
 import unittest
 # from .old_test_data import TESTS
 # from CompIntel.helpers.IsEmail.meta import META_DICT
-from py_is_email import is_email
+from py_is_email import ParseEmail
 from meta_data import *
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
@@ -11,7 +11,16 @@ from meta import IsEmailMetaData
 
 # TEST_DATA = ET.parse('tests.xml').getroot()
 # TEST_DATA2 = ET.parse('tests-original.xml').getroot()
+import logging
+import sys
+'''
+logger = logging.getLogger()
+logger.setLevel(0)
+stream_handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(stream_handler)
+'''
 
+# from testfixtures import LogCapture
 
 def set_find(elem):
 
@@ -50,11 +59,9 @@ class TestSets(object):
 
 elements_title_list = (
     ISEMAIL_ELEMENT_LOCALPART,
-    ISEMAIL_ELEMENT_LOCAL_COMMENT,
-    ISEMAIL_ELEMENT_LOCAL_QUOTEDSTRING,
+    ISEMAIL_ELEMENT_COMMENT,
+    ISEMAIL_ELEMENT_QUOTEDSTRING,
     ISEMAIL_ELEMENT_DOMAINPART,
-    ISEMAIL_ELEMENT_DOMAIN_COMMENT,
-    ISEMAIL_ELEMENT_DOMAIN_QUOTEDSTRING,
     ISEMAIL_ELEMENT_DOMAIN_LIT_IPV4,
     ISEMAIL_ELEMENT_DOMAIN_LIT_IPV6,
     ISEMAIL_ELEMENT_DOMAIN_LIT_GEN,
@@ -80,10 +87,7 @@ class GetTest(object):
             tmp_key = '%s: [pos: %s]' % (tmp_diag, tmp_pos)
             self.diags[tmp_key] = dict(
                 position=tmp_pos,
-                key=tmp_key,
-                id=META_LOOKUP.diags[tmp_diag]['value'],
-                str=META_LOOKUP.diags[tmp_diag]['description']
-            )
+                diag=META_LOOKUP.diags[tmp_diag])
 
             if self.max_diag is None:
                 self.max_diag = tmp_diag
@@ -97,7 +101,6 @@ class GetTest(object):
                     tmp_element_strings.append(item.text)
                 if tmp_element_strings:
                     self.elements[name] = tmp_element_strings
-
 
     def name(self, test_type=''):
         if test_type:
@@ -116,11 +119,56 @@ class GetTest(object):
         for i in tmp_ret:
             yield i
 
+pe = ParseEmail()
+
+def val_max_diag(ret, exp):
+    assert ret == exp
+
+def val_parse_run(test):
+    tmp_res = pe(test.address)
+    val_max_diag.description = test.name('max_diag')
+    yield val_max_diag, tmp_res['key'], test.max_diag
+
+
+"""
+def test_is_email():
+    tests = TestSets('tests.xml')
+    for test in tests:
+
+
+
+        print(test.name())
+        # with self.subTest(test.name('Run')):
+        tmp_res = None
+        val_parse_run.description = test.name()
+        yield val_parse_run, test
+
+        # with self.subTest(test.name('MaxDiag')):
+        # yield val_max_diag, tmp_res['key'], test.max_diag
+            # self.assertEqual(test.max_diag, tmp_res['key'])
+        '''
+        if test.elements:
+            with self.subTest(test.name('elements')):
+                for name, elements in test.elements.items():
+                    tmp_element_list = pe.elements(element_name=name)
+                    self.assertEqual(tmp_element_list, elements)
+
+        if len(test.diags) > 1:
+            with self.subTest(test.name('diags')):
+                self.assertEqual(test.diags, pe.diags())
+        '''
+"""
+
+
 class TestIsEmail(unittest.TestCase):
     def test_is_email(self):
         tests = TestSets('tests.xml')
         for test in tests:
 
+            logger = logging.getLogger()
+            logger.setLevel(0)
+            stream_handler = logging.StreamHandler(sys.stdout)
+            logger.addHandler(stream_handler)
 
             '''
             tmp_my_find = set_find(test)
@@ -135,14 +183,17 @@ class TestIsEmail(unittest.TestCase):
             tmp_parse = {}
             tmp_name = 'id: %s [%s]:  %s' % (test_id, test_diag, test_address)
             '''
+
+            # l = LogCapture()
+
             print(test.name())
             with self.subTest(test.name('Run')):
 
-                tmp_res = is_email(test.address)
+                tmp_res = pe(test.address)
 
                 # print(tmp_res)
 
-                tmp_res_text = META_LOOKUP[int(tmp_res)]['key']
+                # tmp_res_text = META_LOOKUP[int(tmp_res)]['key']
                 '''
                 msg = ['\n%s  =>  local: %s  /  domain:  %s\n' % (test.address, tmp_res[ISEMAIL_ELEMENT_LOCALPART], tmp_res[ISEMAIL_ELEMENT_DOMAINPART])]
                 msg.append('Diags returned: %s' % tmp_res.responses(response_type='key_list'))
@@ -156,12 +207,19 @@ class TestIsEmail(unittest.TestCase):
                 '''
 
                 with self.subTest(test.name('MaxDiag')):
-                    self.assertEqual(test.max_diag, tmp_res_text)
+                    # yield val_max_diag, tmp_res['key'], test.max_diag
+                    self.assertEqual(test.max_diag, tmp_res['key'])
 
                 if test.elements:
                     with self.subTest(test.name('elements')):
-                        self.assertEqual(test.elements, tmp_res.elements)
+                        for name, elements in test.elements.items():
+                            tmp_element_list = pe.elements(element_name=name)
+                            self.assertEqual(tmp_element_list, elements)
 
-                if len(test.diags)> 1:
+                if len(test.diags) > 1:
                     with self.subTest(test.name('diags')):
-                        self.assertEqual(test.diags, tmp_res.responses)
+                        self.assertEqual(test.diags, pe.diags())
+
+            # print(l)
+
+            # l.uninstall()
