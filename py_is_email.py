@@ -167,7 +167,7 @@ class ParseEmail(object):
         self._elements = []
         self._diags = []
         self.work = WorkQueue()
-        self.parser = ParserOps()
+        self.parser = parser_ops
         self._max_diag = {'value': 0}
         self.local_part = None
         self.domain_part = None
@@ -197,7 +197,7 @@ class ParseEmail(object):
     def parse(self, raw_email):
         log_debug('Parse: %s', raw_email)
         self.reset()
-        self.rem_email = raw_email
+        self.rem_email.extend(raw_email)
         self.raw_length = len(raw_email)
         self._parsing_local_part = True
         self.parser.parse_email(self)

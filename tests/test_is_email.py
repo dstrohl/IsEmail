@@ -13,12 +13,12 @@ from meta import IsEmailMetaData
 # TEST_DATA2 = ET.parse('tests-original.xml').getroot()
 import logging
 import sys
-'''
+
 logger = logging.getLogger()
 logger.setLevel(0)
 stream_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(stream_handler)
-'''
+
 
 # from testfixtures import LogCapture
 
@@ -165,10 +165,10 @@ class TestIsEmail(unittest.TestCase):
         tests = TestSets('tests.xml')
         for test in tests:
 
-            logger = logging.getLogger()
-            logger.setLevel(0)
-            stream_handler = logging.StreamHandler(sys.stdout)
-            logger.addHandler(stream_handler)
+            # logger = logging.getLogger()
+            # logger.setLevel(0)
+            # stream_handler = logging.StreamHandler(sys.stdout)
+            # logger.addHandler(stream_handler)
 
             '''
             tmp_my_find = set_find(test)
@@ -186,7 +186,7 @@ class TestIsEmail(unittest.TestCase):
 
             # l = LogCapture()
 
-            print(test.name())
+            print('\n\n*********************************************************************\n',test.name())
             with self.subTest(test.name('Run')):
 
                 tmp_res = pe(test.address)
