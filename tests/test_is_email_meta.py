@@ -1,39 +1,25 @@
 import unittest
 
-from CompIntel.helpers.IsEmail.meta import IsEmailMetaData
+from isemail_parsers import _and, _or, _c, _char, _for, _look, _m, _make_meth, _opt, _rule, ParserOps
+from py_is_email import ParseEmail, ParserRule
 
-IS_EMAIL_META = IsEmailMetaData()
+TEST_SET_simple = dict(
+    start=_char('abcdef'),
+    and_rule=_and(_char('abcd'), _char('defg')),
+    or_rule=_or(_char('abcd'), _char('jklm'))
+)
 
-class TestIsEmailMeta(unittest.TestCase):
 
-    maxDiff = None
 
-    def test_valid(self):
-        iem = IS_EMAIL_META['ISEMAIL_VALID']
+rules = ParserOps(TEST_SET_simple)
 
-        short_str_check = 'VALID_CATEGORY / VALID:\n' \
-                          '    - Address is valid\n' \
-                          '    - Address is valid. Please note that this does not mean the address actually\n' \
-                          '      exists, nor even that the domain actually exists. This address could be\n' \
-                          '      issued by the domain owner without breaking the rules of any RFCs.\n'
 
-        self.assertEqual('VALID', iem.id)
-        self.assertEqual('VALID_CATEGORY', iem.cat_id)
-        self.assertEqual('VALID_CATEGORY / VALID', iem.name)
+class TestOperations(unittest.TestCase):
+    def test_char(self):
+        pem = ParseEmail(parser=rules.parse_gen, parser_start_rule='and_rule')
 
-        self.assertEqual(short_str_check, iem.short_string())
+        tmp = pem('ag')
 
-    def test_valid_int(self):
-        iem = IS_EMAIL_META[0]
+        print(tmp)
 
-        short_str_check = 'VALID_CATEGORY / VALID:\n' \
-                          '    - Address is valid\n' \
-                          '    - Address is valid. Please note that this does not mean the address actually\n' \
-                          '      exists, nor even that the domain actually exists. This address could be\n' \
-                          '      issued by the domain owner without breaking the rules of any RFCs.\n'
 
-        self.assertEqual('VALID', iem.id)
-        self.assertEqual('VALID_CATEGORY', iem.cat_id)
-        self.assertEqual('VALID_CATEGORY / VALID', iem.name)
-
-        self.assertEqual(short_str_check, iem.short_string())

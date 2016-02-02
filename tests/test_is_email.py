@@ -13,12 +13,12 @@ from meta import IsEmailMetaData
 # TEST_DATA2 = ET.parse('tests-original.xml').getroot()
 import logging
 import sys
-
+'''
 logger = logging.getLogger()
 logger.setLevel(0)
 stream_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(stream_handler)
-
+'''
 
 # from testfixtures import LogCapture
 
@@ -161,6 +161,7 @@ def test_is_email():
 
 
 class TestIsEmail(unittest.TestCase):
+    maxDiff = None
     def test_is_email(self):
         tests = TestSets('tests.xml')
         for test in tests:
@@ -208,7 +209,7 @@ class TestIsEmail(unittest.TestCase):
 
                 with self.subTest(test.name('MaxDiag')):
                     # yield val_max_diag, tmp_res['key'], test.max_diag
-                    self.assertEqual(test.max_diag, tmp_res['key'])
+                    self.assertEqual(test.max_diag, tmp_res['diag']['key'])
 
                 if test.elements:
                     with self.subTest(test.name('elements')):
@@ -223,3 +224,4 @@ class TestIsEmail(unittest.TestCase):
             # print(l)
 
             # l.uninstall()
+            break

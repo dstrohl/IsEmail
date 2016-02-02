@@ -47,7 +47,7 @@ EMAIL_PARSER_CONST = dict(
 
     # US-ASCII visible characters not valid for atext (http:#tools.ietf.org/html/rfc5322#section-3.2.3)
 
-    ATEXT=make_char_str((65, 90), (48, 57), (97, 122), "!#$%&'*+-=?^_`{|}~"),
+    ATEXT=make_char_str((68, 90), (48, 57), (97, 122), "!#$%&'*+-=?^_`{|}~"),
     CRLF='\r\n',
     CTEXT=make_char_str((33, 39), (42, 91), 93, 126, obs_no_ws_ctl),
     DCONTENT=make_char_str((33, 90), (94, 126)),
@@ -58,7 +58,7 @@ EMAIL_PARSER_CONST = dict(
     IPV4_05='012345',
     IPV4_12='12',
     IPV4_19='123456789',
-    LTR_STR=make_char_str((65, 90), (48, 57), (97, 122)),
+    LTR_STR=make_char_str((68, 90), (48, 57), (97, 122)),
     OBS_CTEXT=obs_no_ws_ctl,
     OBS_DTEXT=obs_no_ws_ctl,
     OBS_NO_WS_CTL=make_char_str((1, 8), 11, 12, (14, 31), 127),
@@ -70,24 +70,12 @@ EMAIL_PARSER_CONST = dict(
     VCHAR=make_char_str((33, 126)),
     WSP=' \t',
 )
-'''
+
 EMAIL_PARSER_CONSOLIDATABLE = {
     'count': ('and', 'char'),
     'mark': ('char', 'and', 'or', 'count', 'opt'),
     'opt': ('char', 'and', 'or', 'count', 'mark')
 }
-'''
-EMAIL_PARSER_CONSOLIDATABLE = {
-   'char': ('min_count', 'max_count', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'rule': set(),
-   'and': ('min_count', 'max_count', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'or': ('optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'opt': ('optional', 'return_string'),
-   'count': ('min_count', 'max_count', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'mark': ('return_string', 'on_fail', 'on_pass', 'element_name'),
-   'look': set(),
-}
-
 
 EMAIL_PARSER_OPS = {}
 '''
@@ -123,28 +111,6 @@ class ParserRule(object):
         self.ops.extend(ops)
 
 '''
-
-
-class SpaceText(object):
-    def __init__(self, indent=2):
-        self.indent_size = indent
-        self.indent = 0
-
-    @property
-    def push(self):
-        self.indent += self.indent_size
-        return str(self)
-
-    @property
-    def pop(self):
-        self.indent -= self.indent_size
-        return str(self)
-
-    def __str__(self):
-        return ''.ljust(self.indent)
-
-space_text = SpaceText()
-
 class ParserRule(object):
     rule_type = ''
     # single_op = False
@@ -158,7 +124,7 @@ class ParserRule(object):
         self.rule_type = meth
         self.kwargs = kwargs
         self.ops = ops
-        # log_ddebug('making type "%s" / %r', meth, self)
+        log_ddebug('making type "%s" / %r', meth, self)
 
     @property
     def op(self):
@@ -173,47 +139,20 @@ class ParserRule(object):
                 tmp_ret_list.append('%r' % r)
             tmp_ret = '%s(%s)' % (self.rule_type, ', '.join(tmp_ret_list))
         else:
-            tmp_ret = '%s(%r)' % (self.rule_type, self.op)
-
-        if self.rule_type != 'opt' and self.kwargs.get('optional', False):
-            tmp_ret = '[%s]' % tmp_ret
+            tmp_ret = 'rule(%r)' % self.op
 
         return tmp_ret
 
     def _can_consolidate(self, other_type, **kwargs):
-        tmp_my_methods = EMAIL_PARSER_CONSOLIDATABLE[self.rule_type]
-
-        tmp_consolidate = True
-
-        for m in kwargs:
-            if m not in tmp_my_methods:
-                tmp_consolidate = False
-                break
-
-        if tmp_consolidate:
+        if self.rule_type in EMAIL_PARSER_CONSOLIDATABLE[other_type]:
             self.kwargs.update(kwargs)
-            # log_ddebug('     consolidating %s(%r) into %s', other_type, kwargs, self.rule_type)
             return True
         return False
 
     def __call__(self, parser, data):
-        log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_email))
+        log_ddebug('running operation: %r on data: %r', self, ''.join(data.rem_email))
         method = getattr(parser, '_get_%s' % self.rule_type)
-        tmp = space_text.push
-        try:
-            tmp_ret = method(data, *self.ops, **self.kwargs)
-        except NoElementError:
-            tmp = space_text.pop
-            log_ddebug('%s FAIL->"%r" failed!', space_text, self)
-            raise
-        except TypeError:
-            tmp = space_text.pop
-            log_ddebug('%s !!! type error when running %r', space_text, self)
-            raise
-        else:
-            tmp = space_text.pop
-            log_ddebug('%s PASS-> "%r" passed', space_text, self)
-            return tmp_ret
+        return method(data, *self.ops, **self.kwargs)
 
 
 def _make_meth(method, **kwargs):
@@ -250,7 +189,7 @@ def _make_meth(method, **kwargs):
         #  log_ddebug('               falling through, is already a method')
         tmp_ret = method
 
-    # log_ddebug('             was %r, returning %r', method, tmp_ret)
+    log_ddebug('             was %r, returning %r', method, tmp_ret)
     return tmp_ret
 
 
@@ -328,11 +267,11 @@ def _m(op, on_fail=None, on_pass=None, element_name=None, return_string=True):
     op = _make_meth(op)
 
     if op._can_consolidate('mark', on_fail=on_fail, on_pass=on_pass, element_name=element_name, return_string=return_string):
-        tmp_ret = op
+        return op
     else:
-        tmp_ret = ParserRule(op, meth='mark', on_fail=on_fail, on_pass=on_pass,
+        return ParserRule(op, meth='mark', on_fail=on_fail, on_pass=on_pass,
                           element_name=element_name, return_string=return_string)
-    return tmp_ret
+
 
 def _look(op, *fors):
     op = _make_meth(op)
@@ -344,8 +283,151 @@ def _for(op, count=1, on_fail=None, on_pass=None, only_on_fail=False, only_on_pa
                       only_on_pass=only_on_pass, only_on_fail=only_on_fail, count=count)
 
 
+'''
+def _meth(meth_name, **kwargs):
+    return dict(
+        meth='_get_%s' % meth_name,
+        # method=getattr(ParserOps, '_get_%s' % meth_name),
+        args=[],
+        kwargs=kwargs)
+
+def _rule(rule_name):
+    return dict(
+        meth='_get_rule',
+        # method=ParserOps._get_rule,
+        args=[],
+        kwargs={'rule_name': rule_name})
+
+def _char(char_set, **kwargs):
+    kwargs['char_set'] = char_set
+    return dict(
+        meth='_get_char',
+        # method=ParserOps._get_char,
+        args=[],
+        kwargs=kwargs)
+
+def _and(*methods, **kwargs):
+    tmp_methods = []
+    for m in methods:
+        tmp_methods.append(_make_meth(m))
+    return dict(
+        meth='_get_and',
+        # method=ParserOps._get_and,
+        args=tmp_methods,
+        kwargs=kwargs)
+
+def _or(*methods, **kwargs):
+    tmp_methods = []
+    for m in methods:
+        tmp_methods.append(_make_meth(m))
+    return dict(
+        meth='_get_or',
+        # method=ParserOps._get_or,
+        args=tmp_methods,
+        kwargs=kwargs)
+
+def _opt(op, **kwargs):
+    op = _make_meth(op)
+    if op['meth'] == '_get_char':
+        op['kwargs']['optional'] = True
+        return op
+    else:
+        return dict(
+            meth='_get_opt',
+            # method=ParserOps._get_opt,
+            args=(op,),
+            kwargs=kwargs)
+
+def _c(*args):
+
+    if len(args) == 1:
+        min_count = ISEMAIL_MIN_COUNT
+        max_count = ISEMAIL_MAX_COUNT
+        op = args[0]
+    else:
+        op = args[1]
+        first_arg = args[0]
+        if isinstance(first_arg, int) or first_arg.isdigit():
+            min_count = first_arg
+            max_count = first_arg
+        else:
+            if '*' in first_arg:
+                min_count, max_count = first_arg.split('*')
+                if min_count == '':
+                    min_count = ISEMAIL_MIN_COUNT
+                if max_count == '':
+                    max_count = ISEMAIL_MAX_COUNT
+            else:
+                raise AttributeError('"*" not in %s' % first_arg)
+
+        min_count = int(min_count)
+        max_count = int(max_count)
+
+    op = _make_meth(op)
+
+    if op['meth'] in ('_get_char', '_get_and'):
+        op['kwargs']['min_count'] = min_count
+        op['kwargs']['max_count'] = max_count
+        return op
+    else:
+        return dict(
+            meth='_get_count',
+            # method=ParserOps._get_count,
+            args=[],
+            kwargs=dict(
+                min_count=min_count,
+                max_count=max_count,
+                op=op
+            )
+        )
+
+def _m(op, on_fail=None, on_pass=None, element_name=None, return_string=False):
+    op = _make_meth(op)
+
+    if op['meth'] in ('_get_char', '_get_and', '_get_or', '_get_count'):
+        op['kwargs']['on_fail'] = on_fail
+        op['kwargs']['on_pass'] = on_pass
+        op['kwargs']['element_name'] = element_name
+        op['kwargs']['return_string'] = return_string
+
+        return op
+
+    elif op['meth'] == '_get_opt' and on_fail is None and on_pass is None and element_name is None:
+        op['return_string'] = return_string
+        return op
+
+    else:
+        return dict(
+            meth='_get_mark',
+            # method=ParserOps._get_mark,
+            args=[],
+            kwargs=dict(
+                op=op,
+                on_fail=on_fail,
+                on_pass=on_pass,
+                element_name=element_name,
+                return_string=return_string)
+        )
+
+def _l(op, char_set, on_fail=None, on_pass=None, only_on_fail=False, only_on_pass=False):
+    op = _make_meth(op)
+
+    return dict(
+        meth='_get_look',
+        # method=ParserOps._get_look,
+        args=[],
+        kwargs=dict(
+            op=op,
+            char_set=char_set,
+            on_fail=on_fail,
+            on_pass=on_pass,
+            only_on_pass=only_on_pass,
+            only_on_fail=only_on_fail)
+    )
+'''
+
 EMAIL_PARSER_RULES = dict(
-    start=_and(
+    addr_spec=_and(
         # local-part "@" domain
         _m('local_part', on_fail='ERR_NO_LOCAL_PART', element_name=ISEMAIL_ELEMENT_LOCALPART),
         _c(1, 'AT'),
@@ -430,9 +512,9 @@ EMAIL_PARSER_RULES = dict(
     dot_atom_text=_and(
         # 1*atext *("." 1*atext)
         'ATEXT',
-        _c(_opt(_and(
+        _and(
             'DOT',
-            'ATEXT')))),
+            'ATEXT')),
 
     qcontent=_or(
         # qtext / quoted-pair
@@ -586,66 +668,354 @@ EMAIL_PARSER_RULES = dict(
 
 
 class ParserOps(object):
+    '''
+    def __init__(self):
+        self.rules = {}
+        self._fix_list()
+        # self.start_method = self._compile(EMAIL_PARSER_RULES['addr_spec'])
+        self.start_method = self.rules['addr_spec']
 
-    def __init__(self, ruleset=None):
-        if ruleset is None:
-            self.ruleset = EMAIL_PARSER_RULES
+    def _fix_list(self):
+        for name, rule in EMAIL_PARSER_RULES.items():
+            self.rules[name] = self._fix_rule_1(rule)
+
+        for name, rule in self.rules.items():
+            log_ddebug('fixing rule links in %s', name)
+            self._fix_rule_2(rule)
+
+        for name, rule in self.rules.items():
+            log_ddebug('consolidating count/mark/opt items in %s', name)
+            self._fix_rule_3(rule)
+
+
+    def _fix_rule_1(self, rule):
+        tmp_rule = rule.copy()
+        meth = rule['meth']
+        tmp_rule['method'] = getattr(self, meth)
+        if meth in ('_get_and', '_get_or', '_get_opt'):
+            tmp_rule['args'] = []
+            for r in rule['args']:
+                tmp_rule['args'].append(self._fix_rule_1(r))
+        elif meth in ('_get_count', '_get_mark', '_get_look)'):
+            tmp_rule['kwargs']['op'] = self._fix_rule_1(rule['kwargs']['op'])
+        return tmp_rule
+
+    def _fix_rule_2(self, rule):
+        meth = rule['meth']
+        # log_ddebug('          => %s:  %r', meth, rule)
+        if meth == '_get_rule':
+            tmp_name = rule['kwargs']['rule_name']
+            # log_ddebug('     fixing link to rule %s', tmp_name)
+            rule.clear()
+            rule.update(EMAIL_PARSER_RULES[tmp_name])
+
+        if meth in ('_get_and', '_get_or', '_get_opt'):
+            for i, r in enumerate(rule['args']):
+                # log_ddebug('     --- START %s ---', meth)
+                self._fix_rule_2(r)
+                # log_ddebug('     ---- END %s -------', meth)
+        elif meth in ('_get_count', '_get_mark', '_get_look)'):
+            # log_ddebug('     --- START %s ---', meth)
+            self._fix_rule_2(rule['kwargs']['op'])
+            # log_ddebug('     --- END %s ---', meth)
+
+    def _fix_rule_3(self, rule):
+        # log_ddebug('     => %s:  %r', rule['meth'], rule)
+        if rule['meth'] == '_get_count':
+            # log_ddebug('          checking consolidation (_count) for: %s', rule['kwargs']['op']['meth'])
+            if rule['kwargs']['op']['meth'] in ('_get_char', '_get_and'):
+                # log_ddebug('          consolidating %s rule', rule['kwargs']['op']['meth'])
+                rule['kwargs']['op']['kwargs']['min_count'] = rule['kwargs']['min_count']
+                rule['kwargs']['op']['kwargs']['max_count'] = rule['kwargs']['max_count']
+                tmp_rule = rule['kwargs']['op']
+                rule.clear()
+                rule.update(tmp_rule)
+            # else:
+                # log_ddebug('          no consolidation needed for %s', rule['kwargs']['op']['meth'])
+        elif rule['meth'] == '_get_mark':
+            # log_ddebug('          checking consolidation (_mark) for: %s', rule['kwargs']['op']['meth'])
+            if rule['kwargs']['op']['meth'] in ('_get_char', '_get_and', '_get_or', '_get_count'):
+                # log_ddebug('          consolidating %s rule', rule['kwargs']['op']['meth'])
+                rule['kwargs']['op']['kwargs']['on_fail'] = rule['kwargs']['on_fail']
+                rule['kwargs']['op']['kwargs']['on_pass'] = rule['kwargs']['on_pass']
+                rule['kwargs']['op']['kwargs']['element_name'] = rule['kwargs']['element_name']
+                rule['kwargs']['op']['kwargs']['return_string'] = rule['kwargs']['return_string']
+
+                tmp_rule = rule['kwargs']['op']
+                rule.clear()
+                rule.update(tmp_rule)
+
+            elif rule['kwargs']['op']['meth'] == '_get_opt' and 'on_fail' not in rule['kwargs'] \
+                    and 'on_pass' not in rule['kwargs'] and 'element_name' not in rule['kwargs']:
+                rule['kwargs']['op']['kwargs']['return_string'] = rule['kwargs']['return_string']
+                # log_ddebug('          consolidating %s rule', rule['kwargs']['op']['meth'])
+
+                tmp_rule = rule['kwargs']['op']
+                rule.clear()
+                rule.update(tmp_rule)
+            # else:
+            #     log_ddebug('          no consolidation needed for %s', rule['kwargs']['op']['meth'])
+        # else:
+        #     log_ddebug('          no consolidation needed.')
+
+        if rule['meth'] in ('_get_and', '_get_or', '_get_opt'):
+            for i, r in enumerate(rule['args']):
+                # log_ddebug('     --- START %s ---', rule['meth'])
+                self._fix_rule_3(r)
+                # log_ddebug('     ---- END %s -------', rule['meth'])
+        elif rule['meth'] in ('_get_count', '_get_mark', '_get_look)'):
+            # log_ddebug('     --- START %s ---', rule['meth'])
+            self._fix_rule_3(rule['kwargs']['op'])
+            # log_ddebug('     --- END %s ---', rule['meth'])
+
+    '''
+
+    '''
+    def _fix_item(self, rule):
+        if rule['meth'] == '_get_rule':
+            return EMAIL_PARSER_RULES[rule['kwargs']['rule_name']]
         else:
-            self.ruleset = ruleset
+            return rule
+    '''
 
-    def parse_email(self, data, rule=None):
-        rule = rule or 'start'
+    '''
+    @staticmethod
+    def _make_meth(method, **kwargs):
+        log_ddebug('          making method object for -->%r<--', method)
+        if isinstance(method, str):
+            if method[0] == '"' and method[-1] == '"':
+                # if it is a quoted string:  "do this"
+                tmp_and_set = []
+                for c in method[1:-1]:
+                    tmp_and_set.append(ParserOps._make_meth(c))
+                log_ddebug('               "AND" method')
+                return ParserOps._and(*tmp_and_set)
+
+            elif method[0] == '[' and method[-1] == ']':
+                # if it is in square brackets:  [blah]
+                tmp_opp = ParserOps._make_meth(method[1:-1])
+                log_ddebug('               "OPT" method')
+                return ParserOps._opt(tmp_opp, **kwargs)
+
+            else:
+                # this is a string set
+                try:
+                    log_ddebug('               trying "CONST(CHAR)" method')
+                    return ParserOps._char(EMAIL_PARSER_CONST[method])
+                except KeyError:
+                    try:
+                        log_ddebug('               trying "RULE" method')
+                        return ParserOps._rule(method)
+                    except KeyError:
+                        if method[0] == '_':
+                            log_ddebug('               trying "METH" method')
+                            return ParserOps._meth(method)
+                        else:
+                            log_ddebug('               trying "CHAR" method')
+                            return ParserOps._char(method)
+        else:
+            log_ddebug('               falling through, is already a method')
+            return method
+
+    @staticmethod
+    def _meth(meth_name, **kwargs):
+        return dict(
+            meth='_get_%s' % meth_name,
+            method=getattr(ParserOps, '_get_%s' % meth_name),
+            args=[],
+            kwargs=kwargs)
+
+    @staticmethod
+    def _rule(rule_name):
+        return dict(
+            meth='_get_rule',
+            method=ParserOps._get_rule,
+            args=[],
+            kwargs={'rule_name': rule_name})
+
+    @staticmethod
+    def _char(char_set, **kwargs):
+        kwargs['char_set'] = char_set
+        return dict(
+            meth='_get_char',
+            method=ParserOps._get_char,
+            args=[],
+            kwargs=kwargs)
+
+    @staticmethod
+    def _and(*methods, **kwargs):
+        tmp_methods = []
+        for m in methods:
+            tmp_methods.append(ParserOps._make_meth(m))
+        return dict(
+            meth='_get_and',
+            method=ParserOps._get_and,
+            args=tmp_methods,
+            kwargs=kwargs)
+
+    @staticmethod
+    def _or(*methods, **kwargs):
+        tmp_methods = []
+        for m in methods:
+            tmp_methods.append(ParserOps._make_meth(m))
+        return dict(
+            meth='_get_or',
+            method=ParserOps._get_or,
+            args=tmp_methods,
+            kwargs=kwargs)
+
+    @staticmethod
+    def _opt(op, **kwargs):
+        op = ParserOps._make_meth(op)
+        if op['meth'] == '_get_char':
+            op['kwargs']['optional'] = True
+            return op
+        else:
+            return dict(
+                meth='_get_opt',
+                method=ParserOps._get_opt,
+                args=(op,),
+                kwargs=kwargs)
+
+    @staticmethod
+    def _c(*args):
+
+        if len(args) == 1:
+            min_count = ISEMAIL_MIN_COUNT
+            max_count = ISEMAIL_MAX_COUNT
+            op = args[0]
+        else:
+            op = args[1]
+            first_arg = args[0]
+            if isinstance(first_arg, int) or first_arg.isdigit():
+                min_count = first_arg
+                max_count = first_arg
+            else:
+                if '*' in first_arg:
+                    min_count, max_count = first_arg.split('*')
+                    if min_count == '':
+                        min_count = ISEMAIL_MIN_COUNT
+                    if max_count == '':
+                        max_count = ISEMAIL_MAX_COUNT
+                else:
+                    raise AttributeError('"*" not in %s' % first_arg)
+
+            min_count = int(min_count)
+            max_count = int(max_count)
+
+        op = ParserOps._make_meth(op)
+
+        if op['meth'] in ('_get_char', '_get_and'):
+            op['kwargs']['min_count'] = min_count
+            op['kwargs']['max_count'] = max_count
+            return op
+        else:
+            return dict(
+                meth='_get_count',
+                method=ParserOps._get_count,
+                args=[],
+                kwargs=dict(
+                    min_count=min_count,
+                    max_count=max_count,
+                    op=op
+                )
+            )
+
+    @staticmethod
+    def _m(op, on_fail=None, on_pass=None, element_name=None, return_string=False):
+        op = ParserOps._make_meth(op)
+
+        if op['meth'] in ('_get_char', '_get_and', '_get_or', '_get_count'):
+            op['kwargs']['on_fail'] = on_fail
+            op['kwargs']['on_pass'] = on_pass
+            op['kwargs']['element_name'] = element_name
+            op['kwargs']['return_string'] = return_string
+
+            return op
+
+        elif op['meth'] == '_get_opt' and on_fail is None and on_pass is None and element_name is None:
+            op['return_string'] = return_string
+            return op
+
+        else:
+            return dict(
+                meth='_get_mark',
+                method=ParserOps._get_mark,
+                args=[],
+                kwargs=dict(
+                    op=op,
+                    on_fail=on_fail,
+                    on_pass=on_pass,
+                    element_name=element_name,
+                    return_string=return_string)
+            )
+
+    @staticmethod
+    def _l(op, char_set, on_fail=None, on_pass=None, only_on_fail=False, only_on_pass=False):
+        op = ParserOps._make_meth(op)
+
+        return dict(
+            meth='_get_look',
+            method=ParserOps._get_look,
+            args=[],
+            kwargs=dict(
+                op=op,
+                char_set=char_set,
+                on_fail=on_fail,
+                on_pass=on_pass,
+                only_on_pass=only_on_pass,
+                only_on_fail=only_on_fail)
+        )
+    '''
+    def parse_email(self, data):
         if data.rem_email is not None and data.rem_email != '':
             if isinstance(data.rem_email, str):
                 data.rem_email = deque(data.rem_email)
 
             if '@' not in data.rem_email:
-                data.add_note(diag='ERR_NO_DOMAIN_SEP', position=0)
+                data.add_note(diag='ERR_NO_DOMAIN_SEP', pos=0)
             else:
                 try:
-                    self.ruleset[rule](self, data)
+                    EMAIL_PARSER_RULES['addr_spec'](self, data)
                     # start_meth = EMAIL_PARSER_RULES['addr_spec']
                     # self.start_method['method'](data, *self.start_method['args'], **self.start_method['kwargs'])
                 except NoElementError:
                     pass
         else:
-            data.add_note(diag='ERR_EMPTY_ADDRESS', position=0)
+            data.add_note(diag='ERR_EMPTY_ADDRESS', pos=0)
 
-    def parse_gen(self, data, rule=None):
-        rule = rule or 'start'
-        if isinstance(data.rem_email, str):
-            data.rem_email = deque(data.rem_email)
-
-        try:
-            self.ruleset[rule](self, data)
-        except NoElementError:
-            pass
-
+    '''
+    @staticmethod
+    def _get(data, op):
+        if not isinstance(op, dict):
+            op = ParserOps._make_meth(op)
+        return op['method'](data, *op['args'], **op['kwargs'])
+    '''
 
     @staticmethod
     def _get_char(data, char_set, min_count=0, max_count=None, optional=False,
                   return_string=True, on_fail=None, on_pass=None, element_name=None):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
+        log_debug('checking for chars in -->%r<--', char_set)
         try:
             tmp_ret = []
             for i in range(len(data.rem_email)):
                 tmp_next_char = data.rem_email[0]
-                log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, char_set)
+                log_ddebug('    checking: %r', tmp_next_char)
                 if max_count is not None and i > max_count-1:
-                    log_ddebug('S5 found, max_count (%s) met!', space_text, max_count)
+                    log_ddebug('    found, max_count (%s) met!', max_count)
                     break
 
                 if tmp_next_char in char_set:
                     tmp_ret.append(data.rem_email.popleft())
-                    log_ddebug('%s found', space_text)
+                    log_ddebug('     found')
                 elif i < min_count-1:
-                    log_ddebug('%s missed, min_count (%s) not met!', space_text, min_count)
+                    log_ddebug('     missed, min_count (%s) not met!', min_count)
                     raise NoElementError(data, popped_text=tmp_ret)
                 else:
-                    log_ddebug('%s missed', space_text)
+                    log_ddebug('    missed')
                     break
             if tmp_ret:
-                # data.position += len(tmp_ret)
+                data.position += len(tmp_ret)
                 if on_pass or element_name:
                     data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret)
                 if return_string:
@@ -659,9 +1029,9 @@ class ParserOps(object):
                 raise NoElementError(data, fail_flag=on_fail)
 
     def _get_rule(self, data, rule_name):
-        # log_ddebug('%s getting rule "%s"', space_text, rule_name)
+        log_debug('getting rule "%s"', rule_name)
         # return ParserOps._get(data, EMAIL_PARSER_RULES[rule_name])
-        return self.ruleset[rule_name](self, data)
+        return EMAIL_PARSER_OPS[rule_name](self, data)
 
     def _get_and(self, data, *operations, min_count=1, max_count=None, optional=False, return_string=True,
                  on_fail=None, on_pass=None, element_name=None):
@@ -699,6 +1069,7 @@ class ParserOps(object):
         except NoElementError:
             if not optional:
                 raise NoElementError(data, fail_flag=on_fail)
+
 
     def _get_or(self, data, *operations, optional=False, return_string=True,
                 on_fail=None, on_pass=None, element_name=None):
@@ -815,5 +1186,16 @@ class ParserOps(object):
                 if on_fail is not None:
                     data.add_note(diag=on_fail)
         return tmp_ret
+
+'''
+_and = ParserOps._and
+_meth = ParserOps._meth
+_char = ParserOps._char
+_or = ParserOps._or
+_opt = ParserOps._opt
+_c = ParserOps._c
+_m = ParserOps._m
+_l = ParserOps._l
+'''
 
 parser_ops = ParserOps()

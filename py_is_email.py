@@ -159,7 +159,11 @@ class WorkQueue(object):
 
 class ParseEmail(object):
 
-    def __init__(self, raw_email=None, threashold=None):
+    def __init__(self, raw_email=None, threashold=None, parser=None, parser_start_rule=None):
+
+        self.parser = parser or parser_ops.parse_email
+        self.parser_start_rule = parser_start_rule or 'start'
+
         self.rem_email = deque()
         self.raw_email = None
         self.raw_length = 0
@@ -167,7 +171,6 @@ class ParseEmail(object):
         self._elements = []
         self._diags = []
         self.work = WorkQueue()
-        self.parser = parser_ops
         self._max_diag = {'value': 0}
         self.local_part = None
         self.domain_part = None
@@ -200,7 +203,7 @@ class ParseEmail(object):
         self.rem_email.extend(raw_email)
         self.raw_length = len(raw_email)
         self._parsing_local_part = True
-        self.parser.parse_email(self)
+        self.parser(self, rule=self.parser_start_rule)
 
     def add_note(self, diag=None, position=None, element_name=None, element=None):
         if diag is not None:
