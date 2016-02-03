@@ -156,6 +156,94 @@ class WorkQueue(object):
     def __getitem__(self, item):
         return self.done[item]
 
+class ParseString(object):
+
+    def __init__(self,
+                 raw_string=None,
+                 parser=None,
+                 parser_start_rule=None,
+                 diag_codes=None):
+
+        self.parser = parser or parser_ops.parse_email
+        self.parser_start_rule = parser_start_rule or 'start'
+
+        self.rem_string = deque()
+        self.raw_string = None
+        self.raw_length = 0
+        self._elements = []
+        self._diags = []
+        self.work = WorkQueue()
+        self._max_diag = 0
+        if raw_string is not None:
+            self.parse(raw_string)
+
+    def reset(self):
+        self.rem_string.clear()
+        self._elements.clear()
+        self._diags.clear()
+        self.work.clear()
+        self._max_diag = 0
+
+    def parse(self, raw_email):
+        log_debug('Parse: %s', raw_email)
+        self.reset()
+        self.rem_string.extend(raw_email)
+        self.raw_length = len(raw_email)
+        self.parser(self, rule=self.parser_start_rule)
+
+    def add_note(self, diag=None, position=None, element_name=None, element=None):
+        position = position or self.raw_length - len(self.rem_string)
+        if diag is not None:
+            tmp_diag = dict(
+                position=position,
+                diag=diag)
+            self._diags.append(tmp_diag)
+            if diag > self._max_diag:
+                self._max_diag = diag
+
+        if element_name is not None:
+            if isinstance(element, list):
+                element = ''.join(element)
+
+            self._elements.append(dict(
+                name=element_name,
+                element=element,
+            ))
+
+    def __int__(self):
+        return self._max_diag
+
+    def elements(self, element_name=None):
+        tmp_elements = []
+        if element_name is None:
+            tmp_elements = self._elements.copy()
+        else:
+            for e in self._elements:
+                if e['name'] == element_name:
+                    tmp_elements.append(e)
+
+        return tmp_elements
+
+    def all_elements(self):
+        return self._elements
+
+    def diags(self, max_code=None, min_code=None):
+        min_code = min_code or 0
+        max_code = max_code or ISEMAIL_MAX_THREASHOLD
+
+        tmp_ret = []
+        for i in self._diags:
+            if min_code < i < max_code:
+                tmp_ret.append(i)
+        return tmp_ret
+
+    def __getitem__(self, item):
+        return self.elements(element_name=item)
+
+    def __call__(self, email_in):
+        self.parse(email_in)
+        return self._max_diag
+
 
 class ParseEmail(object):
 

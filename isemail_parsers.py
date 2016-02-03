@@ -8,7 +8,7 @@ from collections import deque
 class NoElementError(Exception):
     def __init__(self, is_email_obj=None, popped_text=None, fail_flag=None, position=None):
         if popped_text is not None:
-            is_email_obj.rem_email.extendleft(popped_text)
+            is_email_obj.rem_string.extendleft(popped_text)
         if fail_flag is not None:
             is_email_obj.add_note(diag=fail_flag, pos=position)
 
@@ -197,7 +197,7 @@ class ParserRule(object):
         return False
 
     def __call__(self, parser, data):
-        log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_email))
+        log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
         method = getattr(parser, '_get_%s' % self.rule_type)
         tmp = space_text.push
         try:
@@ -587,7 +587,9 @@ EMAIL_PARSER_RULES = dict(
 
 class ParserOps(object):
 
-    def __init__(self, ruleset=None):
+    def __init__(self, ruleset=None, on_fail=255, on_rem_string=254):
+        self._on_fail = on_fail
+        self._on_rem_string = on_rem_string
         if ruleset is None:
             self.ruleset = EMAIL_PARSER_RULES
         else:
@@ -595,11 +597,11 @@ class ParserOps(object):
 
     def parse_email(self, data, rule=None):
         rule = rule or 'start'
-        if data.rem_email is not None and data.rem_email != '':
-            if isinstance(data.rem_email, str):
-                data.rem_email = deque(data.rem_email)
+        if data.rem_string is not None and data.rem_string != '':
+            if isinstance(data.rem_string, str):
+                data.rem_string = deque(data.rem_string)
 
-            if '@' not in data.rem_email:
+            if '@' not in data.rem_string:
                 data.add_note(diag='ERR_NO_DOMAIN_SEP', position=0)
             else:
                 try:
@@ -607,19 +609,24 @@ class ParserOps(object):
                     # start_meth = EMAIL_PARSER_RULES['addr_spec']
                     # self.start_method['method'](data, *self.start_method['args'], **self.start_method['kwargs'])
                 except NoElementError:
-                    pass
+                    if self._on_fail is not None:
+                        data.add_note(diag=self._on_fail)
         else:
             data.add_note(diag='ERR_EMPTY_ADDRESS', position=0)
 
-    def parse_gen(self, data, rule=None):
+    def parse_str(self, data, rule=None):
         rule = rule or 'start'
-        if isinstance(data.rem_email, str):
-            data.rem_email = deque(data.rem_email)
+        if isinstance(data.rem_string, str):
+            data.rem_string = deque(data.rem_string)
 
         try:
             self.ruleset[rule](self, data)
         except NoElementError:
-            pass
+            if self._on_fail is not None:
+                data.add_note(diag=self._on_fail)
+
+        if data.rem_string:
+            data.add_note(diag=self._on_rem_string)
 
 
     @staticmethod
@@ -628,15 +635,15 @@ class ParserOps(object):
         # log_ddebug('%s checking for chars in %r', space_text, char_set)
         try:
             tmp_ret = []
-            for i in range(len(data.rem_email)):
-                tmp_next_char = data.rem_email[0]
+            for i in range(len(data.rem_string)):
+                tmp_next_char = data.rem_string[0]
                 log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, char_set)
                 if max_count is not None and i > max_count-1:
-                    log_ddebug('S5 found, max_count (%s) met!', space_text, max_count)
+                    log_ddebug('%s found, max_count (%s) met!', space_text, max_count)
                     break
 
                 if tmp_next_char in char_set:
-                    tmp_ret.append(data.rem_email.popleft())
+                    tmp_ret.append(data.rem_string.popleft())
                     log_ddebug('%s found', space_text)
                 elif i < min_count-1:
                     log_ddebug('%s missed, min_count (%s) not met!', space_text, min_count)
@@ -668,7 +675,7 @@ class ParserOps(object):
         tmp_ret_list = []
         log_debug('all must match---')
         try:
-            for i in range(len(data.rem_email)):
+            for i in range(len(data.rem_string)):
                 if max_count is not None and i > max_count-1:
                     break
 
@@ -743,7 +750,7 @@ class ParserOps(object):
                    on_fail=None, on_pass=None, element_name=None):
         tmp_ret_list = []
         try:
-            for i in range(len(data.rem_email)):
+            for i in range(len(data.rem_string)):
                 if i > max_count-1:
                     break
                 try:
@@ -808,7 +815,7 @@ class ParserOps(object):
             get_look = True
 
         if get_look:
-            if data.rem_email[0] in char_set:
+            if data.rem_string[0] in char_set:
                 if on_pass is not None:
                     data.add_note(diag=on_pass)
             else:
