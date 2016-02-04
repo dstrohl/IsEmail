@@ -8,6 +8,8 @@ from collections import deque
 class NoElementError(Exception):
     def __init__(self, is_email_obj=None, popped_text=None, fail_flag=None, position=None):
         if popped_text is not None:
+            print('adding %r back to %r ' % (popped_text, is_email_obj.rem_string))
+            popped_text.reverse()
             is_email_obj.rem_string.extendleft(popped_text)
         if fail_flag is not None:
             is_email_obj.add_note(diag=fail_flag, pos=position)
@@ -21,7 +23,7 @@ def make_char_str(*chars_in):
         elif isinstance(char, int):
             tmp_ret.append(chr(char))
         elif isinstance(char, tuple):
-            for c in range(char[0], char[1]):
+            for c in range(char[0], char[1]+1):
                 tmp_ret.append(chr(c))
     return ''.join(tmp_ret)
 
@@ -33,6 +35,7 @@ EMAIL_PARSER_CONST = dict(
     CLOSEPARENTHESIS=')',
     CLOSESQBRACKET=']',
     COLON=':',
+    COMMA=',',
     CR="\r",
     DOT='.',
     DOUBLECOLON='::',
@@ -48,6 +51,7 @@ EMAIL_PARSER_CONST = dict(
     # US-ASCII visible characters not valid for atext (http:#tools.ietf.org/html/rfc5322#section-3.2.3)
 
     ATEXT=make_char_str((65, 90), (48, 57), (97, 122), "!#$%&'*+-=?^_`{|}~"),
+    ALPHA=make_char_str((65, 90), (97, 122)),
     CRLF='\r\n',
     CTEXT=make_char_str((33, 39), (42, 91), 93, 126, obs_no_ws_ctl),
     DCONTENT=make_char_str((33, 90), (94, 126)),
@@ -88,8 +92,11 @@ EMAIL_PARSER_CONSOLIDATABLE = {
    'look': set(),
 }
 
+EMAIL_PARSER_DO_NOT_CONSOLIDATE = {
+    'opt': ('count',),
+}
 
-EMAIL_PARSER_OPS = {}
+# EMAIL_PARSER_OPS = {}
 '''
 class ParserRule(object):
     parser = ParserOps()
@@ -149,7 +156,7 @@ class ParserRule(object):
     rule_type = ''
     # single_op = False
     # parser = ParserOps
-    parser_ops = EMAIL_PARSER_OPS
+    # parser_ops = EMAIL_PARSER_OPS
 
     def __init__(self,
                  *ops,
@@ -184,11 +191,13 @@ class ParserRule(object):
         tmp_my_methods = EMAIL_PARSER_CONSOLIDATABLE[self.rule_type]
 
         tmp_consolidate = True
-
-        for m in kwargs:
-            if m not in tmp_my_methods:
-                tmp_consolidate = False
-                break
+        if other_type == 'count' and 'optional' in self.kwargs and self.kwargs['optional']:
+            tmp_consolidate = False
+        else:
+            for m in kwargs:
+                if m not in tmp_my_methods:
+                    tmp_consolidate = False
+                    break
 
         if tmp_consolidate:
             self.kwargs.update(kwargs)
@@ -206,9 +215,9 @@ class ParserRule(object):
             tmp = space_text.pop
             log_ddebug('%s FAIL->"%r" failed!', space_text, self)
             raise
-        except TypeError:
+        except TypeError as err:
             tmp = space_text.pop
-            log_ddebug('%s !!! type error when running %r', space_text, self)
+            log_ddebug('%s !!! type error when running %r (%s)', space_text, self, err)
             raise
         else:
             tmp = space_text.pop
@@ -624,24 +633,30 @@ class ParserOps(object):
         except NoElementError:
             if self._on_fail is not None:
                 data.add_note(diag=self._on_fail)
+        else:
+            if data.rem_string:
+                data.add_note(diag=self._on_rem_string)
+            else:
+                data.add_note(diag=0)
 
-        if data.rem_string:
-            data.add_note(diag=self._on_rem_string)
 
 
     @staticmethod
-    def _get_char(data, char_set, min_count=0, max_count=None, optional=False,
+    def _get_char(data, char_set, min_count=1, max_count=1, optional=False,
                   return_string=True, on_fail=None, on_pass=None, element_name=None):
         # log_ddebug('%s checking for chars in %r', space_text, char_set)
+        tmp_pos = data.position
         try:
             tmp_ret = []
+            if len(data.rem_string) < min_count:
+                log_ddebug('%s Not enough chars to meet min count', space_text)
+                raise NoElementError()
             for i in range(len(data.rem_string)):
                 tmp_next_char = data.rem_string[0]
-                log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, char_set)
                 if max_count is not None and i > max_count-1:
                     log_ddebug('%s found, max_count (%s) met!', space_text, max_count)
                     break
-
+                log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, char_set)
                 if tmp_next_char in char_set:
                     tmp_ret.append(data.rem_string.popleft())
                     log_ddebug('%s found', space_text)
@@ -652,9 +667,12 @@ class ParserOps(object):
                     log_ddebug('%s missed', space_text)
                     break
             if tmp_ret:
+                if len(tmp_ret) < min_count:
+                    log_ddebug('%s missed, min_count (%s) not met!', space_text, min_count)
+                    raise NoElementError(data, popped_text=tmp_ret)
                 # data.position += len(tmp_ret)
                 if on_pass or element_name:
-                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret)
+                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret, position=tmp_pos)
                 if return_string:
                     return tmp_ret
                 else:
@@ -663,20 +681,25 @@ class ParserOps(object):
                 raise NoElementError(data)
         except NoElementError:
             if not optional:
-                raise NoElementError(data, fail_flag=on_fail)
+                raise NoElementError(data, fail_flag=on_fail, position=tmp_pos)
 
     def _get_rule(self, data, rule_name):
         # log_ddebug('%s getting rule "%s"', space_text, rule_name)
         # return ParserOps._get(data, EMAIL_PARSER_RULES[rule_name])
-        return self.ruleset[rule_name](self, data)
+        try:
+            return self.ruleset[rule_name](self, data)
+        except KeyError:
+            raise AttributeError('Rule %s not found in rule dictionary' % rule_name)
 
-    def _get_and(self, data, *operations, min_count=1, max_count=None, optional=False, return_string=True,
+
+    def _get_and(self, data, *operations, min_count=1, max_count=1, optional=False, return_string=True,
                  on_fail=None, on_pass=None, element_name=None):
         tmp_ret_list = []
+        tmp_pos = data.position
         log_debug('all must match---')
         try:
             for i in range(len(data.rem_string)):
-                if max_count is not None and i > max_count-1:
+                if max_count is not None and i > max_count-1 or not data.rem_string:
                     break
 
                 for op in operations:
@@ -696,7 +719,7 @@ class ParserOps(object):
                 raise NoElementError()
 
             if on_pass or element_name:
-                data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret_list)
+                data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret_list, position=tmp_pos)
             log_debug('end of and-------, returning: %s', tmp_ret_list)
             if return_string:
                 return tmp_ret_list
@@ -705,11 +728,12 @@ class ParserOps(object):
 
         except NoElementError:
             if not optional:
-                raise NoElementError(data, fail_flag=on_fail)
+                raise NoElementError(data, fail_flag=on_fail, position=tmp_pos)
 
     def _get_or(self, data, *operations, optional=False, return_string=True,
                 on_fail=None, on_pass=None, element_name=None):
         tmp_ret = []
+        tmp_pos = data.position
         try:
             for op in operations:
                 try:
@@ -721,7 +745,7 @@ class ParserOps(object):
 
             if tmp_ret:
                 if on_pass or element_name:
-                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret)
+                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret, position=tmp_pos)
 
                 if return_string:
                     return tmp_ret
@@ -731,7 +755,7 @@ class ParserOps(object):
             raise NoElementError(data)
         except NoElementError:
             if not optional:
-                raise NoElementError(data, fail_flag=on_fail)
+                raise NoElementError(data, fail_flag=on_fail, position=tmp_pos)
 
     def _get_opt(self, data, op, return_string=True):
         try:
@@ -746,9 +770,10 @@ class ParserOps(object):
         except NoElementError:
             return []
 
-    def _get_count(self, data, min_count, max_count, op, optional=False, return_string=True,
+    def _get_count(self, data, op, min_count=ISEMAIL_MIN_COUNT, max_count=ISEMAIL_MAX_COUNT, optional=False, return_string=True,
                    on_fail=None, on_pass=None, element_name=None):
         tmp_ret_list = []
+        tmp_pos = data.position
         try:
             for i in range(len(data.rem_string)):
                 if i > max_count-1:
@@ -762,11 +787,12 @@ class ParserOps(object):
                     if i < min_count-1:
                         raise NoElementError(data, popped_text=tmp_ret_list)
                 else:
-                    tmp_ret_list.append(tmp_ret)
+                    if tmp_ret is not None:
+                        tmp_ret_list.extend(tmp_ret)
 
             if tmp_ret_list:
                 if on_pass or element_name:
-                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret_list)
+                    data.add_note(diag=on_pass, element_name=element_name, element=tmp_ret_list, position=tmp_pos)
                 if return_string:
                     return tmp_ret_list
             else:
@@ -774,29 +800,31 @@ class ParserOps(object):
 
         except NoElementError:
             if not optional:
-                raise NoElementError(fail_flag=on_fail)
+                raise NoElementError(fail_flag=on_fail, position=tmp_pos)
 
     def _get_mark(self, data, op, on_fail=None, on_pass=None, element_name=None, return_string=True):
+        tmp_pos = data.position
         try:
             tmp_ret = op(self, data)
             # tmp_ret = op['method'](data, *op['args'], **op['kwargs'])
             # tmp_ret = self._get(op, data)
         except NoElementError:
             if on_fail is not None:
-                data.add_note(diag=on_fail)
+                data.add_note(diag=on_fail, position=tmp_pos)
             raise
 
         if on_pass is not None:
-            data.add_note(diag=on_pass)
+            data.add_note(diag=on_pass, position=tmp_pos)
 
         if element_name is not None:
-            data.add_note(element_name=element_name, element=tmp_ret)
+            data.add_note(element_name=element_name, element=tmp_ret, position=tmp_pos)
 
         if return_string:
             return tmp_ret
 
     def _get_look(self, data, op, char_set, on_fail=None, on_pass=None,
                   only_on_fail=False, only_on_pass=False):
+        tmp_pos = data.position
         passed = True
         get_look = False
         tmp_ret = []
@@ -817,10 +845,10 @@ class ParserOps(object):
         if get_look:
             if data.rem_string[0] in char_set:
                 if on_pass is not None:
-                    data.add_note(diag=on_pass)
+                    data.add_note(diag=on_pass, position=tmp_pos)
             else:
                 if on_fail is not None:
-                    data.add_note(diag=on_fail)
+                    data.add_note(diag=on_fail, position=tmp_pos)
         return tmp_ret
 
 parser_ops = ParserOps()
