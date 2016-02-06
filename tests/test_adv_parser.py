@@ -1,12 +1,180 @@
 import unittest
 
 from isemail_parsers import _and, _or, _r, _char, _for, _look, _m, _make_meth, _opt, _rule, ParserOps
-from py_is_email import ParserRule, ParseString
+from py_is_email import ParserRule, ParseString, ParserOps
+from adv_parser import _get_between, _get_simple_between, _check_enclosures
+
+BASIC_BETWEENS = [
+    ('foo', ('foo', '', '')),
+    ('foo(bar)', ('foo', 'bar', '')),
+    ('(foo)bar', ('', 'foo', 'bar')),
+    ('fo(ob)ar', ('fo', 'ob', 'ar')),
+    ('(foo)(bar)', ('', 'foo', '(bar)'))]
+
+ADV_BETWEENS = [
+    ('foo((ba)r)', True, ['foo', ['', 'ba', 'r'], '']),
+    ('(foo(b(a(r))))', True, ['', ['foo', ['b', ['a', ['r','',''],''],''],''],'']),
+    ('foo((ba)r)', False, ['foo', '(ba)r', '']),
+    ('(foo(b(a(r))))', False, ['', '(foo(b(a(r)))', '']),
+    ('01234(678(9012)456)890', True, ['1234', ['678', '9012','456'],'890']),
+    ('01234(678(9012)456)890', False, ['1234', '678(9012)456','890'])
+]
+
+ERR_BETWEENS = [
+    'te)st',
+    'te(st',
+    'foo(bar(foo)',
+    'foo(bar))foo',
+]
+
+
+
+
+class TestGetBetweens(unittest.TestCase):
+
+    def test_check_enclosures(self):
+        for test in BASIC_BETWEENS:
+            with self.subTest('run: %s' % test[0]):
+                tmp_ret = _check_enclosures(test[0], '(', ')')
+                print(tmp_ret)
+                self.assertTrue(True)
+
+        for test in ADV_BETWEENS:
+            with self.subTest('run_adv: %s' % test[0]):
+                tmp_ret = _check_enclosures(test[0], '(', ')')
+                print(tmp_ret)
+                self.assertTrue(True)
+
+        for test in ERR_BETWEENS:
+            with self.subTest('error: %s' % test):
+                with self.assertRaises(AttributeError):
+                    tmp_ret = _check_enclosures(test, '(', ')')
+                    print(tmp_ret)
+
+
+    def test_simple_between(self):
+        for test in BASIC_BETWEENS:
+            test_str = test[0]
+            with self.subTest('run: %s' % test_str):
+                tmp_ret = _get_simple_between(test_str, '(', ')')
+                self.assertEqual(test[1], tmp_ret)
+
+        for test in ERR_BETWEENS:
+            with self.subTest('error: %s' % test):
+                with self.assertRaises(AttributeError):
+                    tmp_ret = _get_simple_between(test, '(', ')')
+
+
+    def test_complex_betweens(self):
+        for test in BASIC_BETWEENS:
+            with self.subTest('run: %s' % test[0]):
+                tmp_ret = _get_between(test[0], '(', ')')
+                self.assertEqual(test[1], tmp_ret)
+        for test in ADV_BETWEENS:
+            with self.subTest('run_adv: %s' % test[0]):
+                tmp_ret = _get_between(test[0], '(', ')', allow_recursive=test[1])
+                self.assertEqual(test[2], tmp_ret)
+
+        for test in ERR_BETWEENS:
+            with self.subTest('error: %s' % test):
+                with self.assertRaises(AttributeError):
+                    tmp_ret = _get_between(test, '(', ')')
+
+
+
+TEST_DATA_LOOKUPS = dict(
+    ALPHA='abcdefghijklmnopqrstuvwxyz',
+    ABCD='abcd',
+    ABCDE='abcde',
+    ABCDEF='abcdef',
+    DEFG='defg',
+    JKLM='jklm',
+    FOO='foo',
+    FGHIJK='fghijk',
+)
 
 
 TEST_DATA_RULES = dict(
-    start=_char('abcdef'),
-    alpha=_r(_char('abcdefghijklmnopqrstuvwxyz')),
+    start='ABCDEF',
+    and_rule='ABCD DEFG',
+    or_rule='ABCD / JKLM',
+    opt_rule='[ABCD]',
+    c_rule='2ABCD',
+    c_rule_min='2*ABCD',
+    c_rule_max='*2ABCD',
+    c_rule_min_max='2*3ABCD',
+    c_rule_unl='*ABCD',
+    m_rule_pass_fail='start<pass-10/fail-20>',
+    m_rule_element_name='alpha / *SPACE:test_name:<pass-10^PERCENT<pass-11/fail-20>^/fail-20>',
+    look_rule='ABCD^PRECENT<pass-10/fail-20>^',
+    look_quoted_rule='ABCD^"fubar"<pass-10/fail-20>^',
+    rule_rule='start',
+    lookup_char='HEXDIG',
+    lookup_char_opt='HEXDIG [HEXDIG]',
+    quoted_char_str='HEXDIG "::" HEXDIG',
+    quoted_char_str2='3FOO COMMA "bar"',
+    complex_and='*5LTR_STR [(DOT *5LTR_STR)]',
+    complex_or='5ABCDE / 1FGHIJK',
+    complex_and_or='(*5ALPHA [DOT 2ALPHA]) / *3(HEXDIG ["::" 5HEXDIG])',
+
+    multiple_marks_rule='[mmr_pre_str] mmr_o_sqb mmr_flag_str mmr_c_sqb [mmr_post_str]',
+    mmr_pre_str='*LTR_STR:pre:<pre-p-11/pre-f-101>',
+    mmr_o_sqb='-OPENSQBRACKET<osq-p-12/osq-f-102>',
+    mmr_c_sqb='CLOSESQBRACKET<csq-p-13/csq-f-103>',
+    mmr_post_str='*LTR_STR:post:<post-p-14/post-f-104>',
+    mmr_ret_str='mmr_o_sqb LTR_STR -mmr_c_sqb',
+    mmr_flag_str='mmr_ret_str:data:<data-p-15/data-p-105>',
+
+    count_in_ret='*ABCD#[1*4A]<under/within/over>#',
+    len_in_ret='*ABCD%[1*4]<under/within/over>%',
+)
+
+"""
+parse codes:
+
+PRE-CODES:
+    -   will not pass the returned value up (removes it from the text)
+    min*max  - will allow repeated testing of the rule between min and max times
+    *max    - will allow repeated testing of the rule no more than max times
+    min*    - will test the rule at least min times
+    * allows testing of the rule unlimited times
+
+post code groups:
+
+    :element_name:  - will save the returned value as element name
+    <pass/fail>:    (used outside of another post code group) will save this code to the diag list
+
+advanced groups (can be used within the <pass/fail> or directly after the rule
+    ^char_set<pass/fail>,char_set<pass/fail>^ - will look for (but not capture) char set in the returned value, and
+                                                add <pass/fail> to the diag list
+                                                (if this is in the <pass/fail> of the gorup, this will only operate if
+                                                the return has passed or failed)
+
+    #min*max char_set<under/within/over>#  - will count the occurance of
+    #[min*max char_set]<pass/fail>#
+                - can also enclose min*max in [] for optional counts
+    %min*max<under/within/over>%
+    %[min*max]<pass/fail>%
+
+
+"""
+
+
+'''
+multiple_marks_rule=_and(
+    _m(_opt(_r('LTR_STR')), element_name='pre', on_pass=11, on_fail=101),
+    _m(_and(
+            _m('OPENSQBRACKET', return_string=False, on_pass=12, on_fail=102),
+            _r('LTR_STR'),
+            _m('CLOSESQBRACKET', return_string=False, on_pass=13, on_fail=103)),
+        element_name='data', on_pass=14, on_fail=104),
+    _m(_opt(_r('LTR_STR')), element_name='post', on_pass=15, on_fail=105))
+'''
+
+'''
+
+TEST_DATA_RULES = dict(
+    start=('abcdef'),
     and_rule=_and(_char('abcd'), _char('defg')),
     or_rule=_or(_char('abcd'), _char('jklm')),
     opt_rule=_opt(_char('abcd')),
@@ -53,7 +221,7 @@ TEST_DATA_RULES = dict(
         _m(_opt(_r('LTR_STR')), element_name='post', on_pass=15, on_fail=105))
 
 )
-
+'''
 rules = ParserOps(TEST_DATA_RULES, on_fail=2, on_rem_string=1)
 
 TEST_SETS = [

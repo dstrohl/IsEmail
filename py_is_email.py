@@ -205,7 +205,7 @@ class ParseString(object):
             tmp_diag = dict(
                 position=position,
                 count=self._diag_count)
-            log_ddebug('adding diag: %r', tmp_diag)
+            log_ddebug('adding diag: %s (%r)', diag, tmp_diag)
             if diag in self._diags:
                 self._diags[diag].append(tmp_diag)
             else:
@@ -223,14 +223,14 @@ class ParseString(object):
                     element=element,
                     pos=element_pos,
                 ))
-                log_ddebug('adding element: %r', self._elements[element_name])
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
 
             else:
                 self._elements[element_name] = [dict(
                     element=element,
                     pos=element_pos,
                 )]
-                log_ddebug('adding element: %r', self._elements[element_name])
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
 
 
     def __int__(self):

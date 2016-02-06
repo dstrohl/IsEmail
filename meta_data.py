@@ -55,8 +55,8 @@ ISEMAIL_ELEMENT_DOMAIN_LIT_GEN = 'domain_general_literal'
 # ISEMAIL_IP_REGEX = re.compile(r'(?P<address>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
 # ISEMAIL_IP_REGEX_GOOD_CHAR = re.compile(r'^[0-9A-Fa-f]{0,4}$')
 
-ISEMAIL_MAX_COUNT = 9999
-ISEMAIL_MIN_COUNT = 0
+ISEMAIL_MAX_REPEAT = 9999
+ISEMAIL_MIN_REPEAT = 0
 
 class MetaList(object):
     def __init__(self, dict_in):

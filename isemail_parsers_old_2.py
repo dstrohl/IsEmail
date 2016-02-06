@@ -74,8 +74,13 @@ EMAIL_PARSER_CONST = dict(
     VCHAR=make_char_str((33, 126)),
     WSP=' \t',
 )
-
-
+'''
+EMAIL_PARSER_CONSOLIDATABLE = {
+    'repeat': ('and', 'char'),
+    'mark': ('char', 'and', 'or', 'repeat', 'opt'),
+    'opt': ('char', 'and', 'or', 'repeat', 'mark')
+}
+'''
 EMAIL_PARSER_CONSOLIDATABLE = {
    'char': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
    'rule': set(),
@@ -91,6 +96,40 @@ EMAIL_PARSER_DO_NOT_CONSOLIDATE = {
     'opt': ('repeat',),
 }
 
+# EMAIL_PARSER_OPS = {}
+'''
+class ParserRule(object):
+    parser = ParserOps()
+    _def_op = ''
+
+    def __init__(self,
+                 *ops,
+                 name='',
+                 operation=None,
+                 min_repeat=0,
+                 max_repeat=None,
+                 return_string=True,
+                 on_pass=None,
+                 on_fail=None,
+                 optional=False,
+                 char_set=None,
+                 next_char_check=None
+                 ):
+        self.operation = operation or self._def_op
+        self.min_repeat = min_repeat
+        self.max_repeat = max_repeat
+        self.return_string = return_string
+        self.on_pass = on_pass
+        self.on_fail = on_fail
+        self.optional = optional
+        self.char_set = char_set
+        self.char_string = None
+        self.next_char_check = next_char_check or []
+
+    def add_ops(self, *ops):
+        self.ops.extend(ops)
+
+'''
 
 
 class SpaceText(object):
@@ -127,6 +166,10 @@ class ParserRule(object):
         self.kwargs = kwargs
         self.ops = ops
         # log_ddebug('making type "%s" / %r', meth, self)
+
+    @property
+    def op(self):
+        return self.ops[0]
 
     def __repr__(self):
         if self.rule_type == 'char':
@@ -180,10 +223,6 @@ class ParserRule(object):
             tmp = space_text.pop
             log_ddebug('%s PASS-> "%r" passed', space_text, self)
             return tmp_ret
-
-    def _op(self, data):
-        pass
-
 
 
 def _make_meth(method, **kwargs):
