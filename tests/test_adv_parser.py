@@ -1,9 +1,9 @@
 import unittest
-
-from isemail_parsers import _and, _or, _r, _char, _for, _look, _m, _make_meth, _opt, _rule, ParserOps
-from py_is_email import ParserRule, ParseString, ParserOps
-from adv_parser import _get_between, _get_simple_between, _check_enclosures
-
+from adv_parser import *
+# from adv_parser import _and, _or, _r, _char, _for, _look, _m, _make_meth, _opt, _rule, ParserOps, ParserAction
+# from py_is_email import ParserRule, ParseString, ParserOps
+# from adv_parser import _get_between, _get_simple_between, _check_enclosures, _parse_enclosure
+"""
 BASIC_BETWEENS = [
     ('foo', ('foo', '', '')),
     ('foo(bar)', ('foo', 'bar', '')),
@@ -12,12 +12,32 @@ BASIC_BETWEENS = [
     ('(foo)(bar)', ('', 'foo', '(bar)'))]
 
 ADV_BETWEENS = [
-    ('foo((ba)r)', True, ['foo', ['', 'ba', 'r'], '']),
-    ('(foo(b(a(r))))', True, ['', ['foo', ['b', ['a', ['r','',''],''],''],''],'']),
-    ('foo((ba)r)', False, ['foo', '(ba)r', '']),
-    ('(foo(b(a(r))))', False, ['', '(foo(b(a(r)))', '']),
-    ('01234(678(9012)456)890', True, ['1234', ['678', '9012','456'],'890']),
-    ('01234(678(9012)456)890', False, ['1234', '678(9012)456','890'])
+    ('foo', True, ('foo', '', '')),
+    ('foo(bar)', True, ('foo', 'bar', '')),
+    ('(foo)bar', True, ('', 'foo', 'bar')),
+    ('fo(ob)ar', True, ('fo', 'ob', 'ar')),
+    ('(foo)(bar)', True, ('', 'foo', '(bar)')),
+
+    ('foo', False, ('foo', '', '')),
+    ('foo(bar)', False, ('foo', 'bar', '')),
+    ('(foo)bar', False, ('', 'foo', 'bar')),
+    ('fo(ob)ar', False, ('fo', 'ob', 'ar')),
+    ('(foo)(bar)', False, ('', 'foo', '(bar)')),
+
+
+    ('foo((ba)r)', True, ('foo', ('', 'ba', 'r'), '')),
+    ('(foo(b(a(r))))', True, ('', ('foo', ('b', ('a', ('r','',''),''),''),''),'')),
+
+    ('foo((ba)r)', False, ('foo', '(ba)r', '')),
+    ('(foo(b(a(r))))', False, ('', '(foo(b(a(r)))', '')),
+
+    ('01234(678(9012)456)890', True, ('1234', ('678', '9012', '456'), '890')),
+    ('01234(678(9012)456)890', False, ('1234', '678(9012)456', '890')),
+
+    ('foo(bar(snafu))foo(bar)', True, ('foo', ('bar', 'snafu', ''), 'foo(bar)')),
+    ('foo(bar(snafu))foo(bar)', False, ('foo', 'bar(snafu)', 'foo(bar)')),
+
+
 ]
 
 ERR_BETWEENS = [
@@ -36,22 +56,19 @@ class TestGetBetweens(unittest.TestCase):
         for test in BASIC_BETWEENS:
             with self.subTest('run: %s' % test[0]):
                 tmp_ret = _check_enclosures(test[0], '(', ')')
-                print(tmp_ret)
                 self.assertTrue(True)
 
         for test in ADV_BETWEENS:
             with self.subTest('run_adv: %s' % test[0]):
                 tmp_ret = _check_enclosures(test[0], '(', ')')
-                print(tmp_ret)
                 self.assertTrue(True)
 
         for test in ERR_BETWEENS:
             with self.subTest('error: %s' % test):
                 with self.assertRaises(AttributeError):
                     tmp_ret = _check_enclosures(test, '(', ')')
-                    print(tmp_ret)
 
-
+    '''
     def test_simple_between(self):
         for test in BASIC_BETWEENS:
             test_str = test[0]
@@ -63,15 +80,12 @@ class TestGetBetweens(unittest.TestCase):
             with self.subTest('error: %s' % test):
                 with self.assertRaises(AttributeError):
                     tmp_ret = _get_simple_between(test, '(', ')')
-
+    '''
 
     def test_complex_betweens(self):
-        for test in BASIC_BETWEENS:
-            with self.subTest('run: %s' % test[0]):
-                tmp_ret = _get_between(test[0], '(', ')')
-                self.assertEqual(test[1], tmp_ret)
+
         for test in ADV_BETWEENS:
-            with self.subTest('run_adv: %s' % test[0]):
+            with self.subTest('run_adv [%s]: %s' % (test[1], test[0])):
                 tmp_ret = _get_between(test[0], '(', ')', allow_recursive=test[1])
                 self.assertEqual(test[2], tmp_ret)
 
@@ -80,8 +94,19 @@ class TestGetBetweens(unittest.TestCase):
                 with self.assertRaises(AttributeError):
                     tmp_ret = _get_between(test, '(', ')')
 
+    def test_complex_betweens2(self):
 
+        for test in ADV_BETWEENS:
+            with self.subTest('run_adv [%s]: %s' % (test[1], test[0])):
+                tmp_ret = _parse_enclosure(test[0], '(', ')')
+                self.assertEqual(test[2], tmp_ret)
 
+        for test in ERR_BETWEENS:
+            with self.subTest('error: %s' % test):
+                with self.assertRaises(AttributeError):
+                    tmp_ret = _parse_enclosure(test, '(', ')')
+
+'''
 TEST_DATA_LOOKUPS = dict(
     ALPHA='abcdefghijklmnopqrstuvwxyz',
     ABCD='abcd',
@@ -128,7 +153,7 @@ TEST_DATA_RULES = dict(
     count_in_ret='*ABCD#[1*4A]<under/within/over>#',
     len_in_ret='*ABCD%[1*4]<under/within/over>%',
 )
-
+"""
 """
 parse codes:
 
@@ -171,182 +196,300 @@ multiple_marks_rule=_and(
     _m(_opt(_r('LTR_STR')), element_name='post', on_pass=15, on_fail=105))
 '''
 
-'''
+
+TEST_DATA_LOOKUPS = dict(
+    ALPHA='abcdefghijklmnopqrstuvwxyz',
+    ABCD='abcd',
+    ABCDE='abcde',
+    ABCDEF='abcdef',
+    DEFG='defg',
+    JKLM='jklm',
+    FOO='foo',
+    FGHIJK='fghijk',
+)
+
 
 TEST_DATA_RULES = dict(
-    start=('abcdef'),
-    and_rule=_and(_char('abcd'), _char('defg')),
-    or_rule=_or(_char('abcd'), _char('jklm')),
-    opt_rule=_opt(_char('abcd')),
-    c_rule=_r(2, _char('abcd')),
-    c_rule_min=_r('2*', _char('abcd')),
-    c_rule_max=_r('*2', _char('abcd')),
-    c_rule_min_max=_r('2*3', _char('abcd')),
-    c_rule_unl=_r('*', _char('abcd')),
-    c_rule_unl2=_r(_char('abcd')),
-    m_rule=_m(_char('abcd')),
-    m_rule_pass_fail=_m('start', on_fail=20, on_pass=10),
-    m_rule_element_name=_m(_or('alpha', _r('SPACE')), element_name='test_name', on_fail=20, on_pass=10),
-    look_rule=_look(_char('abcd'), _for(_char('%', on_pass=10, on_fail=20))),
-    rule_rule=_rule('start'),
-    lookup_char=_and('HEXDIG'),
-    lookup_char_opt=_and('HEXDIG', '[HEXDIG]'),
-    quoted_char_str=_and('HEXDIG', '"::"', 'HEXDIG'),
-    quoted_char_str2=_and(_r(3, _char('foo')), 'COMMA', '"bar"'),
+    char_rule=Char('abcdef'),
+    char_rule2='/abcdef',
+    lookupChar_rule='ABCD',
+    char_rule_quoted_str='"Foo"',
+    char_rule_quoted_str_case_insensitive='^"Foo"',
+    and_rule=And('/abcd', 'DEFG'),
+    or_rule=Or(Char('abcd'), Char('jklm')),
+    opt_rule=['/abcd'],
+    opt_rule2='[/abcd]',
+    c_rule=Repeat(2, Char('abcd')),
+    c_rule_min=Repeat('2*', Char('abcd')),
+    c_rule_max=Repeat('*2', Char('abcd')),
+    c_rule_min_max=Repeat('2*3', Char('abcd')),
+    c_rule_unl=Repeat('*', Char('abcd')),
+    c_rule_unl2=Repeat(Char('abcd')),
+    c_rule_inChar='2*ABCD',
+    c_rule_mult_items=Repeat('2*3', And('/abcd', '/defg')),
+    rule_rule=Rule('start'),
+    lookupChar=And('HEXDIG'),
+    lookupChar_opt=And('HEXDIG', '[HEXDIG]'),
+    quotedChar_str=And('HEXDIG', '"::"', 'HEXDIG'),
+    quotedChar_str2=And(Repeat(3, Char('foo')), 'COMMA', '"bar"'),
+    complex_and=And('*5LTR_STR', [And('DOT', '*5LTR_STR')]),
 
-    complex_and=_and(_r('*5', 'LTR_STR'), _opt(_and('DOT', _r('*5', 'LTR_STR')))),
-
-    complex_or=_or(_r('5', _char('abcde')), _r('1', _char('fghijk'))),
-    complex_and_or=_or(
-        _and(
-            _r('*5', 'ALPHA'),
-            _opt(_and('DOT', _r('ALPHA')))),
-        _and(
+    complex_or=Or(Word('abcde', exact=5), Char('fghijk')),
+    complex_and_or=Or(
+        And(
+            Word('ALPHA', max=5),
+            [And('DOT', '*ALPHA')]),
+        And(
             'HEXDIG',
-            _opt(_and('"::"', 'HEXDIG')))),
-    complex_and_or2=_or(
-        _and(
-            _r('*5', 'ALPHA'),
-            _r(_opt(_and('DOT', _r(2, 'ALPHA'))))),
-        _and(
-            _r(5, 'HEXDIG'),
-            _r('*3', _opt(_and('"::"', _r(5, ('HEXDIG'))))))),
-    multiple_marks_rule=_and(
-        _m(_opt(_r('LTR_STR')), element_name='pre', on_pass=11, on_fail=101),
-        _m(_and(
-                _m('OPENSQBRACKET', return_string=False, on_pass=12, on_fail=102),
-                _r('LTR_STR'),
-                _m('CLOSESQBRACKET', return_string=False, on_pass=13, on_fail=103)),
-            element_name='data', on_pass=14, on_fail=104),
-        _m(_opt(_r('LTR_STR')), element_name='post', on_pass=15, on_fail=105))
+            [And('"::"', 'HEXDIG')])),
+    complex_and_or2=Or(
+        And(
+            '*5ALPHA',
+            Repeat([And('DOT', '2ALPHA')])),
+        And(
+            '5HEXDIG',
+            Repeat('*3', [And('"::"', '5HEXDIG')]))),
+
+
+    count_rule=Count('3*a', Char('*abcde')),
+    count_rule_qs=Count('1*2"ab"', Char('*abcde')),
+    count_rule_opt=Count('[3*a]', Char('*abcde')),
+    count_rule_3_args=Count(3, 'a', Char('*abcde')),
+    
+    len_rule=Len('2*4', Word('abcde')),
+    len_rule_opt=Len('[2*4]', Word('abcde')),
+
+    # Actions :
+
+
+    p10_f20=ParserAction(pass_diag='pass_10', fail_diag='fail_20'),
+    test_name=ParserAction(name='test_name'),
+    fail_len=ParserAction(fail_diag='len_fail', pass_diag='len_pass'),
+    fail_sb=ParserAction(fail_diag='has_sb', pass_diag='no_sb_there'),
+    pre=ParserAction(pass_diag='pre_pass11', fail_diag='pre_fail101', name='pre'),
+    post=ParserAction(pass_diag='post_pass11', fail_diag='post_fail101', name='post'),
+    data=ParserAction(pass_diag='data_pass11', fail_diag='data_fail101', name='data'),
+    osb=ParserAction(pass_diag='osb_pass11', fail_diag='osb_fail101', name='osb'),
+    csb=ParserAction(pass_diag='csb_pass11', fail_diag='csb_fail101', name='csb'),
+
+    
+
+    m_rule_pass_fail=Char('"start"', actions=ParserAction(pass_diag=10, fail_diag=20)),
+
+    m_rule_element_name=Repeat(Or('alpha', 'SPACE'), actions=('p10_f20, test_name')),
+
+    multiple_marks_rule=Count(0, '[]', 
+        Len('5', 
+            And(
+                Opt('*-LTR_STR', actions='pre'),
+                And(
+                    Char('-OPENSQBRACKET', actions='osb'),
+                    '*LTR_STR',
+                    Char('-CLOSESQBRACKET', actions='csb'),
+                    actions='data'),
+                Opt('*-LTR_STR', actions='post')),
+             actions=['p10_f20', 'fail_len']),
+        actions='fail_sb'),                           
+
+    next_withChars=Char('abcde', next='/fghi'),
+    next_with_lookup=Char('abcde', next='HEXDIG'),
+    next_with_rule=Char('abcde', next='char_rule_quoted_str'),
+    next_with_opt_action_rule=Char('abcde', next='[m_rule_pass_fail]'),
+    next_with_action_rule=Char('abcde', next='m_rule_pass_fail'),
+    not_next_rule=Char('abcde', not_next='/hijk'),
+    
+    both_next_at=Char('@', actions=ParserAction(pass_diag='has_at', fail_diag='no_at')),
+    both_next_dquote=Char('DQUOTE', actions=ParserAction(pass_diag='has_qt', fail_diag='no_qt')),
+    
+    both_next_rule=Char('abcde', next='both_next_at', not_next='both_next_dquote'),
 
 )
-'''
+
 rules = ParserOps(TEST_DATA_RULES, on_fail=2, on_rem_string=1)
 
+PASS = 0
+FAIL = 2
+REM = 1
+
 TEST_SETS = [
-    (1, 'start', 'a', 0, ''),
-    (2, 'start', 'h', 2, 'h'),
-    (3, 'start', 'abc', 1, 'bc'),
-    (4, 'and_rule', 'ad', 0, ''),
-    (5, 'and_rule', 'ha', 2, 'ha'),
-    (6, 'and_rule', 'xx', 2, 'xx'),
-    (7, 'and_rule', 'aa', 2, 'aa'),
-    (8, 'and_rule', 'ade', 1, 'e'),
-    (9, 'or_rule', 'a', 0, ''),
-    (10, 'or_rule', 'l', 0, ''),
-    (11, 'or_rule', 'z', 2, 'z'),
-    (12, 'opt_rule', 'ax', 1, 'x'),
-    (13, 'opt_rule', '', 0, ''),
-    (14, 'm_rule', 'a', 0, ''),
-    (15, 'm_rule', 'h', 2, 'h'),
-    (16, 'm_rule', 'abc', 1, 'bc'),
-    (17, 'c_rule', 'ab', 0, ''),
-    (18, 'c_rule', 'abb', 1, 'b'),
-    (19, 'c_rule', 'a', 2, 'a'),
-    (20, 'c_rule_min', 'a', 2, 'a'),
-    (21, 'c_rule_min', 'aa', 0, ''),
-    (22, 'c_rule_min', 'aaa', 0, ''),
-    (23, 'c_rule_max', 'a', 0, ''),
-    (24, 'c_rule_max', 'ax', 1, 'x'),
-    (25, 'c_rule_max', 'aa', 0, ''),
-    (26, 'c_rule_max', 'aaa', 1, 'a'),
-    (27, 'c_rule_unl', 'a', 0, ''),
-    (28, 'c_rule_unl', 'ax', 1, 'x'),
-    (29, 'c_rule_unl', 'aa', 0, ''),
-    (30, 'c_rule_unl', 'aaa', 0, ''),
-    (31, 'c_rule_unl', 'aaabbbbbcccccdddddd', 0, ''),
-    (32, 'c_rule_unl2', 'a', 0, ''),
-    (33, 'c_rule_unl2', 'ax', 1, 'x'),
-    (34, 'c_rule_unl2', 'aa', 0, ''),
-    (35, 'c_rule_unl2', 'aaa', 0, ''),
-    (36, 'c_rule_unl2', 'aaabbbbbcccccdddddd', 0, ''),
-    (37, 'rule_rule', 'a', 0, ''),
-    (38, 'rule_rule', 'h', 2, 'h'),
-    (39, 'rule_rule', 'abc', 1, 'bc'),
-    (40, 'lookup_char', 'a', 0, ''),
-    (41, 'lookup_char', '2', 0, ''),
-    (42, 'lookup_char', 'A', 0, ''),
-    (43, 'lookup_char', 'x', 2, 'x'),
-    (44, 'lookup_char', 'ab', 1, 'b'),
-    (45, 'lookup_char', 'xab', 2, 'xab'),
-    (46, 'lookup_char_opt', 'a', 0, ''),
-    (47, 'lookup_char_opt', 'aa', 0, ''),
-    (48, 'lookup_char_opt', 'af', 0, ''),
-    (49, 'lookup_char_opt', 'aaaa', 1, 'aa'),
-    (50, 'lookup_char_opt', 'xaxa', 2, 'xaxa'),
-    (51, 'quoted_char_str', 'a::a', 0, ''),
-    (52, 'quoted_char_str', 'f::a', 0, ''),
-    (53, 'quoted_char_str', 'f::as', 1, 's'),
-    (54, 'quoted_char_str', 'f', 2, 'f'),
-    (55, 'quoted_char_str', 'f:a', 2, 'f:a'),
-    (56, 'm_rule_pass_fail', 'a', 10, ''),
-    (57, 'm_rule_pass_fail', 'x', 20, 'x'),
-    (58, 'm_rule_element_name', 'aaa', 10, '', {'test_name': (('aaa', 0),)}),
-    (59, 'm_rule_element_name', 'startthisnow', 10, '', {'test_name': (('startthisnow', 0),)}),
-    (60, 'look_rule', 'a', 20, ''),
-    (61, 'look_rule', 'x', 20, ''),
-    (62, 'look_rule', 'a%', 10, ''),
-    (63, 'quoted_char_str2', 'foo,bar', 0, ''),
-    (64, 'quoted_char_str2', 'oof,bar', 0, ''),
-    (65, 'quoted_char_str2', 'oof,rab', 2, 'oof,rab'),
-    (66, 'quoted_char_str2', 'ofo,bar', 0, ''),
-    (67, 'complex_and', 'abdxe', 0, ''),
-    (68, 'complex_and', 'abd', 0, ''),
-    (69, 'complex_and', 'abdxe.abcde', 0, ''),
-    (70, 'complex_and', 'abdxe.', 1, '.'),
-    (71, 'complex_and', 'abdxeee', 1, 'ee'),
-    (72, 'complex_and', 'abdxe.a', 0, ''),
-    (73, 'complex_and', 'abdxe.abcdev', 1, 'v'),
-    (74, 'complex_or', 'abcde', 0, ''),
-    (75, 'complex_or', 'f', 0, ''),
-    (76, 'complex_or', 'abcd', 2, 'abcd'),
-    (77, 'complex_or', 'abcdf', 2, 'abcdf'),
-    (78, 'complex_or', 'ffff', 1, 'fff'),
-    (79, 'complex_and_or', 'abdxe', 0, ''),
-    (80, 'complex_and_or', 'abd', 0, ''),
-    (81, 'complex_and_or', 'abdxe.abcde', 0, ''),
-    (82, 'complex_and_or', 'abdxe.', 1, '.'),
-    (83, 'complex_and_or', 'abdxeee', 1, 'ee'),
-    (84, 'complex_and_or', '123::a', 1, '23::a'),
-    (84, 'complex_and_or', 'abdxe.abcdev', 0, ''),
-    (85, 'complex_and_or', '1::1', 0, ''),
-    (86, 'complex_and_or', ':z::z', 2, ':z::z'),
-    (87, 'complex_and_or2', '1bcde', 0, ''),
-    (88, 'complex_and_or2', '1bcde::1bcde', 0, ''),
-    (89, 'complex_and_or2', '1bcde::1bcde::abcde', 0, ''),
-    (90, 'complex_and_or2', '1bcde::1bcde::abcde::abcde', 0, ''),
-    (91, 'complex_and_or2', '1bcde::1bcde::abcde::abcde::abcde', 1, '::abcde'),
-    (92, 'complex_and_or2', 'abcdx', 0, ''),
-    (93, 'complex_and_or2', 'abcdxzz', 1, 'zz'),
-    (94, 'complex_and_or2', 'xyzhk.a', 1, '.a'),
-    (95, 'complex_and_or2', 'xyzhk.ab', 0, ''),
-    (96, 'complex_and_or2', 'xyzhk.ab.a', 1, '.a'),
-    (97, 'complex_and_or2', 'xyzhk.ab.ax', 0, ''),
-    (98, 'complex_and_or2', 'xyzhk.ab.ax.ab.ab', 0, ''),
-    (99, 'complex_and_or2', 'xyzhk.ab.ax.ab.ab.ab.ab.', 1, '.'),
-    (100, 'multiple_marks_rule', 'foo[bar]blah', 15, '',
+    (1, 'char_rule', 'a', PASS, ''),
+    (2, 'char_rule', 'h', FAIL, 'h'),
+    (3, 'char_rule', 'abc', REM, 'bc'),
+    (4, 'char_rule2', 'a', PASS, ''),
+    (5, 'char_rule2', 'h', FAIL, 'h'),
+    (6, 'char_rule2', 'abc', REM, 'bc'),
+    (7, 'lookup_char_rule', 'a', PASS, ''),
+    (8, 'lookup_char_rule', 'h', FAIL, 'h'),
+    (9, 'lookup_char_rule', 'abc', REM, 'bc'),
+    (10, 'char_rule_quoted_str', 'Foo', PASS, ''),
+    (11, 'char_rule_quoted_str', 'Blah', FAIL, 'Blah'),
+    (12, 'char_rule_quoted_str', 'Foobar', REM, 'bar'),
+    (13, 'char_rule_quoted_str_case_insensitive', 'foo', PASS, ''),
+    (14, 'char_rule_quoted_str_case_insensitive', 'FOO', PASS, ''),
+    (15, 'char_rule_quoted_str_case_insensitive', 'foObar', REM, 'bar'),
+    (16, 'and_rule', 'ad', PASS, ''),
+    (17, 'and_rule', 'ha', FAIL, 'ha'),
+    (18, 'and_rule', 'xx', FAIL, 'xx'),
+    (19, 'and_rule', 'aa', FAIL, 'aa'),
+    (20, 'and_rule', 'ade', REM, 'e'),
+    (21, 'or_rule', 'a', PASS, ''),
+    (22, 'or_rule', 'l', PASS, ''),
+    (23, 'or_rule', 'z', FAIL, 'z'),
+    (24, 'opt_rule', 'ax', REM, 'x'),
+    (25, 'opt_rule', '', PASS, ''),
+    (26, 'opt_rule2', 'ax', REM, 'x'),
+    (27, 'opt_rule2', '', PASS, ''),
+    (28, 'c_rule', 'ab', PASS, ''),
+    (29, 'c_rule', 'abb', REM, 'b'),
+    (30, 'c_rule', 'a', FAIL, 'a'),
+    (31, 'c_rule_min', 'a', FAIL, 'a'),
+    (32, 'c_rule_min', 'aa', PASS, ''),
+    (33, 'c_rule_min', 'aaa', PASS, ''),
+    (34, 'c_rule_max', 'a', PASS, ''),
+    (35, 'c_rule_max', 'ax', REM, 'x'),
+    (36, 'c_rule_max', 'aa', PASS, ''),
+    (37, 'c_rule_max', 'aaa', REM, 'a'),
+    (38, 'c_rule_min_max', 'a', FAIL, 'a'),
+    (39, 'c_rule_min_max', 'ax', PASS, 'ax'),
+    (40, 'c_rule_min_max', 'aa', PASS, ''),
+    (41, 'c_rule_min_max', 'aaa', PASS, ''),
+    (42, 'c_rule_min_max', 'aax', REM, 'x'),
+    (43, 'c_rule_min_max', 'aaax', REM, 'x'),
+    (44, 'c_rule_min_max', 'aaaa', REM, 'x'),
+    (45, 'c_rule_in_char', 'a', FAIL, 'a'),
+    (46, 'c_rule_in_char', 'aa', PASS, ''),
+    (47, 'c_rule_in_char', 'aaa', PASS, ''),
+    (48, 'c_rule_mult_items', 'ad', FAIL, 'ad'), 
+    (49, 'c_rule_mult_items', 'adbe', PASS, ''), 
+    (50, 'c_rule_mult_items', 'adbedf', PASS, ''), 
+    (51, 'c_rule_mult_items', 'adbexx', REM, 'xx'), 
+    (52, 'c_rule_unl', 'a', PASS, ''),
+    (53, 'c_rule_unl', 'ax', REM, 'x'),
+    (54, 'c_rule_unl', 'aa', PASS, ''),
+    (55, 'c_rule_unl', 'aaa', PASS, ''),
+    (56, 'c_rule_unl', 'aaabbbbbcccccdddddd', PASS, ''),
+    (57, 'c_rule_unl2', 'a', PASS, ''),
+    (58, 'c_rule_unl2', 'ax', REM, 'x'),
+    (59, 'c_rule_unl2', 'aa', PASS, ''),
+    (60, 'c_rule_unl2', 'aaa', PASS, ''),
+    (61, 'c_rule_unl2', 'aaabbbbbcccccdddddd', PASS, ''),
+    (62, 'rule_rule', 'a', PASS, ''),
+    (63, 'rule_rule', 'h', FAIL, 'h'),
+    (64, 'rule_rule', 'abc', REM, 'bc'),    
+    (65, 'lookup_char', 'a', PASS, ''),
+    (66, 'lookup_char', '2', PASS, ''),
+    (67, 'lookup_char', 'A', PASS, ''),
+    (68, 'lookup_char', 'x', FAIL, 'x'),
+    (69, 'lookup_char', 'ab', REM, 'b'),
+    (70, 'lookup_char', 'xab', FAIL, 'xab'),
+    (71, 'lookup_char_opt', 'a', PASS, ''),
+    (72, 'lookup_char_opt', 'aa', PASS, ''),
+    (73, 'lookup_char_opt', 'af', PASS, ''),
+    (74, 'lookup_char_opt', 'aaaa', REM, 'aa'),
+    (75, 'lookup_char_opt', 'xaxa', FAIL, 'xaxa'),
+    (76, 'quoted_char_str', 'a::a', PASS, ''),
+    (77, 'quoted_char_str', 'f::a', PASS, ''),
+    (78, 'quoted_char_str', 'f::as', REM, 's'),
+    (79, 'quoted_char_str', 'f', FAIL, 'f'),
+    (80, 'quoted_char_str', 'f:a', FAIL, 'f:a'),
+    (81, 'quoted_char_str2', 'foo,bar', PASS, ''),
+    (82, 'quoted_char_str2', 'oof,bar', PASS, ''),
+    (83, 'quoted_char_str2', 'oof,rab', FAIL, 'oof,rab'),
+    (84, 'quoted_char_str2', 'ofo,bar', PASS, ''),
+    (85, 'complex_and', 'abdxe', PASS, ''),
+    (86, 'complex_and', 'abd', PASS, ''),
+    (87, 'complex_and', 'abdxe.abcde', PASS, ''),
+    (88, 'complex_and', 'abdxe.', REM, '.'),
+    (89, 'complex_and', 'abdxeee', REM, 'ee'),
+    (90, 'complex_and', 'abdxe.a', PASS, ''),
+    (91, 'complex_and', 'abdxe.abcdev', REM, 'v'),
+    (92, 'complex_or', 'abcde', PASS, ''),
+    (93, 'complex_or', 'f', PASS, ''),
+    (94, 'complex_or', 'abcd', FAIL, 'abcd'),
+    (95, 'complex_or', 'abcdf', FAIL, 'abcdf'),
+    (96, 'complex_or', 'ffff', REM, 'fff'),
+    (97, 'complex_and_or', 'abdxe', PASS, ''),
+    (98, 'complex_and_or', 'abd', PASS, ''),
+    (99, 'complex_and_or', 'abdxe.abcde', PASS, ''),
+    (100, 'complex_and_or', 'abdxe.', REM, '.'),
+    (101, 'complex_and_or', 'abdxeee', REM, 'ee'),
+    (102, 'complex_and_or', '123::a', REM, '23::a'),
+    (103, 'complex_and_or', 'abdxe.abcdev', PASS, ''),
+    (104, 'complex_and_or', '1::1', PASS, ''),
+    (105, 'complex_and_or', ':z::z', FAIL, ':z::z'),
+    (106, 'complex_and_or2', '1bcde', PASS, ''),
+    (107, 'complex_and_or2', '1bcde::1bcde', PASS, ''),
+    (108, 'complex_and_or2', '1bcde::1bcde::abcde', PASS, ''),
+    (109, 'complex_and_or2', '1bcde::1bcde::abcde::abcde', PASS, ''),
+    (110, 'complex_and_or2', '1bcde::1bcde::abcde::abcde::abcde', REM, '::abcde'),
+    (111, 'complex_and_or2', 'abcdx', PASS, ''),
+    (112, 'complex_and_or2', 'abcdxzz', REM, 'zz'),
+    (113, 'complex_and_or2', 'xyzhk.a', REM, '.a'),
+    (114, 'complex_and_or2', 'xyzhk.ab', PASS, ''),
+    (115, 'complex_and_or2', 'xyzhk.ab.a', REM, '.a'),
+    (116, 'complex_and_or2', 'xyzhk.ab.ax', PASS, ''),
+    (117, 'complex_and_or2', 'xyzhk.ab.ax.ab.ab', PASS, ''),
+    (118, 'complex_and_or2', 'xyzhk.ab.ax.ab.ab.ab.ab.', REM, '.'),
+    (119, 'count_rule', 'a', FAIL, 'a'),
+    (120, 'count_rule', 'aa', FAIL, 'aa'),
+    (121, 'count_rule', 'aabcd', FAIL, 'aabcd'),
+    (122, 'count_rule', 'aababa', PASS, ''),
+    (123, 'count_rule_qs', 'a', FAIL, 'a'),
+    (124, 'count_rule_qs', 'aa', FAIL, 'aa'),
+    (125, 'count_rule_qs', 'aabcd', PASS, ''),
+    (126, 'count_rule_qs', 'aababa', PASS, ''),
+    (127, 'count_rule_qs', 'aababaab', FAIL, 'aababaab'),
+    (128, 'count_rule_opt', 'a', PASS, ''),
+    (129, 'count_rule_opt', 'aa', PASS, ''),
+    (130, 'count_rule_opt', 'aabcd', PASS, ''),
+    (131, 'count_rule_opt', 'aababa', PASS, ''),
+    (132, 'count_rule_3_args', 'a', FAIL, 'a'),
+    (133, 'count_rule_3_args', 'aa', FAIL, 'aa'),
+    (134, 'count_rule_3_args', 'aabcd', FAIL, 'aabcd'),
+    (135, 'count_rule_3_args', 'aababa', PASS, ''),
+    (136, 'len_rule', 'a', FAIL, 'a'),
+    (137, 'len_rule', 'aa', PASS, ''),
+    (138, 'len_rule', 'aabc', PASS, ''),
+    (139, 'len_rule', 'aababa', FAIL, 'aababa'),
+    (140, 'len_rule_opt', 'a', PASS, ''),
+    (141, 'len_rule_opt', 'aa', PASS, ''),
+    (142, 'len_rule_opt', 'aabc', PASS, ''),
+    (143, 'len_rule_opt', 'aababa', PASS, ''),
+    (144, 'm_rule_pass_fail', 'a', 'pass_10', '', {}, {'pass_10': [1]}),
+    (145, 'm_rule_pass_fail', 'x', 'fail_20', 'x', {}, {'fail_20': [0]}),
+    (146, 'm_rule_element_name', 'aaa', 'pass_10', '', {'test_name': (('aaa', 0),)}),
+    (147, 'm_rule_element_name', 'start this now', 'pass_10', '', {'test_name': (('start this now', 0),)}),
+    (148, 'm_rule_element_name', 'aaa-aa', REM, '-aa', {'test_name': (('aaa', 0),)}),
+    (149, 'next_with_chars', 'a', FAIL, 'a'),
+    (150, 'next_with_chars', 'af', REM, 'f'),
+    (151, 'next_with_lookup', 'af', REM, 'f'),
+    (152, 'next_with_rule', 'aFoo', REM, 'Foo'),
+    (153, 'next_with_action_rule', 'astart', 'pass_10', 'start'),
+    (154, 'next_with_opt_action_rule', 'astart', 'pass_10', 'start'),
+    (155, 'next_with_opt_action_rule', 'ablah', 'fail_20', 'blah'),
+    (156, 'not_next_rule', 'ablah', REM, 'blah'),
+    (157, 'not_next_rule', 'ah', FAIL, 'ah'),
+    (158, 'both_next_rule', 'a', FAIL, 'a', {}, {}),
+    (159, 'both_next_rule', 'a@', REM, '@', {}, {'has_at': [1]}),
+    (160, 'both_next_rule', 'a"', FAIL, '"', {}, {'has_qt': [1]}),
+    (161, 'multiple_marks_rule', 'foo[bar]blah', 15, '',
         {'pre': (('foo', 0),), 'post': (('blah', 8),), 'data': (('bar', 5),)},
-        {0: [12],
-         11: [0],
-         12: [3],
-         13: [7],
-         14: [3],
-         15: [8]}),
-    (101, 'multiple_marks_rule', 'foo/[bar]blah', 2, 'foo/[bar]blah', {'pre': (('foo', 0),)}, 10),
-    (102, 'multiple_marks_rule', 'foo[barblah', 2, 'foo[barblah', {'pre': (('foo', 0),)}, 11),
-    (103, 'multiple_marks_rule', '[bar]', 0, '', {'data': (('bar', 0),)}, 12),
-    (104, 'multiple_marks_rule', '[bar]foo', 0, '', {'data': (('bar', 0),), 'post': (('foo', 5),)}, 13),
-    (105, 'c_rule_min_max', 'a', 2, 'a'),
-    (106, 'c_rule_min_max', 'ab', 0, ''),
-    (107, 'c_rule_min_max', 'abc', 0, ''),
-    (108, 'c_rule_min_max', 'abcd', 1, 'd'),
+        {'pass': [12],
+         'pre_pass': [0],
+         'post_pass': [7],
+         'csb_pass': [7],
+         'osb_pass': [3],
+         'data': [8]}),
+    (162, 'multiple_marks_rule', 'foo/[bar]blah', 2, 'foo/[bar]blah', {'pre': (('foo', 0),)}, {}),
+    (163, 'multiple_marks_rule', 'foo[barblah', 2, 'foo[barblah', {'pre': (('foo', 0),)}, {}),
+    (164, 'multiple_marks_rule', '[bar]', 0, '', {'data': (('bar', 0),)}, {}),
+    (165, 'multiple_marks_rule', '[bar]foo', 0, '', {'data': (('bar', 0),), 'post': (('foo', 5),)}, {}),
 
 ]
 
 RUN_TEST_NUM = 100
 
-
+'''
 class TestParser(unittest.TestCase):
     maxDiff = None
 
@@ -379,3 +522,4 @@ class TestParser(unittest.TestCase):
                 if len(test) > 6:
                     with self.subTest('[%s] RESP %s(%s)' % (test[0], test[1], test[2])):
                         self.assertEqual(test[6], pem.diags(field='position'))
+'''
