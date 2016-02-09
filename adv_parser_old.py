@@ -160,6 +160,7 @@ class ParserOps(object):
 
 class ParserRule(object):
     rule_type = ''
+    parses_data = False
     single_op = True
     returns_info = True
     allow_repeat = True
@@ -186,6 +187,7 @@ class ParserRule(object):
         self.after_self = []
         self.before_ops = []
         self.after_ops = []
+        self.operations = []
         if self.allow_repeat:
             self.min_repeat = min_repeat or ISEMAIL_MIN_REPEAT
             self.max_repeat = max_repeat or ISEMAIL_MAX_REPEAT
@@ -196,7 +198,7 @@ class ParserRule(object):
             self.inner_optional = False
 
     def _operation_strs(self):
-        if self.rule_type == 'char':
+        if self.parses_data:
             return self.parse_str
         elif self.single_op:
             return 'r' % self.operation
@@ -356,11 +358,15 @@ class ParserRule(object):
                 return []
 
     def run(self, parser, data):
-        pass
+        try:
+            return parser.ruleset[self.operation](parser, data)
+        except KeyError:
+            raise AttributeError('Rule %s not found in rule dictionary' % self.operation)
 
 
-class StringParser(ParserRule):
-    rule_type = 'str'
+
+class QString(ParserRule):
+    rule_type = 'qstring'
 
     def __init__(self, parse_str, min_repeat=1, max_repeat=1, **kwargs):
         self.parse_str = parse_str
@@ -432,51 +438,6 @@ class StringParser(ParserRule):
         else:
             raise NoElementError(data)
 
-    def __call__(self, parser, data):
-        log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
-        # method = getattr(parser, '_get_%s' % self.rule_type)
-        tmp = space_text.push
-        tmp_pos = data.position
-        method = self.run_char
-
-        if self.parse_str[0] == '[' and self.parse_str[-1] == ']':
-            self.optional = True
-            self.parse_str = self.parse_str[1:-1]
-
-        if self.parse_str[0] == '"' and self.parse_str[-1] == '"':
-            self.rule_type = 'string'
-            method = self.run_quoted_string
-            self.parse_str = self.parse_str[1:-1]
-
-        elif self.parse_str in parser.ruleset:
-            try:
-                method = parser.ruleset[self.parse_str]
-                self.rule_type = 'rule'
-            except KeyError:
-                raise AttributeError('Rule %s not found in rule dictionary' % self.parse_str)
-
-        elif self.parse_str in parser.char_set:
-            self.parse_str = parser.char_set[self.parse_str]
-            method = self.run_char
-
-        try:
-            tmp_ret = method(parser, data)
-            # tmp_ret = method(data, *self.ops, **self.kwargs)
-        except NoElementError:
-            tmp = space_text.pop
-            log_ddebug('%s FAIL->"%r" failed!', space_text, self)
-            if not self.optional:
-                raise NoElementError(data, fail_flag=self.on_fail, position=tmp_pos)
-        else:
-            tmp = space_text.pop
-            log_ddebug('%s PASS-> "%r" passed', space_text, self)
-
-            if self.on_pass or self.element_name:
-                data.add_note(diag=self.on_pass, element_name=self.element_name, element=tmp_ret, position=tmp_pos)
-            if self.return_string:
-                return tmp_ret
-            else:
-                return []
 
 '''
 class RuleParser(ParserRule):
@@ -545,7 +506,7 @@ class OrParser(ParserRule):
         for op in self.operations:
             try:
                 # tmp_ret = op['method'](data, *op['args'], **op['kwargs'])
-                tmp_ret = op(self, parser, data)
+                tmp_ret = op(parser, data)
                 break
             except NoElementError:
                 pass

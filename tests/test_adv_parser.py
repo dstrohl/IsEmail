@@ -254,7 +254,6 @@ TEST_DATA_RULES = dict(
     count_rule=Count('3*a', Char('*abcde')),
     count_rule_qs=Count('1*2"ab"', Char('*abcde')),
     count_rule_opt=Count('[3*a]', Char('*abcde')),
-    count_rule_3_args=Count(3, 'a', Char('*abcde')),
     
     len_rule=Len('2*4', Word('abcde')),
     len_rule_opt=Len('[2*4]', Word('abcde')),
@@ -278,7 +277,7 @@ TEST_DATA_RULES = dict(
 
     m_rule_element_name=Repeat(Or('alpha', 'SPACE'), actions=('p10_f20, test_name')),
 
-    multiple_marks_rule=Count(0, '[]', 
+    multiple_marks_rule=Count('0/[]',
         Len('5', 
             And(
                 Opt('*-LTR_STR', actions='pre'),
@@ -296,8 +295,7 @@ TEST_DATA_RULES = dict(
     next_with_rule=Char('abcde', next='char_rule_quoted_str'),
     next_with_opt_action_rule=Char('abcde', next='[m_rule_pass_fail]'),
     next_with_action_rule=Char('abcde', next='m_rule_pass_fail'),
-    not_next_rule=Char('abcde', not_next='/hijk'),
-    
+
     both_next_at=Char('@', actions=ParserAction(pass_diag='has_at', fail_diag='no_at')),
     both_next_dquote=Char('DQUOTE', actions=ParserAction(pass_diag='has_qt', fail_diag='no_qt')),
     
@@ -305,7 +303,7 @@ TEST_DATA_RULES = dict(
 
 )
 
-rules = ParserOps(TEST_DATA_RULES, on_fail=2, on_rem_string=1)
+rules = ParserOps(TEST_DATA_RULES, TEST_DATA_LOOKUPS, on_fail=2, on_rem_string=1, on_pass=0)
 
 PASS = 0
 FAIL = 2
@@ -467,8 +465,6 @@ TEST_SETS = [
     (153, 'next_with_action_rule', 'astart', 'pass_10', 'start'),
     (154, 'next_with_opt_action_rule', 'astart', 'pass_10', 'start'),
     (155, 'next_with_opt_action_rule', 'ablah', 'fail_20', 'blah'),
-    (156, 'not_next_rule', 'ablah', REM, 'blah'),
-    (157, 'not_next_rule', 'ah', FAIL, 'ah'),
     (158, 'both_next_rule', 'a', FAIL, 'a', {}, {}),
     (159, 'both_next_rule', 'a@', REM, '@', {}, {'has_at': [1]}),
     (160, 'both_next_rule', 'a"', FAIL, '"', {}, {'has_qt': [1]}),
@@ -487,9 +483,9 @@ TEST_SETS = [
 
 ]
 
-RUN_TEST_NUM = 100
+RUN_TEST_NUM = None
 
-'''
+
 class TestParser(unittest.TestCase):
     maxDiff = None
 
@@ -500,8 +496,9 @@ class TestParser(unittest.TestCase):
                 print('[%s] RUN %s(%s)' % (test[0], test[1], test[2]))
                 print('--------------------\n')
                 with self.subTest('[%s] RUN %s(%s)' % (test[0], test[1], test[2])):
-                    pem = ParseString(parser=rules.parse_str, parser_start_rule=test[1])
-                    tmp_resp = pem(test[2])
+                    pem = rules(test[2], test[1])
+                    # pem = ParseString(parser=rules.parse_str, parser_start_rule=test[1])
+                    tmp_resp = int(pem)
                     self.assertEqual(test[3], tmp_resp)
 
                 with self.subTest('[%s] REN %s(%s)' % (test[0], test[1], test[2])):
@@ -522,4 +519,3 @@ class TestParser(unittest.TestCase):
                 if len(test) > 6:
                     with self.subTest('[%s] RESP %s(%s)' % (test[0], test[1], test[2])):
                         self.assertEqual(test[6], pem.diags(field='position'))
-'''

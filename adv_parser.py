@@ -5,6 +5,236 @@ from collections import deque
 # log = logging.getLogger(__name__)
 
 
+
+'''
+class AddressItem(object):
+
+    def __init__(self, threashold=None):
+        self._threashold = threashold or 0
+        self._elements = {}
+        self._responses = []
+        self._max_code = 0
+        self.local_part = None
+        self.domain_part = None
+
+    def add_element(self, element_code, element):
+        if element_code == ISEMAIL_ELEMENT_LOCALPART:
+            self.local_part = element
+        elif element_code == ISEMAIL_ELEMENT_DOMAINPART:
+            self.local_part = element
+        elif element_code in self._elements:
+            self._elements[element_code].append(element)
+        else:
+            self._elements[element_code] = [element]
+
+    def add_response(self, response_code, position):
+
+        self._max_code = max(response_code, self._max_code)
+        self._responses.append((response_code, position))
+
+    def __int__(self):
+        return self._max_code
+
+    def responses(self, max_code=None, min_code=None, response_type='string_list'):
+        """
+
+        :param max_code:
+        :type max_code:
+        :param min_code:
+        :type min_code:
+        :param response_type: 'string_list'|'code_list'|'detailed_string'|'key_list'
+        :type response_type: str
+        :return:
+        :rtype:
+        """
+        min_code = min_code or self._threashold
+        max_code = max_code or ISEMAIL_MAX_THREASHOLD
+
+        if response_type == 'code_list':
+            return self._responses
+        elif response_type == 'string_list':
+            tmp_ret = []
+            for i, pos in self._responses:
+                tmp_ret.append(META_LOOKUP.diags[i]['description'])
+            return tmp_ret
+        elif response_type == 'key_list':
+            tmp_ret = []
+            for i, pos in self._responses:
+                tmp_ret.append(META_LOOKUP.diags[i]['key'])
+            return tmp_ret
+
+    def __getitem__(self, item):
+        try:
+            return self._elements[item]
+        except KeyError:
+            return 'Unknown / Unfound'
+
+
+class WorkQueue(object):
+    def __init__(self):
+        self.queue = []
+        self.done = []
+        self.length = 0
+
+    def push(self, item):
+        self.queue.append(item)
+        self.length += 1
+
+    def pop(self, count=1):
+        if count > self.length:
+            count = self.length
+
+        for i in range(count):
+            self.done.append(self.queue.pop())
+
+        self.length -= count
+        return self.last(count)
+
+    def last(self, count=1):
+        if count > self.length:
+            count = self.length
+        if count == 1:
+            return self.done[1]
+        else:
+            return self.done[count:]
+
+    def clear(self):
+        self.queue = []
+        self.done = []
+        self.length = 0
+
+    def __getitem__(self, item):
+        return self.done[item]
+'''
+class ParsedItem(object):
+
+    def __init__(self, raw_string=None):
+        '''
+                 parser=None,
+                 parser_start_rule=None,
+                 diag_codes=None):
+        '''
+        # self.parser = parser or parser_ops.parse_email
+        # self.parser_start_rule = parser_start_rule or 'start'
+
+        self.rem_string = deque()
+        self.raw_string = None
+        self.raw_length = 0
+        self._diag_count = 0
+        self._elements = {}
+        self._diags = {}
+        # self.work = WorkQueue()
+        self._max_diag = 0
+
+        # if raw_string is not None:
+        #    self.parse(raw_string)
+
+    '''
+    def reset(self):
+        self.rem_string.clear()
+        self._elements.clear()
+        self._diags.clear()
+        self.work.clear()
+        self._max_diag = 0
+    '''
+    '''
+    def parse(self, raw_email):
+        log_debug('Parse: %s', raw_email)
+        self.reset()
+        self.rem_string.extend(raw_email)
+        self.raw_length = len(raw_email)
+        self.parser(self, rule=self.parser_start_rule)
+    '''
+
+    @property
+    def position(self):
+        return self.raw_length - len(self.rem_string)
+
+    def add_note(self, diag=None, position=None, element_name=None, element=None, element_pos=None):
+        position = position or self.position
+
+        if diag is not None:
+            self._diag_count += 1
+            tmp_diag = dict(
+                position=position,
+                count=self._diag_count)
+            log_ddebug('adding diag: %s (%r)', diag, tmp_diag)
+            if diag in self._diags:
+                self._diags[diag].append(tmp_diag)
+            else:
+                self._diags[diag] = [tmp_diag]
+            if diag > self._max_diag:
+                self._max_diag = diag
+
+        if element_name is not None:
+            element_pos = element_pos or position-len(element)
+            if isinstance(element, list):
+                element = ''.join(element)
+
+            if element_name in self._elements:
+                self._elements[element_name].append(dict(
+                    element=element,
+                    pos=element_pos,
+                ))
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
+
+            else:
+                self._elements[element_name] = [dict(
+                    element=element,
+                    pos=element_pos,
+                )]
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
+
+
+    def __int__(self):
+        return self._max_diag
+
+    def elements(self, element_name=None):
+        if element_name is None:
+            return self._elements.copy()
+        else:
+            return self._elements.get(element_name, [])
+
+    def all_elements(self):
+        return self._elements
+
+    def diags(self, max_code=None, min_code=None, field=None, diag_code=None):
+        min_code = min_code or -1
+        max_code = max_code or sys.maxsize
+
+        if diag_code is None:
+            tmp_ret = {}
+            for diag, items in self._diags.items():
+                if min_code < diag < max_code:
+                    if field is None:
+                        tmp_ret[diag] = items
+                    else:
+                        tmp_ret[diag] = []
+                        for i in items:
+                            tmp_ret[diag].append(i[field])
+            return tmp_ret
+        else:
+            if field is None:
+                return self._diags[diag_code]
+            else:
+                tmp_ret = []
+                for i in self._diags[diag_code]:
+                    tmp_ret.append(i[field])
+                return tmp_ret
+
+    def remaining(self):
+        return ''.join(self.rem_string)
+
+    def __getitem__(self, item):
+        return self.elements(element_name=item)
+
+    '''
+    def __call__(self, email_in):
+        self.parse(email_in)
+        return self._max_diag
+    '''
+
+
 class SpaceText(object):
     def __init__(self, indent=2):
         self.indent_size = indent
@@ -36,9 +266,8 @@ class NoElementError(Exception):
             is_email_obj.add_note(diag=fail_flag, pos=position)
 
 class RuleError(Exception):
-    def __init__(self, rule, msg=None):
-        self.rule = rule
-        self.msg = msg or 'Error building or parsing rule %r' % rule
+    def __init__(self, msg=None):
+        self.msg = msg
 
     def __str__(self):
         return self.msg
@@ -54,149 +283,6 @@ def make_char_str(*chars_in):
             for c in range(char[0], char[1]+1):
                 tmp_ret.append(chr(c))
     return ''.join(tmp_ret)
-
-'''
-def _check_enclosures(in_str, start, end=None):
-    end = end or start
-    tmp_count = 0
-
-    for i, c in enumerate(in_str):
-        if c == start:
-            tmp_count += 1
-        elif c == end:
-            tmp_count -= 1
-            if tmp_count < 0:
-                raise AttributeError('Extra close enclosure at pos %s', i)
-
-    if tmp_count > 0:
-        raise AttributeError('Extra open enclosure')
-    elif tmp_count < 0:
-        raise AttributeError('Missing close enclosure')
-    else:
-        return tmp_count
-
-def _get_simple_between(in_str, start, end=None):
-    """
-    does not support recursive splitting, but is faster.
-
-    :param in_str: the string to split
-    :type in_str: str
-    :param start: the starting key
-    :type start: str
-    :param end: the ending key (if not passed, will use the start key again)
-    :type end: str
-    :return:
-        start, mid, end : if both keys were found.
-        '', '', in_str : if only the start key was found.
-        in_str, '', '' : if no keys were found.
-    :rtype: tuple
-    """
-    end = end or start
-    _check_enclosures(in_str, start, end)
-    if start in in_str:
-        tmp_pre, tmp_post = in_str.split(start, maxsplit=1)
-        if end in tmp_post:
-            tmp_mid, tmp_end = tmp_post.split(end, maxsplit=1)
-            return tmp_pre, tmp_mid, tmp_end
-        else:
-            return '', '', in_str
-    else:
-        return in_str, '', ''
-'''
-'''
-def get_mid_end(rem_str, start, end):
-    tmp_ret2 = []
-    for i2 in range(len(rem_str)):
-        if rem_str[i2] == start:
-            tmp_ret2[0] = rem_str[:i2]
-            tmp_ret2[1], tmp_ret2[2] = get_mid_end(rem_str[i2:])
-            return tmp_ret
-        elif rem_str[i2] == end:
-            return rem_str[:i2], rem_str[i2:]
-'''
-'''
-def _get_between(in_str, start, end, allow_recursive=True, skip_check=False):
-    """
-
-    will support recursive splitting, but is slower.
-
-    examples: start = '(', end = ')'
-
-    'foo'  = ['foo','','']
-    'foo(bar)' = ['foo','bar','']
-    '(foo)bar' = ['','foo','bar']
-    'fo(ob)ar = ['fo','ob','ar']
-    '(foo)(bar) = ['','foo','(bar)']
-
-    with allow_recursive:
-        'foo((ba)r)' = ['foo',['','ba','r'],'']
-        '(foo(b(a(r))) = ['',['foo',['b',['a',['r','',''],''],''],'']
-    without allow_recursive:
-        'foo((ba)r)' = ['foo','(ba)r','']
-        '(foo(b(a(r))) = ['','(foo(b(a(r)))','']
-
-    'te)st' = Raises AttributeError
-    'te(st' = Raises AttributeError
-
-    01234(678(9012)456)890
-
-    [1234,[678,9012,456],890]
-    """
-    tmp_mid_list = None
-    end = end or start
-
-    if not skip_check:
-        _check_enclosures(in_str, start, end)
-
-    if start in in_str:
-        tmp_pre, tmp_post = in_str.split(start, maxsplit=1)
-        if allow_recursive:
-            next_start = tmp_post.find(start)
-            if next_start > -1:
-                next_end = tmp_post.find(end)
-                if next_start < next_end:
-                    tmp_mid_list = _get_between(tmp_post, start, end, allow_recursive=allow_recursive, skip_check=True)
-                    tmp_post = tmp_mid_list[2]
-
-        tmp_mid, tmp_end = tmp_post.split(end, maxsplit=1)
-        if tmp_mid_list:
-            tmp_mid = tmp_mid_list[0], tmp_mid_list[1], tmp_mid
-
-        return tmp_pre, tmp_mid, tmp_end
-    else:
-        return in_str, '', ''
-
-
-
-def _parse_enclosure(str_in, start, end):
-    stack = []
-    for x in str_in:
-        if x == start:
-            stack[-1].append([''])
-            stack.append(stack[-1][-1])
-        elif x == end:
-            stack.pop()
-            if not stack:
-                raise AttributeError('error: opening bracket is missing')
-        else:
-            stack[-1] += x
-    if len(stack) > 1:
-        # return 'error: closing bracket is missing'
-        raise AttributeError('error: closing bracket is missing')
-    return stack.pop()
-'''
-
-'''
-for i in range(len(in_str)):
-    if in_str[i] == start:
-        tmp_ret[0] = in_str[:i]
-        tmp_ret[1], tmp_ret[2] = get_mid_end(in_str[i:])
-        return tmp_ret
-'''
-
-
-
-
 
 _PARSER_CONST = dict(
     AT='@',
@@ -224,26 +310,191 @@ _PARSER_CONST = dict(
 )
 
 _EMAIL_PARSER_CONSOLIDATABLE = {
-   'char': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'rule': set(),
-   'and': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'or': ('optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'opt': ('optional', 'return_string'),
-   'repeat': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
-   'mark': ('return_string', 'on_fail', 'on_pass', 'element_name'),
-   'look': set(),
+    'char': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
+    'rule': set(),
+    'and': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
+    'or': ('optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
+    'opt': ('optional', 'return_string'),
+    'repeat': ('min_repeat', 'max_repeat', 'optional', 'return_string', 'on_fail', 'on_pass', 'element_name'),
+    'mark': ('return_string', 'on_fail', 'on_pass', 'element_name'),
+    'look': set(),
 }
 
 _EMAIL_PARSER_DO_NOT_CONSOLIDATE = {
     'opt': ('repeat',),
 }
 
-
-
 PARSER_DEFAULT_FAIL_CODE = 255
 PARSER_DEFAULT_REMAINING_STR_CODE = 254
 PARSER_DEFAULT_PASS_CODE = 0
 PARSER_DEFAULT_START_RULE = 'start'
+
+class RuleBuilderItem(object):
+    def __init__(self, builder, rule_str):
+        self.init_rule_str = rule_str
+        self.builder = builder
+        if isinstance(rule_str, list):
+            if len(rule_str) == 1:
+                self._rule = Opt(rule_str[0])
+            else:
+                raise RuleError('Rule Builder Error: no more than one item allows in optionals (through lists), %r passed' % rule_str)
+        elif issubclass(rule_str.__class__, BaseRule):
+            self._rule = rule_str
+
+        elif isinstance(rule_str, str):
+            self._kwargs = {}
+            self.rule_type = None
+            self.is_repeated = False
+            self.is_charset = False
+            self.is_quoted_string = False
+            self.is_optional = False
+            self.is_case_sensitive = True
+            self._rule = None
+            self.rule_str = None
+            self.builder._parse_rule_str(self)
+        else:
+            raise RuleError('Rule Builder Error: unknown rule object: %r' % rule_str)
+
+
+    def kwargs(self, kwargs=None):
+        if kwargs is None:
+            return self.kwargs
+        else:
+            kwargs.update(self.kwargs)
+            return kwargs
+
+    @property
+    def rule(self, **kwargs):
+        if self._rule is None:
+            self._rule = self.builder._make_rule(self, **kwargs)
+        return self._rule
+
+    def __call__(self, parser, data):
+        tmp_rule = self.rule
+        return tmp_rule(parser, data)
+
+class RuleBuilder(object):
+    """
+    Returns Rule Objects from strings
+    RuleBuilder["rulestring"] returns the rule builder object
+    RuleBuilder("rulestring") returns the a rule object
+    RuleBuilder["rulestring"](*args, **kwargs) wil run the rule object
+
+    """
+
+    def __init__(self):
+        self.rules = {}
+
+    def _rule(self, rule_str):
+        if rule_str not in self.rules:
+            tmp_item = RuleBuilderItem(self, rule_str)
+            self.rules[rule_str] = tmp_item
+        return self.rules[rule_str]
+
+    __getitem__ = _rule
+
+    def _make_rule(self, rule_in, **kwargs):
+        kwargs = rule_in.kwargs(kwargs)
+        if rule_in.is_charset:
+            if rule_in.is_repeated:
+                return Word(rule_in, **kwargs)
+            else:
+                return Char(rule_in, **kwargs)
+        elif rule_in.is_qs:
+            if len(rule_in) > 1:
+                return Word(rule_in, **kwargs)
+            else:
+                return Char(rule_in, **kwargs)
+        else:
+            return LookupRule(rule_in, **kwargs)
+
+
+    def kwargs(self, rule_str, kwargs=None):
+        return self[rule_str].kwargs(kwargs)
+
+    @staticmethod
+    def _parse_rule_str(tmp_rule):
+        """
+        string formatting options:
+        'abcde' Rule('abcde')
+        '/abcde' = Char('abcde')
+        '"foo"' = QString('foo', case=True)
+        '^"Foo"' = QString('foo', case=False)
+        '2*34abcde' = Rule(abcde, min=2, max=34)
+        '2*3/abcde' = Word('abcde', min=3, max=34)
+        '[abcde]' = Rule(abcde, optional=True)
+        '-abcde' = Rule(abcde, return_string=False)
+        """
+        key_chars = '1234567890*[/"^'
+        repeat_chars = '1234567890*'
+
+        rule_str_in = tmp_rule.init_rule_str
+
+        if rule_str_in[0] == '[' and rule_str_in[-1] == ']':
+            tmp_rule.is_optional = True
+            rule_str_in = rule_str_in[1:-1]
+            tmp_rule.kwargs['optional'] = True
+
+        while rule_str_in[0] in key_chars:
+            if rule_str_in[0] == '"' and rule_str_in[-1] == '"':
+                tmp_rule.is_quoted_string = True
+                rule_str_in = rule_str_in[1:-1]
+                tmp_rule.kwargs['quoted_str'] = True
+                break   # since this means that everything else is a quoted string
+
+            elif rule_str_in[0] == '-':
+                rule_str_in = rule_str_in[1:]
+                tmp_rule.kwargs['return_string'] = True
+
+            elif rule_str_in[0] == '^' and rule_str_in[1] == '"' and rule_str_in[-1] == '"':
+                tmp_rule.is_quoted_string = True
+                tmp_rule.is_case_sensitive = False
+                rule_str_in = rule_str_in[2:-1]
+                tmp_rule.kwargs['case_sensitive'] = False
+                break   # since this means that everything else is a quoted string
+
+            elif rule_str_in[0] == '/':
+                tmp_rule.is_charset = True
+                rule_str_in = rule_str_in[1:]
+                break # since means everything else is a char_set
+
+            elif rule_str_in[0] in repeat_chars:
+                tmp_rule.is_repeated = True
+                tmp_repeat_str = []
+
+                for c in rule_str_in:
+                    if c in repeat_chars:
+                        tmp_repeat_str.append(c)
+                    else:
+                        break
+
+                rule_str_in = rule_str_in[len(tmp_repeat_str) - 1:]
+
+                tmp_repeat_str = ''.join(tmp_repeat_str)
+
+                if '*' in tmp_repeat_str:
+                    min_repeat, max_repeat = tmp_repeat_str.split('*')
+                    if min_repeat == '':
+                        min_repeat = ISEMAIL_MIN_REPEAT
+                    if max_repeat == '':
+                        max_repeat = ISEMAIL_MAX_REPEAT
+                else:
+                    min_repeat = tmp_repeat_str
+                    max_repeat = tmp_repeat_str
+
+                tmp_rule.kwargs['min_repeat'] = int(min_repeat)
+                tmp_rule.kwargs['max_repeat'] = int(max_repeat)
+
+            else:
+                raise RuleError('Invalid rule string: %s' % rule_str_in)
+
+        tmp_rule.rule_str = rule_str_in
+
+    def __call__(self, rule_str, **kwargs):
+        return self[rule_str].rule(**kwargs)
+
+make_rule = RuleBuilder()
+
 
 class ParserOps(object):
 
@@ -256,11 +507,11 @@ class ParserOps(object):
                  start_rule=None):
         self.start_rule = start_rule or PARSER_DEFAULT_START_RULE
         self.ruleset = rules
-        self.charsets = char_sets or {}
+        self.charsets = _PARSER_CONST.copy()
+        self.charsets.update(char_sets or {})
         self.on_fail = on_fail
         self.on_rem_string = on_rem_string
         self.on_pass = on_pass
-        self.charsets.update(_PARSER_CONST)
 
     '''
     def parse_email(self, data, rule=None):
@@ -297,13 +548,18 @@ class ParserOps(object):
                 data.add_note(diag=self.on_rem_string)
             elif self.on_pass is not None:
                 data.add_note(diag=self.on_pass, position=0)
-
+    '''
     def __contains__(self, item):
         if item in self.ruleset:
             return True
         if item in self.charsets:
             return True
         return False
+    '''
+    def __call__(self, parse_str, rule=None):
+        tmp_data = ParsedItem(parse_str)
+        self.parse_str(tmp_data, rule)
+        return tmp_data
 
 
 class ParserAction(object):
@@ -338,152 +594,100 @@ class ParserAction(object):
             return 'Action: Empty'
 
 
-class Rule(object):
-    rule_type = 'Rule'
+class BaseRule(object):
+    rule_type = 'BaseRule'
+    parses_chars = False
     single_op = True
     returns_info = True
     allow_repeat = True
+    should_repeat = False
     repr_format = '{opt_pre}{pre_rule}{type}({pre_ops}{ops}{post_ops}){post_rule}{opt_post}'
-    # parser = ParserOps
-    # parser_ops = EMAIL_PARSER_OPS
 
-    def __init__(self,
-                 *operations,
-                 optional=False,
-                 return_string=True,
-                 on_fail=None,
-                 on_pass=None,
-                 element_name=None,
-                 min_repeat=None,
-                 max_repeat=None,
-                 inner_optional=False,
-                 actions=None,
-                 next=None,
-                 not_next=None
-                 ):
-        if self.single_op:
-            self.operations = operations[0]
+    if should_repeat:
+        def_min_repeat = ISEMAIL_MIN_REPEAT
+        def_max_repeat = ISEMAIL_MAX_REPEAT
+    else:
+        def_min_repeat = 1
+        def_max_repeat = 1
+
+
+    def __init__(self, *operations, **kwargs):
+        """
+        optional=False
+        return_string=True
+        min_repeat=None
+        max_repeat=None
+        inner_optional=False
+        actions=None
+        next=None
+        not_next=None
+
+        old -----
+        on_fail=None
+        on_pass=None
+        element_name=None
+
+        """
+        if self.parses_chars:
+            tmp_arg = make_rule[operations[0]]
+            kwargs = tmp_arg.kwargs(kwargs)
+            self.operations = tmp_arg.rule_str
+            self.is_quoted_string = kwargs.get('quoted_str', False)
         else:
-            self.operations = operations
+            if self.single_op:
+                self.operations = make_rule(operations[0])
+            else:
+                self.operations = []
+                for o in operations:
+                    self.operations.append(make_rule(o))
 
-        self.optional = optional
-        self.return_string = return_string
-        self.on_fail = on_fail
-        self.on_pass = on_pass
-        self.element_name = element_name
+        self.optional = kwargs.get('optional', False)
+        self.return_string = kwargs.get('return_string', True)
+        self.case_sensitive = kwargs.get('case_sensitive', True)
+        self.on_fail = None
+        self.on_pass = None
+        self.element_name = None
         self.before_self = []
         self.after_self = []
         self.before_ops = []
         self.after_ops = []
-
-        self._next = self._make_rule(next)
-        self._not_next = self._make_rule(not_next)
-        self._actions = None
-        self._add_actions(actions)
-        self.parse_method = self.run
+        if 'next' in kwargs:
+            self._next = make_rule(kwargs['next'])
+        if 'not_next' in kwargs:
+            self._not_next = make_rule(kwargs['not_next'])
+        self._actions = kwargs.get('actions', [])
+        if not isinstance(self._actions, (list, tuple)):
+            self._actions = [self._actions]
         if self.allow_repeat:
-            self.min_repeat = min_repeat or ISEMAIL_MIN_REPEAT
-            self.max_repeat = max_repeat or ISEMAIL_MAX_REPEAT
-            self.inner_optional = inner_optional
+            self.min_repeat = kwargs.get('min_repeat', self.def_min_repeat)
+            self.max_repeat = kwargs.get('max_repeat', self.def_max_repeat)
         else:
             self.min_repeat = 1
             self.max_repeat = 1
-            self.inner_optional = False
 
-    def _make_rule(self, rule_in):
+    def _run_actions(self, data, passed, element, position):
+        for a in self._actions:
+            a(data, passed, element, position)
 
-        if isinstance(rule_in, list):
-            if len(rule_in) == 1:
-                return Opt(self._make_rule(rule_in[0]))
+    def _run_next(self, parser, data):
+        try:
+            try:
+                tmp_ret = self._next(parser, data)
+            except NoElementError:
+                op_passed = False
+                raise
             else:
-                raise RuleError(self, 'Rule Builder Error: no more than one item allows in optionals (through lists), %r passed' % rule_in)
-        elif issubclass(rule_in, Rule):
-            return rule_in
-        elif isinstance(rule_in, str):
-            rule_class, rule_name, kwargs = self._break_rule_str(rule_in)
-            return rule_class(rule_name, **kwargs)
-        else:
-            raise RuleError(self, 'Rule Builder Error: unknown rule object: %r' % rule_in)
+                op_passed = True
+                raise NoElementError(data, popped_text=tmp_ret)
+        except NoElementError:
+            if not op_passed:
+                raise NoElementError()
 
 
-    def _break_rule_str(self, rule_str_in):
-        """
-        string formatting options:
-        'abcde' Rule('abcde')
-        '/abcde' = Char('abcde')
-        '"foo"' = QString('foo', case=True)
-        '^"Foo"' = QString('foo', case=False)
-        '2*34abcde' = Rule(abcde, min=2, max=34)
-        '2*3/abcde' = Word('abcde', min=3, max=34)
-        '[abcde]' = Rule(abcde, optional=True)
-        """
-        kwargs={}
-        key_chars = '1234567890*[/"^'
-        repeat_chars = '1234567890*'
-        rule_class = Rule
-
-        while rule_str_in[0] in key_chars:
-            if rule_str_in[0] == '"' and rule_str_in[-1] == '"':
-                rule_str_in = rule_str_in[1:-1]
-                if len(rule_str_in) > 1:
-                    rule_class = Word
-                else:
-                    rule_class = Char
-                break   # since this means that everything else is a quoted string
-
-            elif rule_str_in[0] == '[' and rule_str_in[-1] == ']':
-                rule_str_in = rule_str_in[1:-1]
-                kwargs['optional'] = True
-
-            elif rule_str_in[0] == '^' and rule_str_in[1] == '"':
-                rule_str_in = rule_str_in[1:]
-                kwargs['case'] = False
-
-            elif rule_str_in[0] == '/':
-                rule_str_in = rule_str_in[1:]
-                rule_class = Word
-
-            elif rule_str_in[0] in repeat_chars:
-                tmp_repeat_str = []
-
-                for c in self.parse_str:
-                    if c in repeat_chars:
-                        tmp_repeat_str.append(c)
-                    else:
-                        break
-
-                rule_str_in = rule_str_in[len(tmp_repeat_str)-1:]
-
-                tmp_repeat_str = ''.join(tmp_repeat_str)
-
-                if '*' in tmp_repeat_str:
-                    min_repeat, max_repeat = tmp_repeat_str.split('*')
-                    if min_repeat == '':
-                        min_repeat = ISEMAIL_MIN_REPEAT
-                    if max_repeat == '':
-                        max_repeat = ISEMAIL_MAX_REPEAT
-                else:
-                    min_repeat = tmp_repeat_str
-                    max_repeat = tmp_repeat_str
-
-                kwargs['min_repeat'] = int(min_repeat)
-                kwargs['max_repeat'] = int(max_repeat)
-
-            else:
-                raise RuleError('Invalid rule string: %s' % rule_str_in)
-        return rule_class, rule_str_in, kwargs
-
-    def _add_actions(self, actions):
-        if isinstance(actions, (list, tuple)):
-            self._actions = actions
-        else:
-            self._actions = [actions]
 
     def _operation_strs(self):
-        if self.rule_type == 'char':
-            return self.parse_str
-        elif self.single_op:
-            return 'r' % self.operation
+        if self.single_op:
+            return '%r' % self.operations
         else:
             tmp_ret = []
             for r in self.operations:
@@ -507,18 +711,7 @@ class Rule(object):
     def _set_repr_flags(self):
 
         if self.return_string:
-            self._add_repr_flag(before_self='x')
-
-        if self.on_pass is not None or self.on_fail is not None:
-            if self.on_pass is None:
-                self._add_repr_flag(after_ops='{F}')
-            elif self.on_fail is None:
-                self._add_repr_flag(after_ops='{P}')
-            else:
-                self._add_repr_flag(after_ops='{PF}')
-
-        if self.element_name is not None:
-            self._add_repr_flag(after_ops='<%s>' % self.element_name)
+            self._add_repr_flag(before_self='-')
 
     def __repr__(self):
         """
@@ -582,144 +775,89 @@ class Rule(object):
 
     def __call__(self, parser, data):
         log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
-        # method = getattr(parser, '_get_%s' % self.rule_type)
         tmp = space_text.push
         tmp_pos = data.position
 
         tmp_ret_list = []
 
         try:
-            for i in range(len(data.rem_string)):
-                if i > self.max_repeat-1:
-                    break
-                try:
-                    tmp_ret = self.parse_method(self, parser, data)
-                except NoElementError:
-                    if i < self.min_repeat-1:
-                        if self.inner_optional:
-                            break
-                        else:
+            if self.allow_repeat:
+                for i in range(len(data.rem_string)):
+                    if i > self.max_repeat - 1:
+                        break
+                    try:
+                        tmp_ret = self.run(parser, data)
+                    except NoElementError:
+                        if i < self.min_repeat - 1:
                             raise NoElementError(data, popped_text=tmp_ret_list)
-                else:
-                    if tmp_ret is not None:
-                        tmp_ret_list.extend(tmp_ret)
+                    else:
+                        if tmp_ret is not None:
+                            tmp_ret_list.extend(tmp_ret)
+            else:
+                tmp_ret_list.extend(self.run(parser, data))
+
+            try:
+                self._run_next(parser, data)
+            except NoElementError:
+                raise NoElementError(data, popped_text=tmp_ret_list)
+
         except NoElementError:
             tmp = space_text.pop
             log_ddebug('%s FAIL->"%r" failed!', space_text, self)
+            self._run_actions(data, False, [], tmp_pos)
             if not self.optional:
-                raise NoElementError(data, fail_flag=self.on_fail, position=tmp_pos)
+                raise NoElementError()
         else:
             tmp = space_text.pop
             log_ddebug('%s PASS-> "%r" passed', space_text, self)
+            self._run_actions(data, True, [], tmp_pos)
 
-            if self.on_pass or self.element_name:
-                data.add_note(diag=self.on_pass, element_name=self.element_name, element=tmp_ret_list, position=tmp_pos)
             if self.return_string:
                 return tmp_ret_list
             else:
                 return []
 
     def run(self, parser, data):
+        raise NotImplementedError()
+
+
+class Rule(BaseRule):
+    rule_type = 'Rule'
+
+    def run(self, parser, data):
+        try:
+            return parser.ruleset[self.operations](parser, data)
+        except KeyError:
+            raise AttributeError('Rule %s not found in rule dictionary' % self.operations)
+
+
+class LookupRule(BaseRule):
+    rule_type = 'Lookup'
+
+    def __init__(self, *args, **kwargs):
+        self.kwargs = kwargs
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, parser, data):
+        if self.operations in parser.ruleset:
+            return make_rule[parser.ruleset[self.operations]](parser, data)
+        elif self.operations in parser.charsets:
+            return make_rule[parser.charsets[self.operations]](parser, data)
+        else:
+            raise RuleError('Rule %s not found in lookups' % self.operations)
+
+    def run(self, parser, data):
         pass
 
 
-class Word(Rule):
-    rule_type = 'str'
-    quoted_string = False
+class Word(BaseRule):
+    rule_type = 'Word'
+    parses_chars = True
+    allow_repeat = True
+    should_repeat = True
 
-    def __init__(self, parse_str, **kwargs):
-        self.parse_str = parse_str
-
-        self.check_opt_str(kwargs)
-        self.check_repeat_str(kwargs)
-        self.check_opt_str(kwargs, inner=True)
-        self.check_quoted_str()
-
-        super().__init__(**kwargs)
-
-    def check_opt_str(self, kwargs, inner=False):
-        if self.parse_str[0] == '[' and self.parse_str[-1] == ']':
-            self.parse_str = self.parse_str[1:-1]
-            if inner:
-                kwargs['inner_optional'] = True
-            else:
-                kwargs['optional'] = True
-
-
-    def check_quoted_str(self):
-        if self.parse_str[0] == '"' and self.parse_str[-1] == '"':
-            self.rule_type = 'string'
-            self.quoted_string = True
-            self.parse_str = self.parse_str[1:-1]
-            return True
-        return False
-
-    def check_repeat_str(self, str_in, kwargs):
-        repeat_chars = '1234567890*'
-        tmp_repeat_str = []
-
-        if self.parse_str[0] in repeat_chars:
-            for c in self.parse_str:
-                if c in repeat_chars:
-                    tmp_repeat_str.append(c)
-                else:
-                    break
-
-        if tmp_repeat_str:
-            self.parse_str = self.parse_str[len(tmp_repeat_str)-1:]
-
-            tmp_repeat_str = ''.join(tmp_repeat_str)
-
-            if '*' in tmp_repeat_str:
-                min_repeat, max_repeat = tmp_repeat_str.split('*')
-                if min_repeat == '':
-                    min_repeat = ISEMAIL_MIN_REPEAT
-                if max_repeat == '':
-                    max_repeat = ISEMAIL_MAX_REPEAT
-            else:
-                min_repeat = tmp_repeat_str
-                max_repeat = tmp_repeat_str
-
-            kwargs['min_repeat'] = int(min_repeat)
-            kwargs['max_repeat'] = int(max_repeat)
-
-
-    def run_quoted_string(self, parser, data):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
-        tmp_ret_list = []
-        if len(data.rem_string) < (self.min_repeat * len(self.parse_str)):
-            log_ddebug('%s Not enough chars to meet min repeat', space_text)
-            raise NoElementError()
-        for i in range(len(data.rem_string)):
-            if self.max_repeat is not None and i > self.max_repeat-1:
-                log_ddebug('%s found, max_repeat (%s) met!', space_text, self.max_repeat)
-                break
-
-            log_ddebug('%s checking for: %r in %r', space_text, self.parse_str, data.rem_string)
-
-            try:
-                tmp_ret = []
-                for c in self.parse_str:
-                    tmp_next_char = data.rem_string[0]
-                    if tmp_next_char == c:
-                        tmp_ret.append(data.rem_string.popleft())
-                    else:
-                        raise NoElementError(data, popped_text=tmp_ret)
-                if tmp_ret:
-                    tmp_ret_list.extend(tmp_ret)
-                else:
-                    log_ddebug('%s missed', space_text)
-
-            except NoElementError:
-                if i < self.min_repeat-1:
-                    log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                    raise NoElementError(data, popped_text=tmp_ret_list)
-        if tmp_ret_list:
-            return tmp_ret_list
-        else:
-            raise NoElementError()
-
-    def run_char(self, parser, data):
+    def run(self, parser, data):
+        '''
         # log_ddebug('%s checking for chars in %r', space_text, char_set)
         tmp_ret = []
         if len(data.rem_string) < self.min_repeat:
@@ -747,307 +885,48 @@ class Word(Rule):
             return tmp_ret
         else:
             raise NoElementError(data)
+        '''
 
-    def __call__(self, parser, data):
-        if self.quoted_string:
-            self.parse_method = self.run_quoted_string
+        log_ddebug('%s checking for: %r in %r', space_text, data.rem_string[0], self.operations)
 
-        elif self.parse_str in parser.ruleset:
-            self.parser_method = parser.ruleset[self.parse_str]
-            self.rule_type = 'rule'
-
-        elif self.parse_str in parser.char_set:
-            self.parse_str = parser.char_set[self.parse_str]
-            self.parser_method = self.run_char
-
-        return super().__call__(parser, data)
-
-
-
-
-class Char(Rule):
-    rule_type = 'str'
-    quoted_string = False
-
-    def __init__(self, parse_str, **kwargs):
-        self.parse_str = parse_str
-
-        self.check_opt_str(kwargs)
-        self.check_repeat_str(kwargs)
-        self.check_opt_str(kwargs, inner=True)
-        self.check_quoted_str()
-
-        super().__init__(**kwargs)
-
-    def check_opt_str(self, kwargs, inner=False):
-        if self.parse_str[0] == '[' and self.parse_str[-1] == ']':
-            self.parse_str = self.parse_str[1:-1]
-            if inner:
-                kwargs['inner_optional'] = True
-            else:
-                kwargs['optional'] = True
-
-
-    def check_quoted_str(self):
-        if self.parse_str[0] == '"' and self.parse_str[-1] == '"':
-            self.rule_type = 'string'
-            self.quoted_string = True
-            self.parse_str = self.parse_str[1:-1]
-            return True
-        return False
-
-    def check_repeat_str(self, str_in, kwargs):
-        repeat_chars = '1234567890*'
-        tmp_repeat_str = []
-
-        if self.parse_str[0] in repeat_chars:
-            for c in self.parse_str:
-                if c in repeat_chars:
-                    tmp_repeat_str.append(c)
-                else:
-                    break
-
-        if tmp_repeat_str:
-            self.parse_str = self.parse_str[len(tmp_repeat_str)-1:]
-
-            tmp_repeat_str = ''.join(tmp_repeat_str)
-
-            if '*' in tmp_repeat_str:
-                min_repeat, max_repeat = tmp_repeat_str.split('*')
-                if min_repeat == '':
-                    min_repeat = ISEMAIL_MIN_REPEAT
-                if max_repeat == '':
-                    max_repeat = ISEMAIL_MAX_REPEAT
-            else:
-                min_repeat = tmp_repeat_str
-                max_repeat = tmp_repeat_str
-
-            kwargs['min_repeat'] = int(min_repeat)
-            kwargs['max_repeat'] = int(max_repeat)
-
-
-    def run_quoted_string(self, parser, data):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
-        tmp_ret_list = []
-        if len(data.rem_string) < (self.min_repeat * len(self.parse_str)):
-            log_ddebug('%s Not enough chars to meet min repeat', space_text)
-            raise NoElementError()
-        for i in range(len(data.rem_string)):
-            if self.max_repeat is not None and i > self.max_repeat-1:
-                log_ddebug('%s found, max_repeat (%s) met!', space_text, self.max_repeat)
-                break
-
-            log_ddebug('%s checking for: %r in %r', space_text, self.parse_str, data.rem_string)
-
-            try:
-                tmp_ret = []
-                for c in self.parse_str:
-                    tmp_next_char = data.rem_string[0]
-                    if tmp_next_char == c:
-                        tmp_ret.append(data.rem_string.popleft())
-                    else:
-                        raise NoElementError(data, popped_text=tmp_ret)
-                if tmp_ret:
-                    tmp_ret_list.extend(tmp_ret)
-                else:
-                    log_ddebug('%s missed', space_text)
-
-            except NoElementError:
-                if i < self.min_repeat-1:
-                    log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                    raise NoElementError(data, popped_text=tmp_ret_list)
-        if tmp_ret_list:
-            return tmp_ret_list
+        if data.rem_string[0] in self.operations:
+            log_ddebug('%s found', space_text)
+            return data.rem_string.popleft()
         else:
-            raise NoElementError()
-
-    def run_char(self, parser, data):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
-        tmp_ret = []
-        if len(data.rem_string) < self.min_repeat:
-            log_ddebug('%s Not enough chars to meet min repeat', space_text)
-            raise NoElementError()
-        for i in range(len(data.rem_string)):
-            tmp_next_char = data.rem_string[0]
-            if self.max_repeat is not None and i > self.max_repeat-1:
-                log_ddebug('%s found, max_repeat (%s) met!', space_text, self.max_repeat)
-                break
-            log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, self.char_set)
-            if tmp_next_char in self.char_set:
-                tmp_ret.append(data.rem_string.popleft())
-                log_ddebug('%s found', space_text)
-            elif i < self.min_repeat-1:
-                log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                raise NoElementError(data, popped_text=tmp_ret)
-            else:
-                log_ddebug('%s missed', space_text)
-                break
-        if tmp_ret:
-            if len(tmp_ret) < self.min_repeat:
-                log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                raise NoElementError(data, popped_text=tmp_ret)
-            return tmp_ret
-        else:
+            log_ddebug('%s missed', space_text)
             raise NoElementError(data)
 
-    def __call__(self, parser, data):
-        if self.quoted_string:
-            self.parse_method = self.run_quoted_string
 
-        elif self.parse_str in parser.ruleset:
-            self.parser_method = parser.ruleset[self.parse_str]
-            self.rule_type = 'rule'
-
-        elif self.parse_str in parser.char_set:
-            self.parse_str = parser.char_set[self.parse_str]
-            self.parser_method = self.run_char
-
-        return super().__call__(parser, data)
+class Char(Word):
+    rule_type = 'Char'
+    parses_chars = True
+    should_repeat = False
 
 
-class String(Rule):
-    rule_type = 'str'
-    quoted_string = False
+class QString(BaseRule):
+    rule_type = 'QString'
+    parses_chars = True
+    quoted_string = True
+    should_repeat = False
 
-    def __init__(self, parse_str, **kwargs):
-        self.parse_str = parse_str
+    def run(self, parser, data):
+        log_ddebug('%s checking for quoted string: "%s" in %r', space_text, self.operations, data.rem_string)
 
-        self.check_opt_str(kwargs)
-        self.check_repeat_str(kwargs)
-        self.check_opt_str(kwargs, inner=True)
-        self.check_quoted_str()
-
-        super().__init__(**kwargs)
-
-    def check_opt_str(self, kwargs, inner=False):
-        if self.parse_str[0] == '[' and self.parse_str[-1] == ']':
-            self.parse_str = self.parse_str[1:-1]
-            if inner:
-                kwargs['inner_optional'] = True
-            else:
-                kwargs['optional'] = True
-
-
-    def check_quoted_str(self):
-        if self.parse_str[0] == '"' and self.parse_str[-1] == '"':
-            self.rule_type = 'string'
-            self.quoted_string = True
-            self.parse_str = self.parse_str[1:-1]
-            return True
-        return False
-
-    def check_repeat_str(self, str_in, kwargs):
-        repeat_chars = '1234567890*'
-        tmp_repeat_str = []
-
-        if self.parse_str[0] in repeat_chars:
-            for c in self.parse_str:
-                if c in repeat_chars:
-                    tmp_repeat_str.append(c)
-                else:
-                    break
-
-        if tmp_repeat_str:
-            self.parse_str = self.parse_str[len(tmp_repeat_str)-1:]
-
-            tmp_repeat_str = ''.join(tmp_repeat_str)
-
-            if '*' in tmp_repeat_str:
-                min_repeat, max_repeat = tmp_repeat_str.split('*')
-                if min_repeat == '':
-                    min_repeat = ISEMAIL_MIN_REPEAT
-                if max_repeat == '':
-                    max_repeat = ISEMAIL_MAX_REPEAT
-            else:
-                min_repeat = tmp_repeat_str
-                max_repeat = tmp_repeat_str
-
-            kwargs['min_repeat'] = int(min_repeat)
-            kwargs['max_repeat'] = int(max_repeat)
-
-
-    def run_quoted_string(self, parser, data):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
-        tmp_ret_list = []
-        if len(data.rem_string) < (self.min_repeat * len(self.parse_str)):
-            log_ddebug('%s Not enough chars to meet min repeat', space_text)
-            raise NoElementError()
-        for i in range(len(data.rem_string)):
-            if self.max_repeat is not None and i > self.max_repeat-1:
-                log_ddebug('%s found, max_repeat (%s) met!', space_text, self.max_repeat)
-                break
-
-            log_ddebug('%s checking for: %r in %r', space_text, self.parse_str, data.rem_string)
-
-            try:
-                tmp_ret = []
-                for c in self.parse_str:
-                    tmp_next_char = data.rem_string[0]
-                    if tmp_next_char == c:
-                        tmp_ret.append(data.rem_string.popleft())
-                    else:
-                        raise NoElementError(data, popped_text=tmp_ret)
-                if tmp_ret:
-                    tmp_ret_list.extend(tmp_ret)
-                else:
-                    log_ddebug('%s missed', space_text)
-
-            except NoElementError:
-                if i < self.min_repeat-1:
-                    log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                    raise NoElementError(data, popped_text=tmp_ret_list)
-        if tmp_ret_list:
-            return tmp_ret_list
-        else:
-            raise NoElementError()
-
-    def run_char(self, parser, data):
-        # log_ddebug('%s checking for chars in %r', space_text, char_set)
         tmp_ret = []
-        if len(data.rem_string) < self.min_repeat:
-            log_ddebug('%s Not enough chars to meet min repeat', space_text)
-            raise NoElementError()
-        for i in range(len(data.rem_string)):
+        for c in self.operations:
             tmp_next_char = data.rem_string[0]
-            if self.max_repeat is not None and i > self.max_repeat-1:
-                log_ddebug('%s found, max_repeat (%s) met!', space_text, self.max_repeat)
-                break
-            log_ddebug('%s checking for: %r in %r', space_text, tmp_next_char, self.char_set)
-            if tmp_next_char in self.char_set:
+            if tmp_next_char == c:
                 tmp_ret.append(data.rem_string.popleft())
-                log_ddebug('%s found', space_text)
-            elif i < self.min_repeat-1:
-                log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
-                raise NoElementError(data, popped_text=tmp_ret)
             else:
-                log_ddebug('%s missed', space_text)
-                break
-        if tmp_ret:
-            if len(tmp_ret) < self.min_repeat:
-                log_ddebug('%s missed, min_repeat (%s) not met!', space_text, self.min_repeat)
                 raise NoElementError(data, popped_text=tmp_ret)
-            return tmp_ret
-        else:
-            raise NoElementError(data)
-
-    def __call__(self, parser, data):
-        if self.quoted_string:
-            self.parse_method = self.run_quoted_string
-
-        elif self.parse_str in parser.ruleset:
-            self.parser_method = parser.ruleset[self.parse_str]
-            self.rule_type = 'rule'
-
-        elif self.parse_str in parser.char_set:
-            self.parse_str = parser.char_set[self.parse_str]
-            self.parser_method = self.run_char
-
-        return super().__call__(parser, data)
+        return tmp_ret
 
 
-class And(Rule):
-    rule_type = 'and'
+class And(BaseRule):
+    rule_type = 'And'
     single_op = False
+    allow_repeat = True
+    should_repeat = False
 
     def __init__(self, *operations, min_repeat=1, max_repeat=1, **kwargs):
         self.operations = operations
@@ -1060,7 +939,6 @@ class And(Rule):
         log_debug('all must match---')
         for op in self.operations:
             try:
-                # tmp_ret = op['method'](data, *op['args'], **op['kwargs'])
                 tmp_ret = op(self, parser, data)
             except NoElementError:
                 raise NoElementError(data, popped_text=tmp_ret_list)
@@ -1074,9 +952,11 @@ class And(Rule):
         return tmp_ret_list
 
 
-class Or(Rule):
-    rule_type = 'or'
+class Or(BaseRule):
+    rule_type = 'Or'
     single_op = False
+    allow_repeat = True
+    should_repeat = False
 
     def __init__(self, *operations, **kwargs):
         self.operations = operations
@@ -1086,7 +966,6 @@ class Or(Rule):
         tmp_ret = []
         for op in self.operations:
             try:
-                # tmp_ret = op['method'](data, *op['args'], **op['kwargs'])
                 tmp_ret = op(self, parser, data)
                 break
             except NoElementError:
@@ -1097,49 +976,29 @@ class Or(Rule):
             raise NoElementError()
 
 
-class Opt(Rule):
-    rule_type = 'opt'
+class Opt(BaseRule):
+    rule_type = 'Opt'
     repr_format = '{opt_pre}{ops}{opt_post}'
+    allow_repeat = False
+    should_repeat = False
 
-    def __init__(self, operation, **kwargs):
-        self.operation = operation
+    def __init__(self, *args, **kwargs):
         kwargs['optional'] = True
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
 
     def run(self, parser, data):
-        return self.operation(self, parser, data)
+        return self.operations(self, parser, data)
 
 
-class Repeat(Rule):
-    rule_type = 'repeat'
+class Repeat(BaseRule):
+    rule_type = 'Repeat'
     repr_format = '{opt_pre}{pre_rule}({pre_ops}{ops}{post_ops}){post_rule}{opt_post}'
-
-    def __init__(self, operation,
-                 min_repeat=ISEMAIL_MIN_REPEAT,
-                 max_repeat=ISEMAIL_MAX_REPEAT, **kwargs):
-        self.min_repeat = min_repeat
-        self.max_repeat = max_repeat
-        self.operation = operation
-        super().__init__(**kwargs)
+    single_op = True
+    allow_repeat = True
+    should_repeat = True
 
     def run(self, parser, data):
-        tmp_ret_list = []
-        for i in range(len(data.rem_string)):
-            if i > self.max_repeat-1:
-                break
-            try:
-                tmp_ret = self.operation(self, parser, data)
-                # tmp_ret = op['method'](data, *op['args'], **op['kwargs'])
-
-                # tmp_ret = self._get(op, data)
-            except NoElementError:
-                if i < self.min_repeat-1:
-                    raise NoElementError(data, popped_text=tmp_ret_list)
-            else:
-                if tmp_ret is not None:
-                    tmp_ret_list.extend(tmp_ret)
-
-        return tmp_ret_list
+        return self.operations(self, parser, data)
 
 '''
 class MarkParser(ParserRule):
@@ -1228,209 +1087,70 @@ class LookForParser(ParserRule):
 '''
 
 
-class Count(Rule):
-    rule_type = 'count'
+class MeasureBaseRule(BaseRule):
+    rule_type = 'MeasureBase'
+    single_op = True
+    allow_repeat = False
+    parses_chars = True
 
-    def __init__(self, operation,
-                 char_set,
-                 min_count=0,
-                 max_count=ISEMAIL_MAX_REPEAT,
-                 only_on_pass=False,
-                 only_on_fail=False,
-                 on_below_min=None,
-                 on_above_max=None,
-                 on_within_min_max=None,
-                 count_optional=False,
-                 **kwargs):
-        super().__init__(**kwargs)
-        self.operation = operation
-        self.char_set = char_set
-        self.min_count = min_count
-        self.max_count = max_count
-        self.only_on_pass = only_on_pass
-        self.only_on_fail = only_on_fail
-        self.on_below_min = on_below_min
-        self.on_above_max = on_above_max
-        self.on_within_min_max = on_within_min_max
-        self.count_optional = count_optional
+    def __init__(self, measure_string, operation, **kwargs):
+        tmp_args = make_rule[measure_string]
+        self.measure_str = tmp_args.rule_str
+        super().__init__(operation, **tmp_args.kwargs(kwargs))
 
-    def run(self, parser, data):
-        passed = True
-        get_count = False
-        tmp_ret = []
+    def __call__(self, parser, data):
+        log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
+        tmp = space_text.push
         tmp_pos = data.position
-        count_pass = True
+
+        tmp_ret = self.operations(parser, data)
+
         try:
-            tmp_ret = self.operation(parser, data)
+            self.run(parser, tmp_ret)
+
         except NoElementError:
-            passed = False
-
-        if self.only_on_fail or self.only_on_pass:
-            if passed and self.only_on_pass:
-                get_count = True
-            elif not passed and self.only_on_fail:
-                get_count = True
+            tmp = space_text.pop
+            if not self.optional:
+                raise NoElementError(data, fail_flag=self.on_fail, position=tmp_pos, popped_text=tmp_ret)
         else:
-            get_count = True
+            tmp = space_text.pop
+            log_ddebug('%s PASS-> "%r" passed', space_text, self)
 
-        if get_count:
-            count = data.rem_string.count(self.char_set)
+            if self.on_pass or self.element_name:
+                data.add_note(diag=self.on_pass, element_name=self.element_name, element=tmp_ret, position=tmp_pos)
 
-            if count < self.min_count:
-                if self.on_below_min is not None:
-                    data.add_note(diag=self.on_below_min, position=tmp_pos)
-                    count_pass=False
-            elif count > self.max_count:
-                if self.on_above_max is not None:
-                    data.add_note(diag=self.on_above_max, position=tmp_pos)
-                    count_pass=False
+            if self.return_string:
+                return tmp_ret
             else:
-                if self.on_within_min_max is not None:
-                    data.add_note(diag=self.on_within_min_max, position=tmp_pos)
-            if not self.count_optional and not count_pass:
-                raise NoElementError(data, popped_text=tmp_ret)
-        return tmp_ret
+                return []
 
-class Len(Rule):
-    pass
+    def run(self, parser, op_data):
+        raise NotImplementedError()
 
 
-'''
-def _make_meth(method, **kwargs):
-    #  log_ddebug('          making method object for -->%r<--', method)
-    tmp_ret = None
-    if isinstance(method, str):
-        if method[0] == '"' and method[-1] == '"':
-            # if it is a quoted string:  "do this"
-            tmp_and_set = []
-            for c in method[1:-1]:
-                tmp_and_set.append(_r(1, _char(c)))
-            #  log_ddebug('               "QSTRING" method')
-            tmp_ret = _and(*tmp_and_set)
+class Count(MeasureBaseRule):
+    rule_type = 'Count'
 
-        elif method[0] == '[' and method[-1] == ']':
-            # if it is in square brackets:  [blah]
-            tmp_opp = _make_meth(method[1:-1])
-            #  log_ddebug('               "OPT" method')
-            tmp_ret = _opt(tmp_opp, **kwargs)
+    def run(self, parser, op_data):
 
+        if self.is_quoted_string:
+            tmp_str = ''.join(op_data)
         else:
-            # this is a string set
-            try:
-                #  log_ddebug('               trying "CONST(CHAR)" method')
-                tmp_ret = _char(_PARSER_CONST[method])
-            except KeyError:
-                if method[0] == '_':
-                    # log_ddebug('               trying "METH" method')
-                    tmp_ret = _meth(method)
-                else:
-                    #  log_ddebug('               trying "RULE" method')
-                    tmp_ret = _rule(method)
-    else:
-        #  log_ddebug('               falling through, is already a method')
-        tmp_ret = method
+            tmp_str = op_data
 
-    # log_ddebug('             was %r, returning %r', method, tmp_ret)
-    return tmp_ret
-'''
+        tmp_count = tmp_str.count(self.measure_str)
 
-'''
-def _make_op_obj(operation, *args, **kwargs):
-    #  log_ddebug('          making method object for -->%r<--', method)
-    if isinstance(operation, str):
-        return StringParser(operation)
-    else:
-        return operation
-
-def _meth(meth_name, **kwargs):
-    return ParserRule(meth=meth_name)
+        if not self.min_repeat < tmp_count < self.max_repeat:
+            raise NoElementError()
 
 
-def _rule(rule_name):
-    return ParserRule(
-        rule_name,
-        meth='rule')
+class Len(BaseRule):
+    rule_type = 'Len'
 
-def _char(char_set, **kwargs):
-    return ParserRule(
-        meth='char',
-        char_set=char_set)
+    def run(self, parser, op_data):
 
-def _and(*methods):
-    tmp_methods = []
-    for m in methods:
-        tmp_methods.append(_make_meth(m))
-    return ParserRule(
-        *tmp_methods,
-        meth='and')
+        tmp_count = len(op_data)
 
-def _or(*methods):
-    tmp_methods = []
-    for m in methods:
-        tmp_methods.append(_make_meth(m))
-    return ParserRule(
-        *tmp_methods,
-        meth='or')
+        if not self.min_repeat < tmp_count < self.max_repeat:
+            raise NoElementError()
 
-def _opt(op, **kwargs):
-    op = _make_meth(op)
-
-    if op._can_consolidate('opt', optional=True):
-        return op
-    else:
-        return ParserRule(op, meth='opt')
-
-def _r(*args):
-
-    if len(args) == 1:
-        min_repeat = ISEMAIL_MIN_REPEAT
-        max_repeat = ISEMAIL_MAX_REPEAT
-        op = args[0]
-    else:
-        op = args[1]
-        first_arg = args[0]
-        if isinstance(first_arg, int) or first_arg.isdigit():
-            min_repeat = first_arg
-            max_repeat = first_arg
-        else:
-            if '*' in first_arg:
-                min_repeat, max_repeat = first_arg.split('*')
-                if min_repeat == '':
-                    min_repeat = ISEMAIL_MIN_REPEAT
-                if max_repeat == '':
-                    max_repeat = ISEMAIL_MAX_REPEAT
-            else:
-                raise AttributeError('"*" not in %s' % first_arg)
-
-        min_repeat = int(min_repeat)
-        max_repeat = int(max_repeat)
-
-    op = _make_meth(op)
-
-    if op._can_consolidate('repeat', min_repeat=min_repeat, max_repeat=max_repeat):
-        return op
-    else:
-        return ParserRule(op, meth='repeat', min_repeat=min_repeat, max_repeat=max_repeat)
-
-
-def _m(op, on_fail=None, on_pass=None, element_name=None, return_string=True):
-    op = _make_meth(op)
-
-    if op._can_consolidate('mark', on_fail=on_fail, on_pass=on_pass, element_name=element_name, return_string=return_string):
-        tmp_ret = op
-    else:
-        tmp_ret = ParserRule(op, meth='mark', on_fail=on_fail, on_pass=on_pass,
-                          element_name=element_name, return_string=return_string)
-    return tmp_ret
-
-def _look(op, *fors):
-    op = _make_meth(op)
-    return ParserRule(op, meth='look', fors=fors)
-
-
-def _for(op, repeat=1, on_fail=None, on_pass=None, only_on_fail=False, only_on_pass=False):
-    return ParserRule(op, meth='for', on_fail=on_fail, on_pass=on_pass,
-                      only_on_pass=only_on_pass, only_on_fail=only_on_fail, repeat=repeat)
-
-parser_ops = ParserOps()
-'''
