@@ -360,7 +360,7 @@ class RuleBuilderItem(object):
         if kwargs is None:
             return self.kwargs
         else:
-            kwargs.update(self.kwargs)
+            kwargs.update(self._kwargs)
             return kwargs
 
     @property
@@ -369,7 +369,7 @@ class RuleBuilderItem(object):
             self._rule = self.builder._make_rule(self, **kwargs)
         return self._rule
 
-    def __call__(self, parser, data):
+    def run(self, parser, data):
         tmp_rule = self.rule
         return tmp_rule(parser, data)
 
@@ -391,7 +391,10 @@ class RuleBuilder(object):
             self.rules[rule_str] = tmp_item
         return self.rules[rule_str]
 
-    __getitem__ = _rule
+    get_parsed = _rule
+
+    def get_rule(self, rule_str):
+        return self.get_parsed(rule_str).rule
 
     def _make_rule(self, rule_in, **kwargs):
         kwargs = rule_in.kwargs(kwargs)
@@ -433,24 +436,24 @@ class RuleBuilder(object):
         if rule_str_in[0] == '[' and rule_str_in[-1] == ']':
             tmp_rule.is_optional = True
             rule_str_in = rule_str_in[1:-1]
-            tmp_rule.kwargs['optional'] = True
+            tmp_rule._kwargs['optional'] = True
 
         while rule_str_in[0] in key_chars:
             if rule_str_in[0] == '"' and rule_str_in[-1] == '"':
                 tmp_rule.is_quoted_string = True
                 rule_str_in = rule_str_in[1:-1]
-                tmp_rule.kwargs['quoted_str'] = True
+                tmp_rule._kwargs['quoted_str'] = True
                 break   # since this means that everything else is a quoted string
 
             elif rule_str_in[0] == '-':
                 rule_str_in = rule_str_in[1:]
-                tmp_rule.kwargs['return_string'] = True
+                tmp_rule._kwargs['return_string'] = True
 
             elif rule_str_in[0] == '^' and rule_str_in[1] == '"' and rule_str_in[-1] == '"':
                 tmp_rule.is_quoted_string = True
                 tmp_rule.is_case_sensitive = False
                 rule_str_in = rule_str_in[2:-1]
-                tmp_rule.kwargs['case_sensitive'] = False
+                tmp_rule._kwargs['case_sensitive'] = False
                 break   # since this means that everything else is a quoted string
 
             elif rule_str_in[0] == '/':
@@ -482,13 +485,16 @@ class RuleBuilder(object):
                     min_repeat = tmp_repeat_str
                     max_repeat = tmp_repeat_str
 
-                tmp_rule.kwargs['min_repeat'] = int(min_repeat)
-                tmp_rule.kwargs['max_repeat'] = int(max_repeat)
+                tmp_rule._kwargs['min_repeat'] = int(min_repeat)
+                tmp_rule._kwargs['max_repeat'] = int(max_repeat)
 
             else:
                 raise RuleError('Invalid rule string: %s' % rule_str_in)
 
         tmp_rule.rule_str = rule_str_in
+
+    def run(self, rule_str, parser, data):
+        return self.get_parsed(rule_str).run(parser, data)
 
     def __call__(self, rule_str, **kwargs):
         return self[rule_str].rule(**kwargs)
@@ -628,18 +634,19 @@ class BaseRule(object):
         element_name=None
 
         """
+        log_ddebug('startng to load rule type: %s(operations=%r, kwargs=%r)', self.rule_type, operations, kwargs)
         if self.parses_chars:
-            tmp_arg = make_rule[operations[0]]
+            tmp_arg = make_rule.get_parsed(operations[0])
             kwargs = tmp_arg.kwargs(kwargs)
             self.operations = tmp_arg.rule_str
             self.is_quoted_string = kwargs.get('quoted_str', False)
         else:
             if self.single_op:
-                self.operations = make_rule(operations[0])
+                self.operations = make_rule.get_rule(operations[0])
             else:
                 self.operations = []
                 for o in operations:
-                    self.operations.append(make_rule(o))
+                    self.operations.append(make_rule.get_rule(o))
 
         self.optional = kwargs.get('optional', False)
         self.return_string = kwargs.get('return_string', True)
@@ -652,9 +659,9 @@ class BaseRule(object):
         self.before_ops = []
         self.after_ops = []
         if 'next' in kwargs:
-            self._next = make_rule(kwargs['next'])
+            self._next = make_rule.get_rule(kwargs['next'])
         if 'not_next' in kwargs:
-            self._not_next = make_rule(kwargs['not_next'])
+            self._not_next = make_rule.get_rule(kwargs['not_next'])
         self._actions = kwargs.get('actions', [])
         if not isinstance(self._actions, (list, tuple)):
             self._actions = [self._actions]
@@ -664,6 +671,7 @@ class BaseRule(object):
         else:
             self.min_repeat = 1
             self.max_repeat = 1
+        log_ddebug('loaded rule type: %r', self)
 
     def _run_actions(self, data, passed, element, position):
         for a in self._actions:
@@ -769,7 +777,8 @@ class BaseRule(object):
             pre_rule=pre_rule,
             post_rule=post_rule,
             pre_ops=pre_ops,
-            post_ops=post_ops)
+            post_ops=post_ops,
+            ops=self._operation_strs())
 
         return tmp_ret
 
@@ -840,9 +849,9 @@ class LookupRule(BaseRule):
 
     def __call__(self, parser, data):
         if self.operations in parser.ruleset:
-            return make_rule[parser.ruleset[self.operations]](parser, data)
+            return make_rule.run(parser.ruleset[self.operations], parser, data)
         elif self.operations in parser.charsets:
-            return make_rule[parser.charsets[self.operations]](parser, data)
+            return make_rule.run(parser.charsets[self.operations], parser, data)
         else:
             raise RuleError('Rule %s not found in lookups' % self.operations)
 
@@ -997,6 +1006,22 @@ class Repeat(BaseRule):
     allow_repeat = True
     should_repeat = True
 
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1:
+            super().__init__(args[0], **kwargs)
+        elif len(args) == 2:
+            if isinstance(args[0], str):
+                tmp_opt = make_rule.get_parsed(args[0])
+                super().__init__(args[1], **tmp_opt.kwargs(kwargs))
+            elif isinstance(args[0], int):
+                kwargs['min_repeat'] = args[0]
+                kwargs['max_repeat'] = args[0]
+                super().__init__(args[1], **kwargs)
+            else:
+                raise RuleError('Error processing repeat rule arg: %r' % args[0])
+        else:
+            raise RuleError('invalid number of args for repeat rule: %r' % args)
+
     def run(self, parser, data):
         return self.operations(self, parser, data)
 
@@ -1094,7 +1119,7 @@ class MeasureBaseRule(BaseRule):
     parses_chars = True
 
     def __init__(self, measure_string, operation, **kwargs):
-        tmp_args = make_rule[measure_string]
+        tmp_args = make_rule.get_parsed(measure_string)
         self.measure_str = tmp_args.rule_str
         super().__init__(operation, **tmp_args.kwargs(kwargs))
 
