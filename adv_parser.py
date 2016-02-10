@@ -4,6 +4,73 @@ from collections import deque
 
 # log = logging.getLogger(__name__)
 
+class StringParseTree(object):
+    def __init__(self, parent=None):
+        self.parent = parent
+        self.items = []
+
+    def child(self):
+        tmp_child = StringParseTree(self)
+        self.items.append(tmp_child)
+        return tmp_child
+
+    def __iadd__(self, other):
+        if not self.items or not isinstance(self.items[-1], str):
+            self.items.append('')
+        self.items[-1] += other
+        return self
+
+    def list(self):
+        tmp_ret = []
+        for i in self.items:
+            if isinstance(i, str):
+                tmp_ret.append(i)
+            else:
+                tmp_ret.append(i.list())
+        return tmp_ret
+
+def parse_enclosed_string(string_in, start, end, escape_char=None):
+    cur_item = StringParseTree()
+    if escape_char is None:
+        escapable = False
+    else:
+        escapable = True
+    escaped = False
+
+    for c in string_in:
+        if escapable and c == escape_char:
+            escaped = True
+
+        elif c == start and not escaped:
+            cur_item = cur_item.child()
+
+            # tmp_parent = tmp_working_item
+            # tmp_working_item.append([''])
+            # tmp_working_item = tmp_working_item[-1]
+            #tmp_item_stack.append(''.join(tmp_working_item))
+            # tmp_item_stack.append([])
+
+        elif c == end and not escaped:
+            cur_item = cur_item.parent
+            if cur_item is None:
+                raise AttributeError('more closing objects than opening ones.')
+
+            # tmp_parent =
+            # tmp_item_stack.append(''.join(tmp_working_item))
+            # try:
+            #     tmp_ret_list.append(tmp_item_stack.pop())
+            # except IndexError:
+
+        else:
+            if escaped and (c != start and c != end):
+                cur_item += escape_char
+            cur_item += c
+            escaped = False
+
+    if cur_item.parent is not None:
+        raise AttributeError('more closing chars than opening ones.')
+    else:
+        return cur_item.list()
 
 
 '''
@@ -364,9 +431,9 @@ class RuleBuilderItem(object):
             return kwargs
 
     @property
-    def rule(self, **kwargs):
+    def rule(self):
         if self._rule is None:
-            self._rule = self.builder._make_rule(self, **kwargs)
+            self._rule = self.builder._make_rule(self)
         return self._rule
 
     def run(self, parser, data):
@@ -403,7 +470,7 @@ class RuleBuilder(object):
                 return Word(rule_in, **kwargs)
             else:
                 return Char(rule_in, **kwargs)
-        elif rule_in.is_qs:
+        elif rule_in.is_quoted_string:
             if len(rule_in) > 1:
                 return Word(rule_in, **kwargs)
             else:
@@ -438,7 +505,7 @@ class RuleBuilder(object):
             rule_str_in = rule_str_in[1:-1]
             tmp_rule._kwargs['optional'] = True
 
-        while rule_str_in[0] in key_chars:
+        while rule_str_in and rule_str_in[0] in key_chars:
             if rule_str_in[0] == '"' and rule_str_in[-1] == '"':
                 tmp_rule.is_quoted_string = True
                 rule_str_in = rule_str_in[1:-1]
@@ -471,7 +538,7 @@ class RuleBuilder(object):
                     else:
                         break
 
-                rule_str_in = rule_str_in[len(tmp_repeat_str) - 1:]
+                rule_str_in = rule_str_in[len(tmp_repeat_str):]
 
                 tmp_repeat_str = ''.join(tmp_repeat_str)
 

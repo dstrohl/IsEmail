@@ -3,42 +3,23 @@ from adv_parser import *
 # from adv_parser import _and, _or, _r, _char, _for, _look, _m, _make_meth, _opt, _rule, ParserOps, ParserAction
 # from py_is_email import ParserRule, ParseString, ParserOps
 # from adv_parser import _get_between, _get_simple_between, _check_enclosures, _parse_enclosure
-"""
-BASIC_BETWEENS = [
-    ('foo', ('foo', '', '')),
-    ('foo(bar)', ('foo', 'bar', '')),
-    ('(foo)bar', ('', 'foo', 'bar')),
-    ('fo(ob)ar', ('fo', 'ob', 'ar')),
-    ('(foo)(bar)', ('', 'foo', '(bar)'))]
 
-ADV_BETWEENS = [
-    ('foo', True, ('foo', '', '')),
-    ('foo(bar)', True, ('foo', 'bar', '')),
-    ('(foo)bar', True, ('', 'foo', 'bar')),
-    ('fo(ob)ar', True, ('fo', 'ob', 'ar')),
-    ('(foo)(bar)', True, ('', 'foo', '(bar)')),
+ADV_BETWEENS2 = [
+    ('foo',             ['foo']),
+    ('foo(bar)',        ['foo', ['bar']]),
+    ('(foo)bar',        [['foo'], 'bar']),
+    ('fo(ob)ar',        ['fo', ['ob'], 'ar']),
+    ('(foo)(bar)',      [['foo'], ['bar']]),
 
-    ('foo', False, ('foo', '', '')),
-    ('foo(bar)', False, ('foo', 'bar', '')),
-    ('(foo)bar', False, ('', 'foo', 'bar')),
-    ('fo(ob)ar', False, ('fo', 'ob', 'ar')),
-    ('(foo)(bar)', False, ('', 'foo', '(bar)')),
+    ('fo/(ob/)ar',        ['fo(ob)ar']),
+    ('(foo/)/(bar)',      [['foo)(bar']]),
 
+    ('foo((ba)r)',      ['foo', [['ba'], 'r']]),
+    ('(foo(b(a(r))))',  [['foo', ['b', ['a', ['r']]]]]),
 
-    ('foo((ba)r)', True, ('foo', ('', 'ba', 'r'), '')),
-    ('(foo(b(a(r))))', True, ('', ('foo', ('b', ('a', ('r','',''),''),''),''),'')),
+    ('01234(678(9012)456)890', ['01234', ['678', ['9012'], '456'], '890']),
+    ('foo(bar(snafu))foo(bar)', ['foo', ['bar', ['snafu']], 'foo', ['bar']])]
 
-    ('foo((ba)r)', False, ('foo', '(ba)r', '')),
-    ('(foo(b(a(r))))', False, ('', '(foo(b(a(r)))', '')),
-
-    ('01234(678(9012)456)890', True, ('1234', ('678', '9012', '456'), '890')),
-    ('01234(678(9012)456)890', False, ('1234', '678(9012)456', '890')),
-
-    ('foo(bar(snafu))foo(bar)', True, ('foo', ('bar', 'snafu', ''), 'foo(bar)')),
-    ('foo(bar(snafu))foo(bar)', False, ('foo', 'bar(snafu)', 'foo(bar)')),
-
-
-]
 
 ERR_BETWEENS = [
     'te)st',
@@ -51,62 +32,19 @@ ERR_BETWEENS = [
 
 
 class TestGetBetweens(unittest.TestCase):
+    def test_complex_betweens2(self):
 
-    def test_check_enclosures(self):
-        for test in BASIC_BETWEENS:
-            with self.subTest('run: %s' % test[0]):
-                tmp_ret = _check_enclosures(test[0], '(', ')')
-                self.assertTrue(True)
-
-        for test in ADV_BETWEENS:
-            with self.subTest('run_adv: %s' % test[0]):
-                tmp_ret = _check_enclosures(test[0], '(', ')')
-                self.assertTrue(True)
-
-        for test in ERR_BETWEENS:
-            with self.subTest('error: %s' % test):
-                with self.assertRaises(AttributeError):
-                    tmp_ret = _check_enclosures(test, '(', ')')
-
-    '''
-    def test_simple_between(self):
-        for test in BASIC_BETWEENS:
-            test_str = test[0]
-            with self.subTest('run: %s' % test_str):
-                tmp_ret = _get_simple_between(test_str, '(', ')')
+        for test in ADV_BETWEENS2:
+            with self.subTest('run_adv [%s]: %s' % (test[1], test[0])):
+                tmp_ret = parse_enclosed_string(test[0], '(', ')', '/')
                 self.assertEqual(test[1], tmp_ret)
 
         for test in ERR_BETWEENS:
             with self.subTest('error: %s' % test):
                 with self.assertRaises(AttributeError):
-                    tmp_ret = _get_simple_between(test, '(', ')')
-    '''
+                    tmp_ret = parse_enclosed_string(test, '(', ')', '/')
 
-    def test_complex_betweens(self):
 
-        for test in ADV_BETWEENS:
-            with self.subTest('run_adv [%s]: %s' % (test[1], test[0])):
-                tmp_ret = _get_between(test[0], '(', ')', allow_recursive=test[1])
-                self.assertEqual(test[2], tmp_ret)
-
-        for test in ERR_BETWEENS:
-            with self.subTest('error: %s' % test):
-                with self.assertRaises(AttributeError):
-                    tmp_ret = _get_between(test, '(', ')')
-
-    def test_complex_betweens2(self):
-
-        for test in ADV_BETWEENS:
-            with self.subTest('run_adv [%s]: %s' % (test[1], test[0])):
-                tmp_ret = _parse_enclosure(test[0], '(', ')')
-                self.assertEqual(test[2], tmp_ret)
-
-        for test in ERR_BETWEENS:
-            with self.subTest('error: %s' % test):
-                with self.assertRaises(AttributeError):
-                    tmp_ret = _parse_enclosure(test, '(', ')')
-
-'''
 TEST_DATA_LOOKUPS = dict(
     ALPHA='abcdefghijklmnopqrstuvwxyz',
     ABCD='abcd',
@@ -118,7 +56,7 @@ TEST_DATA_LOOKUPS = dict(
     FGHIJK='fghijk',
 )
 
-
+'''
 TEST_DATA_RULES = dict(
     start='ABCDEF',
     and_rule='ABCD DEFG',
@@ -153,7 +91,7 @@ TEST_DATA_RULES = dict(
     count_in_ret='*ABCD#[1*4A]<under/within/over>#',
     len_in_ret='*ABCD%[1*4]<under/within/over>%',
 )
-"""
+'''
 """
 parse codes:
 
@@ -254,7 +192,7 @@ TEST_DATA_RULES = dict(
     count_rule=Count('3*a', Char('*abcde')),
     count_rule_qs=Count('1*2"ab"', Char('*abcde')),
     count_rule_opt=Count('[3*a]', Char('*abcde')),
-    
+
     len_rule=Len('2*4', Word('abcde')),
     len_rule_opt=Len('[2*4]', Word('abcde')),
 
@@ -271,14 +209,14 @@ TEST_DATA_RULES = dict(
     osb=ParserAction(pass_diag='osb_pass11', fail_diag='osb_fail101', name='osb'),
     csb=ParserAction(pass_diag='csb_pass11', fail_diag='csb_fail101', name='csb'),
 
-    
+
 
     m_rule_pass_fail=Char('"start"', actions=ParserAction(pass_diag=10, fail_diag=20)),
 
     m_rule_element_name=Repeat(Or('alpha', 'SPACE'), actions=('p10_f20, test_name')),
 
     multiple_marks_rule=Count('0/[]',
-        Len('5', 
+        Len('5',
             And(
                 Opt('*-LTR_STR', actions='pre'),
                 And(
@@ -288,7 +226,7 @@ TEST_DATA_RULES = dict(
                     actions='data'),
                 Opt('*-LTR_STR', actions='post')),
              actions=['p10_f20', 'fail_len']),
-        actions='fail_sb'),                           
+        actions='fail_sb'),
 
     next_withChars=Char('abcde', next='/fghi'),
     next_with_lookup=Char('abcde', next='HEXDIG'),
@@ -298,7 +236,7 @@ TEST_DATA_RULES = dict(
 
     both_next_at=Char('@', actions=ParserAction(pass_diag='has_at', fail_diag='no_at')),
     both_next_dquote=Char('DQUOTE', actions=ParserAction(pass_diag='has_qt', fail_diag='no_qt')),
-    
+
     both_next_rule=Char('abcde', next='both_next_at', not_next='both_next_dquote'),
 
 )
@@ -357,10 +295,10 @@ TEST_SETS = [
     (45, 'c_rule_in_char', 'a', FAIL, 'a'),
     (46, 'c_rule_in_char', 'aa', PASS, ''),
     (47, 'c_rule_in_char', 'aaa', PASS, ''),
-    (48, 'c_rule_mult_items', 'ad', FAIL, 'ad'), 
-    (49, 'c_rule_mult_items', 'adbe', PASS, ''), 
-    (50, 'c_rule_mult_items', 'adbedf', PASS, ''), 
-    (51, 'c_rule_mult_items', 'adbexx', REM, 'xx'), 
+    (48, 'c_rule_mult_items', 'ad', FAIL, 'ad'),
+    (49, 'c_rule_mult_items', 'adbe', PASS, ''),
+    (50, 'c_rule_mult_items', 'adbedf', PASS, ''),
+    (51, 'c_rule_mult_items', 'adbexx', REM, 'xx'),
     (52, 'c_rule_unl', 'a', PASS, ''),
     (53, 'c_rule_unl', 'ax', REM, 'x'),
     (54, 'c_rule_unl', 'aa', PASS, ''),
@@ -373,7 +311,7 @@ TEST_SETS = [
     (61, 'c_rule_unl2', 'aaabbbbbcccccdddddd', PASS, ''),
     (62, 'rule_rule', 'a', PASS, ''),
     (63, 'rule_rule', 'h', FAIL, 'h'),
-    (64, 'rule_rule', 'abc', REM, 'bc'),    
+    (64, 'rule_rule', 'abc', REM, 'bc'),
     (65, 'lookup_char', 'a', PASS, ''),
     (66, 'lookup_char', '2', PASS, ''),
     (67, 'lookup_char', 'A', PASS, ''),
@@ -485,7 +423,7 @@ TEST_SETS = [
 
 RUN_TEST_NUM = None
 
-
+'''
 class TestParser(unittest.TestCase):
     maxDiff = None
 
@@ -519,3 +457,4 @@ class TestParser(unittest.TestCase):
                 if len(test) > 6:
                     with self.subTest('[%s] RESP %s(%s)' % (test[0], test[1], test[2])):
                         self.assertEqual(test[6], pem.diags(field='position'))
+'''
