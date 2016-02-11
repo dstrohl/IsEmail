@@ -43,7 +43,7 @@ class TestGetBetweens(unittest.TestCase):
             with self.subTest('error: %s' % test):
                 with self.assertRaises(AttributeError):
                     tmp_ret = parse_enclosed_string(test, '(', ')', '/')
-
+'''
 
 TEST_DATA_LOOKUPS = dict(
     ALPHA='abcdefghijklmnopqrstuvwxyz',
@@ -56,7 +56,7 @@ TEST_DATA_LOOKUPS = dict(
     FGHIJK='fghijk',
 )
 
-'''
+
 TEST_DATA_RULES = dict(
     start='ABCDEF',
     and_rule='ABCD DEFG',
@@ -147,6 +147,131 @@ TEST_DATA_LOOKUPS = dict(
 )
 
 
+class l(object):
+    def __init__(self, lookup_str):
+        self.lookup = lookup_str
+
+TEST_LOAD_RULES_PRELOAD = [
+    ('abcd', Char, 'abcd', {}),
+    ('jklm', Char, 'jklm', {}),
+
+    ('char_rule', Char, 'abcdef', {}),
+    ('char_rule2', Char, '/abcdef', {}),
+    ('lookup_char_rule', Char, 'ABCD', {}),
+    ('char_rule_quoted_str', Char, '"Foo"', {}),
+    ('char_rule_quoted_str_case_insensitive', Word, '^"Foo"', {}),
+    ('and_rule', And, ('/abcd', 'DEFG'), {}),
+    ('and_rule2', And, ('/abcd', '/defg'), {}),
+
+    ('or_rule', Or, (l('abcd'), l('jklm'))),
+    ('opt_rule', Char, (['/abcd'],), {}),
+    ('opt_rule2', Char, '[/abcd]', {}),
+    ('c_rule', Repeat, (2, l('abcd'))),
+    ('c_rule_min', Repeat, ('2*', l('abcd'))),
+    ('c_rule_max', Repeat, ('*2', l('abcd'))),
+    ('c_rule_min_max', Repeat, ('2*3', l('abcd'))),
+    ('c_rule_unl', Repeat, ('*', l('abcd'))),
+    ('c_rule_unl2', Repeat, (l('abcd'))),
+    ('c_rule_inChar', Char, '2*ABCD', {}),
+    ('c_rule_mult_items', Repeat, ('2*3', l('and_rule2'))),
+    ('rule_rule', Rule, 'char_rule'),
+    ('lookupChar', And, 'HEXDIG'),
+    ('lookupChar_opt', And, ('HEXDIG', '[HEXDIG]')),
+    ('quotedChar_str', And, ('HEXDIG', '"::"', 'HEXDIG')),
+    ('count_rule', Count, ('3*a', '*abcde')),
+    ('count_rule_qs', Count, ('1*2"ab"', '*abcde')),
+    ('count_rule_opt', Count, ('[3*a]', '*abcde')),
+    ('word_abcde', Word, 'abcde'),
+    ('len_rule', Len, ('2*4', l('word_abcde'))),
+    ('len_rule_opt', Len, ('[2*4]', l('word_abcde'))),
+
+    # Actions :
+
+
+    ('p10_f20', ParserAction, None, {'pass_diag': 'pass_10', 'fail_diag': 'fail_20'}),
+    ('test_name', ParserAction, None, {'name': 'test_name'}),
+    ('fail_len', ParserAction, None, {'fail_diag': 'len_fail', 'pass_diag': 'len_pass'}),
+    ('fail_sb', ParserAction, None, {'fail_diag': 'has_sb', 'pass_diag': 'no_sb_there'}),
+    ('pre', ParserAction, None, {'pass_diag': 'pre_pass11', 'fail_diag': 'pre_fail101', 'name': 'pre'}),
+    ('post', ParserAction, None, {'pass_diag': 'post_pass11', 'fail_diag': 'post_fail101', 'name': 'post'}),
+    ('data', ParserAction, None, {'pass_diag': 'data_pass11', 'fail_diag': 'data_fail101', 'name': 'data'}),
+    ('osb', ParserAction, None, {'pass_diag': 'osb_pass11', 'fail_diag': 'osb_fail101', 'name': 'osb'}),
+    ('csb', ParserAction, None, {'pass_diag': 'csb_pass11', 'fail_diag': 'csb_fail101', 'name': 'csb'}),
+
+
+
+    ('m_rule_pass_fail', Char, '"start"', {'actions': l('p10_f20')}),
+    ('or_alpha_space', Or, ('alpha', 'SPACE')),
+    ('m_rule_element_name', Repeat, l('or_alpha_space'), {'actions': ('p10_f20, test_name')}),
+
+    ('next_withChars', Char, 'abcde', {'next': '/fghi'}),
+    ('next_with_lookup', Char, 'abcde', {'next': 'HEXDIG'}),
+    ('next_with_rule', Char, 'abcde', {'next': 'char_rule_quoted_str'}),
+    ('next_with_opt_action_rule', Char, 'abcde', {'next':'[m_rule_pass_fail]'}),
+    ('next_with_action_rule', Char, 'abcde', {'next':'m_rule_pass_fail'}),
+
+    ('has_at', ParserAction, None, {'pass_diag': 'has_at', 'fail_diag': 'no_at'}),
+    ('has_qt', ParserAction, None, {'pass_diag': 'has_qt', 'fail_diag': 'no_qt'}),
+    ('both_next_at', Char, '@', {'actions': l('has_at')}),
+    ('both_next_dquote', Char, 'DQUOTE', {'actions': l('has_qt')}),
+    ('both_next_and', And, (l('both_next_at'), l('both_next_dquote'))),
+
+    ('both_next_rule', Char, 'abcde', {'next': l('both_next_and')}),
+]
+
+TEST_LOAD_RULES_RUN_NAME = None
+
+TEST_LOAD_RULES = {}
+for tr in TEST_LOAD_RULES_PRELOAD:
+    TEST_LOAD_RULES[tr[0]] = tr
+
+
+class TestLoadRules(unittest.TestCase):
+    # rule_set = None
+
+    def make_rule(self, key):
+        tmp_item = TEST_LOAD_RULES[key]
+        tmp_rule_type = tmp_item[1]
+        tmp_args = tmp_item[2]
+        try:
+            tmp_kwargs = tmp_item[3]
+        except IndexError:
+            tmp_kwargs = {}
+
+        if tmp_args is not None:
+            if isinstance(tmp_args, tuple):
+                tmp_new_args = []
+                for a in tmp_args:
+                    if isinstance(a, l):
+                        tmp_new_args.append(self.make_rule(a.lookup))
+                    else:
+                        tmp_new_args.append(a)
+            else:
+                tmp_new_args = [tmp_args]
+        else:
+            tmp_new_args = []
+
+        tmp_new_kwargs = {}
+        for kwkey, item in tmp_kwargs.items():
+            if isinstance(item, tuple):
+                for a in item:
+                    if isinstance(a, l):
+                        tmp_new_kwargs[kwkey] = self.make_rule(a)
+                    else:
+                        tmp_new_kwargs[kwkey] = a
+            else:
+                tmp_new_kwargs[kwkey] = tmp_args
+
+        return tmp_rule_type(*tmp_new_args, **tmp_new_kwargs)
+
+    def test_load_rules(self):
+
+        for tr in TEST_LOAD_RULES_PRELOAD:
+            if TEST_LOAD_RULES_RUN_NAME is None or TEST_LOAD_RULES_RUN_NAME == tr[0]:
+                with self.subTest(tr[0]):
+                    tmp_item = self.make_rule(tr[0])
+
+
 TEST_DATA_RULES = dict(
     char_rule=Char('abcdef'),
     char_rule2='/abcdef',
@@ -165,7 +290,7 @@ TEST_DATA_RULES = dict(
     c_rule_unl2=Repeat(Char('abcd')),
     c_rule_inChar='2*ABCD',
     c_rule_mult_items=Repeat('2*3', And('/abcd', '/defg')),
-    rule_rule=Rule('start'),
+    rule_rule=Rule('char_rule'),
     lookupChar=And('HEXDIG'),
     lookupChar_opt=And('HEXDIG', '[HEXDIG]'),
     quotedChar_str=And('HEXDIG', '"::"', 'HEXDIG'),
@@ -421,40 +546,41 @@ TEST_SETS = [
 
 ]
 
-RUN_TEST_NUM = None
+RUN_TEST_NUM = 2
 
-'''
 class TestParser(unittest.TestCase):
     maxDiff = None
 
     def test_sets(self):
         for test in TEST_SETS:
             if RUN_TEST_NUM is None or RUN_TEST_NUM == test[0] or (isinstance(RUN_TEST_NUM, (list, tuple, range)) and test[0] in RUN_TEST_NUM):
-                print('--------------------')
-                print('[%s] RUN %s(%s)' % (test[0], test[1], test[2]))
-                print('--------------------\n')
+                # print('--------------------')
+                # print('[%s] RUN %s(%s)' % (test[0], test[1], test[2]))
+                # print('--------------------\n')
+                pem = None
                 with self.subTest('[%s] RUN %s(%s)' % (test[0], test[1], test[2])):
                     pem = rules(test[2], test[1])
                     # pem = ParseString(parser=rules.parse_str, parser_start_rule=test[1])
                     tmp_resp = int(pem)
                     self.assertEqual(test[3], tmp_resp)
+                if pem is not None:
 
-                with self.subTest('[%s] REN %s(%s)' % (test[0], test[1], test[2])):
-                    self.assertEqual(test[4], pem.remaining())
-                if len(test) > 5:
-                    with self.subTest('[%s] ELEM  %s(%s)' % (test[0], test[1], test[2])):
-                        tmp_elements = pem.elements()
-                        tmp_expected = {}
-                        for e_name, e_items in test[5].items():
-                            tmp_expected[e_name] = []
-                            tmp_item = {}
-                            for e_item, e_pos in e_items:
-                                tmp_item['element'] = e_item
-                                tmp_item['pos'] = e_pos
-                            tmp_expected[e_name].append(tmp_item)
-                        self.assertCountEqual(tmp_expected, tmp_elements)
+                    with self.subTest('[%s] REM %s(%s)' % (test[0], test[1], test[2])):
+                        self.assertEqual(test[4], pem.remaining())
+                    if len(test) > 5:
+                        with self.subTest('[%s] ELEM  %s(%s)' % (test[0], test[1], test[2])):
+                            tmp_elements = pem.elements()
+                            tmp_expected = {}
+                            for e_name, e_items in test[5].items():
+                                tmp_expected[e_name] = []
+                                tmp_item = {}
+                                for e_item, e_pos in e_items:
+                                    tmp_item['element'] = e_item
+                                    tmp_item['pos'] = e_pos
+                                tmp_expected[e_name].append(tmp_item)
+                            self.assertCountEqual(tmp_expected, tmp_elements)
 
-                if len(test) > 6:
-                    with self.subTest('[%s] RESP %s(%s)' % (test[0], test[1], test[2])):
-                        self.assertEqual(test[6], pem.diags(field='position'))
-'''
+                    if len(test) > 6:
+                        with self.subTest('[%s] RESP %s(%s)' % (test[0], test[1], test[2])):
+                            self.assertEqual(test[6], pem.diags(field='position'))
+

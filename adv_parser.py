@@ -4,73 +4,157 @@ from collections import deque
 
 # log = logging.getLogger(__name__)
 
-class StringParseTree(object):
-    def __init__(self, parent=None):
-        self.parent = parent
-        self.items = []
 
-    def child(self):
-        tmp_child = StringParseTree(self)
-        self.items.append(tmp_child)
-        return tmp_child
+class DiagItem(object):
+    def __init__(self, key, value, name=None, description=None, category=None, **kwargs):
+        self.key = key
+        self.value = value
+        self.name = name or ''
+        self.description = description or name
+        self.category = category
+        for key, value in kwargs.items():
+            if key not in self.__dir__():
+                setattr(self, key, value)
 
-    def __iadd__(self, other):
-        if not self.items or not isinstance(self.items[-1], str):
-            self.items.append('')
-        self.items[-1] += other
-        return self
+    def __int__(self):
+        return self.value
 
-    def list(self):
-        tmp_ret = []
-        for i in self.items:
-            if isinstance(i, str):
-                tmp_ret.append(i)
-            else:
-                tmp_ret.append(i.list())
-        return tmp_ret
+    def __str__(self):
+        return self.name
 
-def parse_enclosed_string(string_in, start, end, escape_char=None):
-    cur_item = StringParseTree()
-    if escape_char is None:
-        escapable = False
-    else:
-        escapable = True
-    escaped = False
+class DiagsList(object):
+    def __init__(self, *items):
+        self._by_value = {}
+        self._by_key = {}
 
-    for c in string_in:
-        if escapable and c == escape_char:
-            escaped = True
-
-        elif c == start and not escaped:
-            cur_item = cur_item.child()
-
-            # tmp_parent = tmp_working_item
-            # tmp_working_item.append([''])
-            # tmp_working_item = tmp_working_item[-1]
-            #tmp_item_stack.append(''.join(tmp_working_item))
-            # tmp_item_stack.append([])
-
-        elif c == end and not escaped:
-            cur_item = cur_item.parent
-            if cur_item is None:
-                raise AttributeError('more closing objects than opening ones.')
-
-            # tmp_parent =
-            # tmp_item_stack.append(''.join(tmp_working_item))
-            # try:
-            #     tmp_ret_list.append(tmp_item_stack.pop())
-            # except IndexError:
-
+        if len(items) > 1 and isinstance(items[0], dict):
+            for key, item in items[0].items():
+                if isinstance(item, dict):
+                    item['key'] = key
+                elif isinstance(item, int):
+                    item = {'key': key, 'value': item}
+                elif isinstance(key, int) and isinstance(item, str):
+                    item = {'key': key, 'value': item}
+                else:
+                    raise AttributeError('could not determine diags from: %r' % item)
+                self.add_diag(DiagItem(**item))
         else:
-            if escaped and (c != start and c != end):
-                cur_item += escape_char
-            cur_item += c
-            escaped = False
+            for item in items:
+                self.add_diag(item)
 
-    if cur_item.parent is not None:
-        raise AttributeError('more closing chars than opening ones.')
-    else:
-        return cur_item.list()
+    def add_diag(self, item):
+        self._by_key[item.key] = item
+        self._by_value[item.value] = item
+
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            return self._by_key[item]
+        else:
+            return self._by_value[item]
+
+BASE_DIAGS = DiagsList(dict(PASS=0, REM=1, FAIL=2))
+
+class ParsedResp(object):
+    def __init__(self,
+                 raw_string,
+                 diag_lookup=None,
+                 **kwargs):
+
+        self.rem_string = deque(raw_string)
+        self.raw_string = raw_string
+        self.raw_length = len(raw_string)
+        self._diag_count = 0
+        self._elements = {}
+        self._diags = {}
+        self._max_diag = 0
+
+    @property
+    def position(self):
+        return self.raw_length - len(self.rem_string)
+
+    def add_note(self, diag=None, position=None, element_name=None, element=None, element_pos=None):
+        position = position or self.position
+
+        if diag is not None:
+            self._diag_count += 1
+            tmp_diag = dict(
+                position=position,
+                count=self._diag_count)
+            log_ddebug('adding diag: %s (%r)', diag, tmp_diag)
+            if diag in self._diags:
+                self._diags[diag].append(tmp_diag)
+            else:
+                self._diags[diag] = [tmp_diag]
+            if diag > self._max_diag:
+                self._max_diag = diag
+
+        if element_name is not None:
+            element_pos = element_pos or position-len(element)
+            if isinstance(element, list):
+                element = ''.join(element)
+
+            if element_name in self._elements:
+                self._elements[element_name].append(dict(
+                    element=element,
+                    pos=element_pos,
+                ))
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
+
+            else:
+                self._elements[element_name] = [dict(
+                    element=element,
+                    pos=element_pos,
+                )]
+                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
+
+
+    def __int__(self):
+        return self._max_diag
+
+    def elements(self, element_name=None):
+        if element_name is None:
+            return self._elements.copy()
+        else:
+            return self._elements.get(element_name, [])
+
+    def all_elements(self):
+        return self._elements
+
+    def diags(self, max_code=None, min_code=None, field=None, diag_code=None):
+        min_code = min_code or -1
+        max_code = max_code or sys.maxsize
+
+        if diag_code is None:
+            tmp_ret = {}
+            for diag, items in self._diags.items():
+                if min_code < diag < max_code:
+                    if field is None:
+                        tmp_ret[diag] = items
+                    else:
+                        tmp_ret[diag] = []
+                        for i in items:
+                            tmp_ret[diag].append(i[field])
+            return tmp_ret
+        else:
+            if field is None:
+                return self._diags[diag_code]
+            else:
+                tmp_ret = []
+                for i in self._diags[diag_code]:
+                    tmp_ret.append(i[field])
+                return tmp_ret
+
+    def remaining(self):
+        return ''.join(self.rem_string)
+
+    def __getitem__(self, item):
+        return self.elements(element_name=item)
+
+    '''
+    def __call__(self, email_in):
+        self.parse(email_in)
+        return self._max_diag
+    '''
 
 
 '''
@@ -173,9 +257,11 @@ class WorkQueue(object):
     def __getitem__(self, item):
         return self.done[item]
 '''
+
+
 class ParsedItem(object):
 
-    def __init__(self, raw_string=None):
+    def __init__(self, raw_string):
         '''
                  parser=None,
                  parser_start_rule=None,
@@ -184,9 +270,9 @@ class ParsedItem(object):
         # self.parser = parser or parser_ops.parse_email
         # self.parser_start_rule = parser_start_rule or 'start'
 
-        self.rem_string = deque()
-        self.raw_string = None
-        self.raw_length = 0
+        self.rem_string = deque(raw_string)
+        self.raw_string = raw_string
+        self.raw_length = len(raw_string)
         self._diag_count = 0
         self._elements = {}
         self._diags = {}
@@ -326,7 +412,7 @@ space_text = SpaceText()
 class NoElementError(Exception):
     def __init__(self, is_email_obj=None, popped_text=None, fail_flag=None, position=None):
         if popped_text is not None:
-            print('adding %r back to %r ' % (popped_text, is_email_obj.rem_string))
+            # print('adding %r back to %r ' % (popped_text, is_email_obj.rem_string))
             popped_text.reverse()
             is_email_obj.rem_string.extendleft(popped_text)
         if fail_flag is not None:
@@ -416,12 +502,12 @@ class RuleBuilderItem(object):
             self.is_quoted_string = False
             self.is_optional = False
             self.is_case_sensitive = True
+            self.return_string = True
             self._rule = None
             self.rule_str = None
-            self.builder._parse_rule_str(self)
+            self._parse_rule_str()
         else:
             raise RuleError('Rule Builder Error: unknown rule object: %r' % rule_str)
-
 
     def kwargs(self, kwargs=None):
         if kwargs is None:
@@ -430,60 +516,46 @@ class RuleBuilderItem(object):
             kwargs.update(self._kwargs)
             return kwargs
 
-    @property
-    def rule(self):
-        if self._rule is None:
-            self._rule = self.builder._make_rule(self)
+    def rule(self, rule_type=None, parser=None, **kwargs):
+        if rule_type is not None or \
+                self._rule is None or \
+                (self._rule is LookupRule and parser is not None):
+
+            self.set_type(rule_type=rule_type, parser=parser)
+            self._rule = self.rule_type(self.rule_str, **self.kwargs(kwargs))
+
         return self._rule
 
-    def run(self, parser, data):
-        tmp_rule = self.rule
-        return tmp_rule(parser, data)
-
-class RuleBuilder(object):
-    """
-    Returns Rule Objects from strings
-    RuleBuilder["rulestring"] returns the rule builder object
-    RuleBuilder("rulestring") returns the a rule object
-    RuleBuilder["rulestring"](*args, **kwargs) wil run the rule object
-
-    """
-
-    def __init__(self):
-        self.rules = {}
-
-    def _rule(self, rule_str):
-        if rule_str not in self.rules:
-            tmp_item = RuleBuilderItem(self, rule_str)
-            self.rules[rule_str] = tmp_item
-        return self.rules[rule_str]
-
-    get_parsed = _rule
-
-    def get_rule(self, rule_str):
-        return self.get_parsed(rule_str).rule
-
-    def _make_rule(self, rule_in, **kwargs):
-        kwargs = rule_in.kwargs(kwargs)
-        if rule_in.is_charset:
-            if rule_in.is_repeated:
-                return Word(rule_in, **kwargs)
+    def set_type(self, rule_type=None, parser=None):
+        if rule_type is not None:
+            self.rule_type = rule_type
+        elif self.is_charset:
+            if self.is_repeated:
+                self.rule_type = Word
             else:
-                return Char(rule_in, **kwargs)
-        elif rule_in.is_quoted_string:
-            if len(rule_in) > 1:
-                return Word(rule_in, **kwargs)
+                self.rule_type = Char
+        elif self.is_quoted_string:
+            if len(self.rule_str) > 1:
+                self.rule_type = Word
             else:
-                return Char(rule_in, **kwargs)
+                self.rule_type = Char
         else:
-            return LookupRule(rule_in, **kwargs)
+            if parser is not None:
+                if self.rule_str in parser.ruleset:
+                    self.rule_type = Rule
+                elif self.rule_str in parser.charsets:
+                    self.rule_str = parser.charsets[self.rule_str]
+                    if self.is_repeated:
+                        self.rule_type = Word
+                    else:
+                        self.rule_type = Char
+                else:
+                    raise RuleError('Rule %s not found in lookups' % self.operations)
+            else:
+                self.rule_type = LookupRule
+        return self.rule_type
 
-
-    def kwargs(self, rule_str, kwargs=None):
-        return self[rule_str].kwargs(kwargs)
-
-    @staticmethod
-    def _parse_rule_str(tmp_rule):
+    def _parse_rule_str(self):
         """
         string formatting options:
         'abcde' Rule('abcde')
@@ -498,38 +570,39 @@ class RuleBuilder(object):
         key_chars = '1234567890*[/"^'
         repeat_chars = '1234567890*'
 
-        rule_str_in = tmp_rule.init_rule_str
+        rule_str_in = self.init_rule_str
 
         if rule_str_in[0] == '[' and rule_str_in[-1] == ']':
-            tmp_rule.is_optional = True
+            self.is_optional = True
             rule_str_in = rule_str_in[1:-1]
-            tmp_rule._kwargs['optional'] = True
+            self._kwargs['optional'] = True
 
         while rule_str_in and rule_str_in[0] in key_chars:
             if rule_str_in[0] == '"' and rule_str_in[-1] == '"':
-                tmp_rule.is_quoted_string = True
+                self.is_quoted_string = True
                 rule_str_in = rule_str_in[1:-1]
-                tmp_rule._kwargs['quoted_str'] = True
+                self._kwargs['quoted_str'] = True
                 break   # since this means that everything else is a quoted string
 
             elif rule_str_in[0] == '-':
                 rule_str_in = rule_str_in[1:]
-                tmp_rule._kwargs['return_string'] = True
+                self.return_string = False
+                self._kwargs['return_string'] = False
 
             elif rule_str_in[0] == '^' and rule_str_in[1] == '"' and rule_str_in[-1] == '"':
-                tmp_rule.is_quoted_string = True
-                tmp_rule.is_case_sensitive = False
+                self.is_quoted_string = True
+                self.is_case_sensitive = False
                 rule_str_in = rule_str_in[2:-1]
-                tmp_rule._kwargs['case_sensitive'] = False
+                self._kwargs['case_sensitive'] = False
                 break   # since this means that everything else is a quoted string
 
             elif rule_str_in[0] == '/':
-                tmp_rule.is_charset = True
+                self.is_charset = True
                 rule_str_in = rule_str_in[1:]
                 break # since means everything else is a char_set
 
             elif rule_str_in[0] in repeat_chars:
-                tmp_rule.is_repeated = True
+                self.is_repeated = True
                 tmp_repeat_str = []
 
                 for c in rule_str_in:
@@ -552,16 +625,51 @@ class RuleBuilder(object):
                     min_repeat = tmp_repeat_str
                     max_repeat = tmp_repeat_str
 
-                tmp_rule._kwargs['min_repeat'] = int(min_repeat)
-                tmp_rule._kwargs['max_repeat'] = int(max_repeat)
+                self._kwargs['min_repeat'] = int(min_repeat)
+                self._kwargs['max_repeat'] = int(max_repeat)
 
             else:
                 raise RuleError('Invalid rule string: %s' % rule_str_in)
 
-        tmp_rule.rule_str = rule_str_in
+        self.rule_str = rule_str_in
 
-    def run(self, rule_str, parser, data):
-        return self.get_parsed(rule_str).run(parser, data)
+    def run(self, parser, data, **kwargs):
+        return self.rule(parser=parser, **kwargs)(parser, data)
+
+
+class RuleBuilder(object):
+    """
+    Returns Rule Objects from strings
+    RuleBuilder["rulestring"] returns the rule builder object
+    RuleBuilder("rulestring") returns the a rule object
+    RuleBuilder["rulestring"](*args, **kwargs) wil run the rule object
+
+    """
+
+    def __init__(self):
+        self.rules = {}
+
+    def parsed(self, rule_str):
+        if isinstance(rule_str, list):
+            if len(rule_str) == 1:
+                rule_str = '[%s]' % rule_str[0]
+            else:
+                raise TypeError('invalid argument: %r, if a list is passed it must only have one object' % rule_str)
+        if not isinstance(rule_str, str):
+            raise TypeError('%r is not a string rule' % rule_str)
+        if rule_str not in self.rules:
+            tmp_item = RuleBuilderItem(self, rule_str)
+            self.rules[rule_str] = tmp_item
+        return self.rules[rule_str]
+
+    def rule(self, rule_str, rule_type=None, parser=None, **kwargs):
+        if isinstance(rule_str, str):
+            return self.parsed(rule_str).rule(rule_type=rule_type, parser=parser, **kwargs)
+        else:
+            return rule_str
+
+    def run(self, rule_str, parser, data, **kwargs):
+        return self.parsed(rule_str).run(parser, data, **kwargs)
 
     def __call__(self, rule_str, **kwargs):
         return self[rule_str].rule(**kwargs)
@@ -701,34 +809,41 @@ class BaseRule(object):
         element_name=None
 
         """
-        log_ddebug('startng to load rule type: %s(operations=%r, kwargs=%r)', self.rule_type, operations, kwargs)
+        log_ddebug('starting to load rule type: "%s" / operations=%r / kwargs=%r)', self.rule_type, operations, kwargs)
         if self.parses_chars:
-            tmp_arg = make_rule.get_parsed(operations[0])
+            tmp_arg = make_rule.parsed(operations[0])
             kwargs = tmp_arg.kwargs(kwargs)
             self.operations = tmp_arg.rule_str
             self.is_quoted_string = kwargs.get('quoted_str', False)
         else:
             if self.single_op:
-                self.operations = make_rule.get_rule(operations[0])
+                self.operations = make_rule.rule(operations[0])
             else:
                 self.operations = []
                 for o in operations:
-                    self.operations.append(make_rule.get_rule(o))
+                    self.operations.append(make_rule.rule(o))
 
         self.optional = kwargs.get('optional', False)
         self.return_string = kwargs.get('return_string', True)
         self.case_sensitive = kwargs.get('case_sensitive', True)
+        '''
         self.on_fail = None
         self.on_pass = None
         self.element_name = None
+
         self.before_self = []
         self.after_self = []
         self.before_ops = []
         self.after_ops = []
+        '''
         if 'next' in kwargs:
-            self._next = make_rule.get_rule(kwargs['next'])
+            self._next = make_rule.rule(kwargs['next'])
+        else:
+            self._next = None
+        '''
         if 'not_next' in kwargs:
-            self._not_next = make_rule.get_rule(kwargs['not_next'])
+            self._not_next = make_rule.rule(kwargs['not_next'])
+        '''
         self._actions = kwargs.get('actions', [])
         if not isinstance(self._actions, (list, tuple)):
             self._actions = [self._actions]
@@ -745,20 +860,19 @@ class BaseRule(object):
             a(data, passed, element, position)
 
     def _run_next(self, parser, data):
-        try:
+        if self._next is not None:
             try:
-                tmp_ret = self._next(parser, data)
+                try:
+                    tmp_ret = self._next(parser, data)
+                except NoElementError:
+                    op_passed = False
+                    raise
+                else:
+                    op_passed = True
+                    raise NoElementError(data, popped_text=tmp_ret)
             except NoElementError:
-                op_passed = False
-                raise
-            else:
-                op_passed = True
-                raise NoElementError(data, popped_text=tmp_ret)
-        except NoElementError:
-            if not op_passed:
-                raise NoElementError()
-
-
+                if not op_passed:
+                    raise NoElementError()
 
     def _operation_strs(self):
         if self.single_op:
@@ -768,7 +882,7 @@ class BaseRule(object):
             for r in self.operations:
                 tmp_ret.append('%r' % r)
             return ', '.join(tmp_ret)
-
+    '''
     def _add_repr_flag(self,
                        before_self=None,
                        after_self=None,
@@ -782,47 +896,19 @@ class BaseRule(object):
             self.before_ops.insert(0, before_ops)
         if after_ops:
             self.after_ops.append(after_ops)
-
+    '''
+    '''
     def _set_repr_flags(self):
 
         if self.return_string:
             self._add_repr_flag(before_self='-')
-
+    '''
     def __repr__(self):
         """
-        repr_format = '{opt_pre}{pre_rule}{type}({pre_ops}{ops}{post_ops}){post_rule}{opt_post}'
-
-        pre_flags:
-            [type(ops)] = optional
-            (x:type(ops)) = do not return string
-        post_flags:
-            type(ops, {PF}) = pass / fail
-            type(ops, <name>)
+        format:
+            Char{2*2,A,N,-}([operations])
         """
-        if self.optional:
-            opt_pre = '['
-            opt_post = ']'
-        else:
-            opt_pre = ''
-            opt_post = ''
-
-        if self.before_self or self.after_self:
-            pre_rule = '(%s:' % ''.join(self.before_self)
-            post_rule = ', %s)' % ''.join(self.after_self)
-        else:
-            pre_rule = ''
-            post_rule = ''
-
-        if self.before_ops or self.after_ops:
-            pre_ops = '%s, ' % ''.join(self.before_ops)
-            post_ops = ', %s' % ''.join(self.after_ops)
-        else:
-            pre_ops = ''
-            post_ops = ''
-
-        """
-        (5*3:type(ops))
-        """
+        tmp_flags = []
         if hasattr(self, 'min_repeat'):
             if self.min_repeat == ISEMAIL_MIN_REPEAT:
                 tmp_min = ''
@@ -834,17 +920,39 @@ class BaseRule(object):
             else:
                 tmp_max = str(self.max_repeat)
 
-            self._add_repr_flag(after_ops='%s*%s:' % (tmp_min, tmp_max))
+            if tmp_min == tmp_max:
+                if tmp_min != '1' and tmp_max != '1':
+                    tmp_flags.append(tmp_min)
 
+            else:
+                tmp_flags.append('%s*%s' % (tmp_min, tmp_max))
 
-        tmp_ret = self.repr_format.format(
+        if self._actions:
+            tmp_flags.append('A')
+        if self._next:
+            tmp_flags.append('N')
+        if not self.return_string:
+            tmp_flags.append('-')
+
+        if tmp_flags:
+            tmp_flags = '{%s}' % ','.join(tmp_flags)
+        else:
+            tmp_flags = ''
+        if tmp_flags == '{}':
+            tmp_flags = ''
+
+        if self.optional:
+            opt_pre = '['
+            opt_post = ']'
+        else:
+            opt_pre = ''
+            opt_post = ''
+
+        tmp_ret = '{type}{flags}({opt_pre}{ops}{opt_post})'.format(
             type=self.rule_type,
             opt_pre=opt_pre,
             opt_post=opt_post,
-            pre_rule=pre_rule,
-            post_rule=post_rule,
-            pre_ops=pre_ops,
-            post_ops=post_ops,
+            flags=tmp_flags,
             ops=self._operation_strs())
 
         return tmp_ret
@@ -910,17 +1018,13 @@ class Rule(BaseRule):
 class LookupRule(BaseRule):
     rule_type = 'Lookup'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, parsed_rule_str, **kwargs):
         self.kwargs = kwargs
-        super().__init__(*args, **kwargs)
+        self.operations = parsed_rule_str
+        # super().__init__(*args, **kwargs)
 
     def __call__(self, parser, data):
-        if self.operations in parser.ruleset:
-            return make_rule.run(parser.ruleset[self.operations], parser, data)
-        elif self.operations in parser.charsets:
-            return make_rule.run(parser.charsets[self.operations], parser, data)
-        else:
-            raise RuleError('Rule %s not found in lookups' % self.operations)
+        return make_rule.run(self.operations, parser, data, **self.kwargs)
 
     def run(self, parser, data):
         pass
@@ -1078,7 +1182,7 @@ class Repeat(BaseRule):
             super().__init__(args[0], **kwargs)
         elif len(args) == 2:
             if isinstance(args[0], str):
-                tmp_opt = make_rule.get_parsed(args[0])
+                tmp_opt = make_rule.parsed(args[0])
                 super().__init__(args[1], **tmp_opt.kwargs(kwargs))
             elif isinstance(args[0], int):
                 kwargs['min_repeat'] = args[0]
@@ -1183,10 +1287,10 @@ class MeasureBaseRule(BaseRule):
     rule_type = 'MeasureBase'
     single_op = True
     allow_repeat = False
-    parses_chars = True
+    parses_chars = False
 
     def __init__(self, measure_string, operation, **kwargs):
-        tmp_args = make_rule.get_parsed(measure_string)
+        tmp_args = make_rule.parsed(measure_string)
         self.measure_str = tmp_args.rule_str
         super().__init__(operation, **tmp_args.kwargs(kwargs))
 

@@ -15,7 +15,7 @@ log_debug = log.debug
 
 
 def log_ddebug(msg, *args, **kwargs):
-    print(msg % args)
+    # print(msg % args)
     log.log(9, msg, *args, **kwargs)
 
 
