@@ -5,6 +5,7 @@ from collections import deque
 # log = logging.getLogger(__name__)
 
 
+# <editor-fold desc="***** Diag Manager *******************************">
 class DiagItem(object):
     def __init__(self, key, value, name=None, description=None, category=None, **kwargs):
         self.key = key
@@ -27,7 +28,7 @@ class DiagsList(object):
         self._by_value = {}
         self._by_key = {}
 
-        if len(items) > 1 and isinstance(items[0], dict):
+        if len(items) == 1 and isinstance(items[0], dict):
             for key, item in items[0].items():
                 if isinstance(item, dict):
                     item['key'] = key
@@ -46,27 +47,169 @@ class DiagsList(object):
         self._by_key[item.key] = item
         self._by_value[item.value] = item
 
+    def code(self, item):
+        tmp_diag = self[item]
+        return {"key": tmp_diag.key, 'value': tmp_diag.value}
+
     def __getitem__(self, item):
         if isinstance(item, str):
             return self._by_key[item]
         else:
             return self._by_value[item]
 
+
+
 BASE_DIAGS = DiagsList(dict(PASS=0, REM=1, FAIL=2))
+# </editor-fold>
+
+
+class ElementHelper(object):
+    name = 'element'
+
+    def __init__(self, lookup=None):
+        self.items = {}
+        self.count = 0
+        self.lookup = lookup
+        self._max = None
+
+    def name_value(self, code):
+        return code, code
+
+    def set_max(self, value):
+        pass
+
+    def add(self, code, **kwargs):
+        self.count += 1
+        name, value =  self.name_value(code)
+        tmp_item = kwargs
+        tmp_item['name'] = name
+        tmp_item['value'] = value
+        self.set_max(value)
+        if name in self:
+            self[name]['instances'].append(tmp_item)
+        else:
+            self[name] = dict(
+                name=name,
+                value=value,
+                instances=[tmp_item]
+            )
+            if self.lookup is not None:
+                self[code]['info'] = self.lookup[code]
+
+        log_ddebug('adding %s: %s (%r)', self.name, code, tmp_item)
+
+    def get(self, name=None, max_value=None, min_value=None, field=None):
+        min_value = min_value or -1
+        max_value = max_value or sys.maxsize
+
+        if name is None:
+            tmp_ret = {}
+            for diag, items in self.items.items():
+                if min_value < items['value'] < max_value:
+                    if field is None:
+                        tmp_ret[diag] = items['instances']
+                    else:
+                        tmp_ret[diag] = []
+                        for i in items['instances']:
+                            tmp_ret[diag].append(i[field])
+            return tmp_ret
+        else:
+            if field is None:
+                return self.items[name]
+            else:
+                tmp_ret = []
+                for i in self.items[name]['instances']:
+                    tmp_ret.append(i[field])
+                return tmp_ret
+
+
+    def __contains__(self, item):
+        return item in self.items
+
+    def __getitem__(self, item):
+        return self.items[item]
+
+    def __setitem__(self, key, value):
+        self.items[key] = value
+
+    def __iter__(self):
+        for item in self.items.values():
+            yield item
+
+
+class DiagHelper(ElementHelper):
+
+    def name_value(self, code):
+        if self.lookup is not None:
+            try:
+                return self.lookup[code].key, self.lookup[code].value
+            except KeyError:
+                pass
+        return code, code
+
+    def set_max(self, value):
+        if isinstance(value, int):
+            if self._max is None:
+                self._max = 0
+            self._max = max(self._max, value)
+        else:
+            self._max = value
+
+class WorkQueue(object):
+    def __init__(self):
+        self.queue = []
+        self.done = []
+        self.name_queue = []
+
+    def push(self, name, **kwargs):
+        self.name_queue.append(name)
+        kwargs['name'] = '.'.join(self.name_queue)
+        self.queue.append(kwargs)
+
+    def pop(self, **kwargs):
+        tmp_item = self.queue.pop()
+        tmp_item.update(kwargs)
+        self.done.append(tmp_item)
+        return tmp_item
+
+    def last(self):
+        return self.done[-1]
+
 
 class ParsedResp(object):
     def __init__(self,
                  raw_string,
+                 charsets=None,
+                 rules=None,
                  diag_lookup=None,
-                 **kwargs):
+                 element_lookup=None,
 
-        self.rem_string = deque(raw_string)
+                 on_fail=None,
+                 on_rem_string=None,
+                 on_pass=None):
+
+        self.ruleset = rules
+
+        self.charsets = _PARSER_CONST.copy()
+        self.charsets.update(charsets or {})
+
+        self.on_fail = on_fail
+        self.on_rem_string = on_rem_string
+        self.on_pass = on_pass
+
+        self._diag_lookup = diag_lookup
         self.raw_string = raw_string
         self.raw_length = len(raw_string)
-        self._diag_count = 0
-        self._elements = {}
-        self._diags = {}
-        self._max_diag = 0
+        self.diags = DiagHelper(lookup=diag_lookup)
+        self.elements = ElementHelper(lookup=element_lookup)
+
+        self.work_queue = WorkQueue()
+        self.working_text = ''
+        self.working_pos = 0
+        self.rem_string = deque(raw_string)
+
+    def remaining(self):
+        return ''.join(self.rem_string)
 
     @property
     def position(self):
@@ -76,189 +219,36 @@ class ParsedResp(object):
         position = position or self.position
 
         if diag is not None:
-            self._diag_count += 1
-            tmp_diag = dict(
-                position=position,
-                count=self._diag_count)
-            log_ddebug('adding diag: %s (%r)', diag, tmp_diag)
-            if diag in self._diags:
-                self._diags[diag].append(tmp_diag)
-            else:
-                self._diags[diag] = [tmp_diag]
-            if diag > self._max_diag:
-                self._max_diag = diag
+            self.diags.add(diag, position=position)
 
         if element_name is not None:
             element_pos = element_pos or position-len(element)
             if isinstance(element, list):
                 element = ''.join(element)
+            self.elements.add(element_name, element=element, position=element_pos)
 
-            if element_name in self._elements:
-                self._elements[element_name].append(dict(
-                    element=element,
-                    pos=element_pos,
-                ))
-                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
+    '''
+    def __call__(self, parse_str, rule=None):
+        tmp_data = ParsedItem(parse_str)
+        self.parse_str(tmp_data, rule)
+        return tmp_data
+    '''
 
-            else:
-                self._elements[element_name] = [dict(
-                    element=element,
-                    pos=element_pos,
-                )]
-                log_ddebug('adding element: %s (%r)', element_name, self._elements[element_name])
-
-
+    '''
     def __int__(self):
         return self._max_diag
 
-    def elements(self, element_name=None):
-        if element_name is None:
-            return self._elements.copy()
-        else:
-            return self._elements.get(element_name, [])
-
-    def all_elements(self):
-        return self._elements
-
-    def diags(self, max_code=None, min_code=None, field=None, diag_code=None):
-        min_code = min_code or -1
-        max_code = max_code or sys.maxsize
-
-        if diag_code is None:
-            tmp_ret = {}
-            for diag, items in self._diags.items():
-                if min_code < diag < max_code:
-                    if field is None:
-                        tmp_ret[diag] = items
-                    else:
-                        tmp_ret[diag] = []
-                        for i in items:
-                            tmp_ret[diag].append(i[field])
-            return tmp_ret
-        else:
-            if field is None:
-                return self._diags[diag_code]
-            else:
-                tmp_ret = []
-                for i in self._diags[diag_code]:
-                    tmp_ret.append(i[field])
-                return tmp_ret
-
-    def remaining(self):
-        return ''.join(self.rem_string)
 
     def __getitem__(self, item):
         return self.elements(element_name=item)
 
-    '''
     def __call__(self, email_in):
         self.parse(email_in)
         return self._max_diag
     '''
 
 
-'''
-class AddressItem(object):
-
-    def __init__(self, threashold=None):
-        self._threashold = threashold or 0
-        self._elements = {}
-        self._responses = []
-        self._max_code = 0
-        self.local_part = None
-        self.domain_part = None
-
-    def add_element(self, element_code, element):
-        if element_code == ISEMAIL_ELEMENT_LOCALPART:
-            self.local_part = element
-        elif element_code == ISEMAIL_ELEMENT_DOMAINPART:
-            self.local_part = element
-        elif element_code in self._elements:
-            self._elements[element_code].append(element)
-        else:
-            self._elements[element_code] = [element]
-
-    def add_response(self, response_code, position):
-
-        self._max_code = max(response_code, self._max_code)
-        self._responses.append((response_code, position))
-
-    def __int__(self):
-        return self._max_code
-
-    def responses(self, max_code=None, min_code=None, response_type='string_list'):
-        """
-
-        :param max_code:
-        :type max_code:
-        :param min_code:
-        :type min_code:
-        :param response_type: 'string_list'|'code_list'|'detailed_string'|'key_list'
-        :type response_type: str
-        :return:
-        :rtype:
-        """
-        min_code = min_code or self._threashold
-        max_code = max_code or ISEMAIL_MAX_THREASHOLD
-
-        if response_type == 'code_list':
-            return self._responses
-        elif response_type == 'string_list':
-            tmp_ret = []
-            for i, pos in self._responses:
-                tmp_ret.append(META_LOOKUP.diags[i]['description'])
-            return tmp_ret
-        elif response_type == 'key_list':
-            tmp_ret = []
-            for i, pos in self._responses:
-                tmp_ret.append(META_LOOKUP.diags[i]['key'])
-            return tmp_ret
-
-    def __getitem__(self, item):
-        try:
-            return self._elements[item]
-        except KeyError:
-            return 'Unknown / Unfound'
-
-
-class WorkQueue(object):
-    def __init__(self):
-        self.queue = []
-        self.done = []
-        self.length = 0
-
-    def push(self, item):
-        self.queue.append(item)
-        self.length += 1
-
-    def pop(self, count=1):
-        if count > self.length:
-            count = self.length
-
-        for i in range(count):
-            self.done.append(self.queue.pop())
-
-        self.length -= count
-        return self.last(count)
-
-    def last(self, count=1):
-        if count > self.length:
-            count = self.length
-        if count == 1:
-            return self.done[1]
-        else:
-            return self.done[count:]
-
-    def clear(self):
-        self.queue = []
-        self.done = []
-        self.length = 0
-
-    def __getitem__(self, item):
-        return self.done[item]
-'''
-
-
+"""
 class ParsedItem(object):
 
     def __init__(self, raw_string):
@@ -387,7 +377,7 @@ class ParsedItem(object):
         return self._max_diag
     '''
 
-
+"""
 class SpaceText(object):
     def __init__(self, indent=2):
         self.indent_size = indent
@@ -482,6 +472,8 @@ PARSER_DEFAULT_REMAINING_STR_CODE = 254
 PARSER_DEFAULT_PASS_CODE = 0
 PARSER_DEFAULT_START_RULE = 'start'
 
+
+# <editor-fold desc="************ Rule Builder Helpers *******************************">
 class RuleBuilderItem(object):
     def __init__(self, builder, rule_str):
         self.init_rule_str = rule_str
@@ -516,17 +508,17 @@ class RuleBuilderItem(object):
             kwargs.update(self._kwargs)
             return kwargs
 
-    def rule(self, rule_type=None, parser=None, **kwargs):
+    def rule(self, rule_type=None, data=None, **kwargs):
         if rule_type is not None or \
                 self._rule is None or \
-                (self._rule is LookupRule and parser is not None):
+                (self._rule is LookupRule and data is not None):
 
-            self.set_type(rule_type=rule_type, parser=parser)
+            self.set_type(rule_type=rule_type, data=data)
             self._rule = self.rule_type(self.rule_str, **self.kwargs(kwargs))
 
         return self._rule
 
-    def set_type(self, rule_type=None, parser=None):
+    def set_type(self, rule_type=None, data=None):
         if rule_type is not None:
             self.rule_type = rule_type
         elif self.is_charset:
@@ -540,11 +532,11 @@ class RuleBuilderItem(object):
             else:
                 self.rule_type = Char
         else:
-            if parser is not None:
-                if self.rule_str in parser.ruleset:
+            if data is not None:
+                if self.rule_str in data.ruleset:
                     self.rule_type = Rule
-                elif self.rule_str in parser.charsets:
-                    self.rule_str = parser.charsets[self.rule_str]
+                elif self.rule_str in data.charsets:
+                    self.rule_str = data.charsets[self.rule_str]
                     if self.is_repeated:
                         self.rule_type = Word
                     else:
@@ -633,8 +625,8 @@ class RuleBuilderItem(object):
 
         self.rule_str = rule_str_in
 
-    def run(self, parser, data, **kwargs):
-        return self.rule(parser=parser, **kwargs)(parser, data)
+    def run(self, data, **kwargs):
+        return self.rule(data=data, **kwargs)(data)
 
 
 class RuleBuilder(object):
@@ -662,14 +654,14 @@ class RuleBuilder(object):
             self.rules[rule_str] = tmp_item
         return self.rules[rule_str]
 
-    def rule(self, rule_str, rule_type=None, parser=None, **kwargs):
+    def rule(self, rule_str, rule_type=None, data=None, **kwargs):
         if isinstance(rule_str, str):
-            return self.parsed(rule_str).rule(rule_type=rule_type, parser=parser, **kwargs)
+            return self.parsed(rule_str).rule(rule_type=rule_type, data=data, **kwargs)
         else:
             return rule_str
 
-    def run(self, rule_str, parser, data, **kwargs):
-        return self.parsed(rule_str).run(parser, data, **kwargs)
+    def run(self, rule_str, data, **kwargs):
+        return self.parsed(rule_str).run(data, **kwargs)
 
     def __call__(self, rule_str, **kwargs):
         return self[rule_str].rule(**kwargs)
@@ -677,6 +669,41 @@ class RuleBuilder(object):
 make_rule = RuleBuilder()
 
 
+def parse_string(self, rule, raw_string, **kwargs):
+    data = ParsedResp(raw_string=raw_string, **kwargs)
+
+    try:
+        self(data)
+
+    except NoElementError:
+        if data.on_fail is not None:
+            data.add_note(diag=data.on_fail, position=0)
+    else:
+        if data.rem_string and data.on_rem_string is not None:
+            data.add_note(diag=data.on_rem_string)
+        elif data.on_pass is not None:
+            data.add_note(diag=data.on_pass, position=0)
+
+
+
+        rule = rule or self.start_rule
+        if isinstance(data.rem_string, str):
+            data.rem_string = deque(data.rem_string)
+
+        try:
+            self.ruleset[rule](self, data)
+        except NoElementError:
+            if self.on_fail is not None:
+                data.add_note(diag=self.on_fail, position=0)
+        else:
+            if data.rem_string and self.on_rem_string is not None:
+                data.add_note(diag=self.on_rem_string)
+            elif self.on_pass is not None:
+                data.add_note(diag=self.on_pass, position=0)
+
+# </editor-fold>
+
+"""
 class ParserOps(object):
 
     def __init__(self,
@@ -742,6 +769,7 @@ class ParserOps(object):
         self.parse_str(tmp_data, rule)
         return tmp_data
 
+"""
 
 class ParserAction(object):
 
@@ -775,6 +803,9 @@ class ParserAction(object):
             return 'Action: Empty'
 
 
+
+
+# <editor-fold desc="************** Rules *****************************************">
 class BaseRule(object):
     rule_type = 'BaseRule'
     parses_chars = False
@@ -859,11 +890,11 @@ class BaseRule(object):
         for a in self._actions:
             a(data, passed, element, position)
 
-    def _run_next(self, parser, data):
+    def _run_next(self, data):
         if self._next is not None:
             try:
                 try:
-                    tmp_ret = self._next(parser, data)
+                    tmp_ret = self._next(data)
                 except NoElementError:
                     op_passed = False
                     raise
@@ -873,6 +904,21 @@ class BaseRule(object):
             except NoElementError:
                 if not op_passed:
                     raise NoElementError()
+
+    def parse_string(self, raw_string, **kwargs):
+        data = ParsedResp(raw_string=raw_string, **kwargs)
+
+        try:
+            self(data)
+
+        except NoElementError:
+            if data.on_fail is not None:
+                data.add_note(diag=data.on_fail, position=0)
+        else:
+            if data.rem_string and data.on_rem_string is not None:
+                data.add_note(diag=data.on_rem_string)
+            elif data.on_pass is not None:
+                data.add_note(diag=data.on_pass, position=0)
 
     def _operation_strs(self):
         if self.single_op:
@@ -957,7 +1003,7 @@ class BaseRule(object):
 
         return tmp_ret
 
-    def __call__(self, parser, data):
+    def __call__(self, data):
         log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
         tmp = space_text.push
         tmp_pos = data.position
@@ -970,7 +1016,7 @@ class BaseRule(object):
                     if i > self.max_repeat - 1:
                         break
                     try:
-                        tmp_ret = self.run(parser, data)
+                        tmp_ret = self.run(data)
                     except NoElementError:
                         if i < self.min_repeat - 1:
                             raise NoElementError(data, popped_text=tmp_ret_list)
@@ -978,10 +1024,10 @@ class BaseRule(object):
                         if tmp_ret is not None:
                             tmp_ret_list.extend(tmp_ret)
             else:
-                tmp_ret_list.extend(self.run(parser, data))
+                tmp_ret_list.extend(self.run(data))
 
             try:
-                self._run_next(parser, data)
+                self._run_next(data)
             except NoElementError:
                 raise NoElementError(data, popped_text=tmp_ret_list)
 
@@ -1001,16 +1047,16 @@ class BaseRule(object):
             else:
                 return []
 
-    def run(self, parser, data):
+    def run(self, data):
         raise NotImplementedError()
 
 
 class Rule(BaseRule):
     rule_type = 'Rule'
 
-    def run(self, parser, data):
+    def run(self, data):
         try:
-            return parser.ruleset[self.operations](parser, data)
+            return data.ruleset[self.operations](data)
         except KeyError:
             raise AttributeError('Rule %s not found in rule dictionary' % self.operations)
 
@@ -1023,10 +1069,10 @@ class LookupRule(BaseRule):
         self.operations = parsed_rule_str
         # super().__init__(*args, **kwargs)
 
-    def __call__(self, parser, data):
-        return make_rule.run(self.operations, parser, data, **self.kwargs)
+    def __call__(self, data):
+        return make_rule.run(self.operations, data, **self.kwargs)
 
-    def run(self, parser, data):
+    def run(self, data):
         pass
 
 
@@ -1036,7 +1082,7 @@ class Word(BaseRule):
     allow_repeat = True
     should_repeat = True
 
-    def run(self, parser, data):
+    def run(self, data):
         '''
         # log_ddebug('%s checking for chars in %r', space_text, char_set)
         tmp_ret = []
@@ -1089,7 +1135,7 @@ class QString(BaseRule):
     quoted_string = True
     should_repeat = False
 
-    def run(self, parser, data):
+    def run(self, data):
         log_ddebug('%s checking for quoted string: "%s" in %r', space_text, self.operations, data.rem_string)
 
         tmp_ret = []
@@ -1114,12 +1160,12 @@ class And(BaseRule):
         self.max_repeat = max_repeat
         super().__init__(**kwargs)
 
-    def run(self, parser, data):
+    def run(self, data):
         tmp_ret_list = []
         log_debug('all must match---')
         for op in self.operations:
             try:
-                tmp_ret = op(self, parser, data)
+                tmp_ret = op(self, data)
             except NoElementError:
                 raise NoElementError(data, popped_text=tmp_ret_list)
             else:
@@ -1142,11 +1188,11 @@ class Or(BaseRule):
         self.operations = operations
         super().__init__(**kwargs)
 
-    def run(self, parser, data):
+    def run(self, data):
         tmp_ret = []
         for op in self.operations:
             try:
-                tmp_ret = op(self, parser, data)
+                tmp_ret = op(self, data)
                 break
             except NoElementError:
                 pass
@@ -1166,8 +1212,8 @@ class Opt(BaseRule):
         kwargs['optional'] = True
         super().__init__(*args, **kwargs)
 
-    def run(self, parser, data):
-        return self.operations(self, parser, data)
+    def run(self, data):
+        return self.operations(self, data)
 
 
 class Repeat(BaseRule):
@@ -1193,8 +1239,8 @@ class Repeat(BaseRule):
         else:
             raise RuleError('invalid number of args for repeat rule: %r' % args)
 
-    def run(self, parser, data):
-        return self.operations(self, parser, data)
+    def run(self, data):
+        return self.operations(self, data)
 
 '''
 class MarkParser(ParserRule):
@@ -1294,40 +1340,42 @@ class MeasureBaseRule(BaseRule):
         self.measure_str = tmp_args.rule_str
         super().__init__(operation, **tmp_args.kwargs(kwargs))
 
-    def __call__(self, parser, data):
+    def __call__(self, data):
         log_ddebug('%s %r on data: %r', space_text, self, ''.join(data.rem_string))
         tmp = space_text.push
         tmp_pos = data.position
 
-        tmp_ret = self.operations(parser, data)
+        tmp_ret = self.operations(data)
 
         try:
-            self.run(parser, tmp_ret)
+            self.run(tmp_ret)
 
         except NoElementError:
             tmp = space_text.pop
+            self._run_actions(data, False, [], tmp_pos)
             if not self.optional:
-                raise NoElementError(data, fail_flag=self.on_fail, position=tmp_pos, popped_text=tmp_ret)
+                raise NoElementError(popped_text=tmp_ret)
         else:
             tmp = space_text.pop
             log_ddebug('%s PASS-> "%r" passed', space_text, self)
-
+            self._run_actions(data, True, [], tmp_pos)
+            '''
             if self.on_pass or self.element_name:
                 data.add_note(diag=self.on_pass, element_name=self.element_name, element=tmp_ret, position=tmp_pos)
-
+            '''
             if self.return_string:
                 return tmp_ret
             else:
                 return []
 
-    def run(self, parser, op_data):
+    def run(self, op_data):
         raise NotImplementedError()
 
 
 class Count(MeasureBaseRule):
     rule_type = 'Count'
 
-    def run(self, parser, op_data):
+    def run(self, op_data):
 
         if self.is_quoted_string:
             tmp_str = ''.join(op_data)
@@ -1343,10 +1391,11 @@ class Count(MeasureBaseRule):
 class Len(BaseRule):
     rule_type = 'Len'
 
-    def run(self, parser, op_data):
+    def run(self, op_data):
 
         tmp_count = len(op_data)
 
         if not self.min_repeat < tmp_count < self.max_repeat:
             raise NoElementError()
+# </editor-fold>
 

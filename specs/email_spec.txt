@@ -1,0 +1,506 @@
+addr-spec       =   local-part "@" domain
+
+    local-part      =   dot-atom / quoted-string / obs-local-part
+        // http://tools.ietf.org/html/rfc5321#section-4.5.3.1.1
+        //   The maximum total length of a user name or other local-part is 64
+        //   octets.
+
+        dot-atom        =   [CFWS] dot-atom-text [CFWS]
+
+            dot-atom-text   =   1*atext *("." 1*atext)
+
+                atext           =   ALPHA / DIGIT /    ; Printable US-ASCII
+                                   "!" / "#" /        ;  characters not including
+                                   "$" / "%" /        ;  specials.  Used for atoms.
+                                   "&amp;" / "'" /
+                                   "*" / "+" /
+                                   "-" / "/" /
+                                   "=" / "?" /
+                                   "^" / "_" /
+                                   "`" / "{" /
+                                   "|" / "}" /
+                                   "~"
+
+        obs-local-part  =   word *("." word)
+
+            word            =   atom / quoted-string
+
+                atom            =   [CFWS] 1*atext [CFWS]
+
+                // The entire local-part can be a quoted string for RFC 5321
+                // If it's just one atom that is quoted then it's an RFC 5322 obsolete form
+
+
+
+    domain          =   dot-atom / domain-literal / address_literal /obs-domain
+        ---------------------------------------------------------------------------------------------
+        ; NB For SMTP mail, the domain-literal is restricted by RFC5321 as follows:
+                Mailbox        = Local-part "@" ( domain-addr / address-literal )
+        -----------------------------------------------------------------------------------------
+
+        // http://tools.ietf.org/html/rfc5322#section-3.4.1
+        //      Note: A liberal syntax for the domain portion of addr-spec is
+        //      given here.  However, the domain portion contains addressing
+        //      information specified by and used in other protocols (e.g.,
+        //      [RFC1034], [RFC1035], [RFC1123], [RFC5321]).  It is therefore
+        //      incumbent upon implementations to conform to the syntax of
+        //      addresses for the context in which they are used.
+        // is_email() author's note: it's not clear how to interpret this in
+        // the context of a general email address validator. The conclusion I
+        // have reached is this: "addressing information" must comply with
+        // RFC 5321 (and in turn RFC 1035), anything that is "semantically
+        // invisible" must comply only with RFC 5322.
+
+		// http://tools.ietf.org/html/rfc5321#section-4.5.3.1.2
+		//   The maximum total length of a domain name or number is 255 octets.
+
+		// http://tools.ietf.org/html/rfc5321#section-4.1.2
+		//   Forward-path   = Path
+		//
+		//   Path           = "<" [ A-d-l ":" ] Mailbox ">"
+		//
+		// http://tools.ietf.org/html/rfc5321#section-4.5.3.1.3
+		//   The maximum total length of a reverse-path or forward-path is 256
+		//   octets (including the punctuation and element separators).
+		//
+		// Thus, even without (obsolete) routing information, the Mailbox can
+		// only be 254 characters long. This is confirmed by this verified
+		// erratum to RFC 3696:
+		//
+		// http://www.rfc-editor.org/errata_search.php?rfc=3696&eid=1690
+		//   However, there is a restriction in RFC 2821 on the length of an
+		//   address in MAIL and RCPT commands of 254 characters.  Since addresses
+		//   that do not fit in those fields are not normally useful, the upper
+		//   limit on address lengths should normally be considered to be 254.
+
+
+
+        //  dns check
+		// http://tools.ietf.org/html/rfc5321#section-2.3.5
+		//   Names that can
+		//   be resolved to MX RRs or address (i.e., A or AAAA) RRs (as discussed
+		//   in Section 5) are permitted, as are CNAME RRs whose targets can be
+		//   resolved, in turn, to MX or address RRs.
+		//
+		// http://tools.ietf.org/html/rfc5321#section-5.1
+		//   The lookup first attempts to locate an MX record associated with the
+		//   name.  If a CNAME record is found, the resulting name is processed as
+		//   if it were the initial name. ... If an empty list of MXs is returned,
+		//   the address is treated as if it was associated with an implicit MX
+		//   RR, with a preference of 0, pointing to that host.
+		//
+		// is_email() author's note: We will regard the existence of a CNAME to be
+		// sufficient evidence of the domain's existence. For performance reasons
+		// we will not repeat the DNS lookup for the CNAME's target, but we will
+		// raise a warning because we didn't immediately find an MX record.
+
+        // dns tld
+        // Check for TLD addresses
+        // -----------------------
+        // TLD addresses are specifically allowed in RFC 5321 but they are
+        // unusual to say the least. We will allocate a separate
+        // status to these addresses on the basis that they are more likely
+        // to be typos than genuine addresses (unless we've already
+        // established that the domain does have an MX record)
+        //
+        // http://tools.ietf.org/html/rfc5321#section-2.3.5
+        //   In the case
+        //   of a top-level domain used by itself in an email address, a single
+        //   string is used without any dots.  This makes the requirement,
+        //   described in more detail below, that only fully-qualified domain
+        //   names appear in SMTP transactions on the public Internet,
+        //   particularly important where top-level domains are involved.
+        //
+        // TLD format
+        // ----------
+        // The format of TLDs has changed a number of times. The standards
+        // used by IANA have been largely ignored by ICANN, leading to
+        // confusion over the standards being followed. These are not defined
+        // anywhere, except as a general component of a DNS host name (a label).
+        // However, this could potentially lead to 123.123.123.123 being a
+        // valid DNS name (rather than an IP address) and thereby creating
+        // an ambiguity. The most authoritative statement on TLD formats that
+        // the author can find is in a (rejected!) erratum to RFC 1123
+        // submitted by John Klensin, the author of RFC 5321:
+        //
+        // http://www.rfc-editor.org/errata_search.php?rfc=1123&eid=1353
+        //   However, a valid host name can never have the dotted-decimal
+        //   form #.#.#.#, since this change does not permit the highest-level
+        //   component label to start with a digit even if it is not all-numeric.
+
+
+
+        domain-addr = sub-domain *("." sub-domain)
+
+            sub-domain     = Let-dig [Ldh-str]
+
+            // Nowhere in RFC 5321 does it say explicitly that the
+            // domain part of a Mailbox must be a valid domain according
+            // to the DNS standards set out in RFC 1035, but this *is*
+            // implied in several places. For instance, wherever the idea
+            // of host routing is discussed the RFC says that the domain
+            // must be looked up in the DNS. This would be nonsense unless
+            // the domain was designed to be a valid DNS domain. Hence we
+            // must conclude that the RFC 1035 restriction on label length
+            // also applies to RFC 5321 domains.
+            //
+            // http://tools.ietf.org/html/rfc1035#section-2.3.4
+            // labels          63 octets or less
+
+
+                Let-dig        = ALPHA / DIGIT
+
+                Ldh-str        = *( ALPHA / DIGIT / "-" ) Let-dig
+
+
+        domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+        // Domain literal must be the only component
+
+
+            dtext           =   %d33-90 /          ; Printable US-ASCII
+                               %d94-126 /         ;  characters not including
+                               obs-dtext          ;  "[", "]", or "\"
+
+                obs-dtext       =   obs-NO-WS-CTL / quoted-pair
+
+
+        obs-domain      =   atom *("." atom)
+
+
+        address-literal  = "[" ( IPv4-address-literal /
+                        IPv6-address-literal /
+                        General-address-literal ) "]"
+
+            General-address-literal  = Standardized-tag ":" 1*dcontent
+
+                Standardized-tag  = Ldh-str
+                                 ; Standardized-tag MUST be specified in a
+                                 ; Standards-Track RFC and registered with IANA
+
+
+                    Ldh-str        = *( ALPHA / DIGIT / "-" ) Let-dig
+
+                        Let-dig        = ALPHA / DIGIT
+
+
+                dcontent       = %d33-90 / ; Printable US-ASCII
+                              %d94-126 ; excl. "[", "\", "]"
+
+
+            IPv4-address-literal  = Snum 3("."  Snum)
+
+                Snum           = 1*3DIGIT
+                              ; representing a decimal integer
+                              ; value in the range 0 through 255
+
+            IPv6-address-literal  = "IPv6:" IPv6-addr
+                IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
+
+                IPv6-hex       = 1*4HEXDIG
+
+                IPv6-full      = IPv6-hex 7(":" IPv6-hex)
+
+                IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
+                              [IPv6-hex *5(":" IPv6-hex)]
+                              ; The "::" represents at least 2 16-bit groups of
+                              ; zeros.  No more than 6 groups in addition to the
+                              ; "::" may be present.
+
+                IPv6v4-full    = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
+
+                IPv6v4-comp    = [IPv6-hex *3(":" IPv6-hex)] "::"
+                              [IPv6-hex *3(":" IPv6-hex) ":"]
+                              IPv4-address-literal
+                              ; The "::" represents at least 2 16-bit groups of
+                              ; zeros.  No more than 4 groups in addition to the
+                              ; "::" and IPv4-address-literal may be present.
+
+
+
+
+
+
+
+
+
+CFWS            =   (1*([FWS] comment) [FWS]) / FWS
+    // http://tools.ietf.org/html/rfc5322#section-3.4.1
+    //   Comments and folding white space
+    //   SHOULD NOT be used around the "@" in the addr-spec.
+
+    comment         =   "(" *([FWS] ccontent) [FWS] ")"
+        // http://tools.ietf.org/html/rfc5322#section-3.2.2
+        //   Runs of FWS, comment, or CFWS that occur between lexical tokens in a
+        //   structured header field are semantically interpreted as a single
+        //   space character.
+        //
+        // is_email() author's note: This *cannot* mean that we must add a
+        // space to the address wherever CFWS appears. This would result in
+        // any addr-spec that had CFWS outside a quoted string being invalid
+				// for RFC 5321.
+
+
+
+    ccontent        =   ctext / quoted-pair / comment
+
+    ctext           =   %d33-39 /          ; Printable US-ASCII
+                       %d42-91 /          ;  characters not including
+                       %d93-126 /         ;  "(", ")", or "\"
+                       obs-ctext
+
+        obs-ctext       =   obs-NO-WS-CTL
+
+    FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
+                                          ; Folding white space
+        // Folding White Space
+        // Inside a quoted string, spaces are allowed as regular characters.
+        // It's only FWS if we include HTAB or CRLF
+
+
+        // http://tools.ietf.org/html/rfc5322#section-3.2.2
+        //   Runs of FWS, comment, or CFWS that occur between lexical tokens in a
+        //   structured header field are semantically interpreted as a single
+        //   space character.
+
+        // http://tools.ietf.org/html/rfc5322#section-3.2.4
+        //   the CRLF in any FWS/CFWS that appears within the quoted-string [is]
+        //   semantically "invisible" and therefore not part of the quoted-string
+
+			// http://tools.ietf.org/html/rfc5322#section-3.2.2
+			//   FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
+			//                                          ; Folding white space
+
+			// But note the erratum:
+			// http://www.rfc-editor.org/errata_search.php?rfc=5322&eid=1908:
+			//   In the obsolete syntax, any amount of folding white space MAY be
+			//   inserted where the obs-FWS rule is allowed.  This creates the
+			//   possibility of having two consecutive "folds" in a line, and
+			//   therefore the possibility that a line which makes up a folded header
+			//   field could be composed entirely of white space.
+			//
+			//   obs-FWS         =   1*([CRLF] WSP)
+
+
+				// http://tools.ietf.org/html/rfc5322#section-3.2.2
+				//   Runs of FWS, comment, or CFWS that occur between lexical tokens in a
+				//   structured header field are semantically interpreted as a single
+				//   space character.
+				//
+				// is_email() author's note: This *cannot* mean that we must add a
+				// space to the address wherever CFWS appears. This would result in
+				// any addr-spec that had CFWS outside a quoted string being invalid
+				// for RFC 5321.
+
+
+
+
+        WSP             =   SP / HTAB          ; white space
+
+        obs-FWS         =   1*([CRLF] WSP)     ; As amended in erratum #1908
+
+    obs-NO-WS-CTL   =   %d1-8 /            ; US-ASCII control
+                       %d11 /             ;  characters that do not
+                       %d12 /             ;  include the carriage
+                       %d14-31 /          ;  return, line feed, and
+                       %d127              ;  white space characters
+
+
+specials        =   "(" / ")" /        ; Special characters that do
+                   "&lt;" / "&gt;" /        ;  not appear in atext
+                   "[" / "]" /
+                   ":" / ";" /
+                   "@" / "\" /
+                   "," / "." /
+                   DQUOTE
+
+quoted-string   =   [CFWS]
+                   DQUOTE *([FWS] qcontent) [FWS] DQUOTE
+                   [CFWS]
+
+    // for Domain Names
+    // http://tools.ietf.org/html/rfc5322#section-3.4.1
+    //   If the
+    //   string can be represented as a dot-atom (that is, it contains no
+    //   characters other than atext characters or "." surrounded by atext
+    //   characters), then the dot-atom form SHOULD be used and the quoted-
+    //   string form SHOULD NOT be used.
+
+    qcontent        =   qtext / quoted-pair
+
+    qtext           =   %d33 /             ; Printable US-ASCII
+                       %d35-91 /          ;  characters not including
+                       %d93-126 /         ;  "\" or the quote character
+                       obs-qtext
+
+        obs-qtext       =   obs-NO-WS-CTL
+
+
+quoted-pair     =   ("\" (VCHAR / WSP)) / obs-qp
+
+			// At this point we know where this qpair occurred so
+			// we could check to see if the character actually
+			// needed to be quoted at all.
+			// http://tools.ietf.org/html/rfc5321#section-4.1.2
+			//   the sending system SHOULD transmit the
+			//   form that uses the minimum quoting possible.
+        // To do: check whether the character needs to be quoted (escaped) in this context
+        // The maximum sizes specified by RFC 5321 are octet counts, so we must include the backslash
+
+
+    VCHAR           =   %x21-7E            ; visible (printing) characters
+
+    obs-qp         =   "\" (%d0 / obs-NO-WS-CTL / LF / CR)
+
+
+
+
+---------------------------------------
+NOTES:
+	$end_or_die	= false;			// CFWS can only appear at the end of the element
+
+    local_part_open_parans
+					// Comments are OK at the beginning of an element
+					$end_or_die		= true;	// We can't start a comment in the middle of an element, so this better be the end
+
+     local_part_string_quote
+					$end_or_die	= false;	// CFWS & quoted strings are OK again now we're at the beginning of an element (although they are obsolete forms)
+    local_part FWS
+					$end_or_die = true;	// We can't start FWS in the middle of an element, so this better be the end
+
+
+
+
+
+
+
+ASCII control characters
+Dec	Hex	Binary	Character Description
+0	00	00000000	NUL	null
+1	01	00000001	SOH	start of header
+2	02	00000010	STX	start of text
+3	03	00000011	ETX	end of text
+4	04	00000100	EOT	end of transmission
+5	05	00000101	ENQ	enquiry
+6	06	00000110	ACK	acknowledge
+7	07	00000111	BEL	bell
+8	08	00001000	BS	backspace
+9	09	00001001	HT	horizontal tab
+10	0A	00001010	LF	line feed
+11	0B	00001011	VT	vertical tab
+12	0C	00001100	FF	form feed
+13	0D	00001101	CR	enter / carriage return
+14	0E	00001110	SO	shift out
+15	0F	00001111	SI	shift in
+16	10	00010000	DLE	data link escape
+17	11	00010001	DC1	device control 1
+18	12	00010010	DC2	device control 2
+19	13	00010011	DC3	device control 3
+20	14	00010100	DC4	device control 4
+21	15	00010101	NAK	negative acknowledge
+22	16	00010110	SYN	synchronize
+23	17	00010111	ETB	end of trans. block
+24	18	00011000	CAN	cancel
+25	19	00011001	EM	end of medium
+26	1A	00011010	SUB	substitute
+27	1B	00011011	 ESC	escape
+28	1C	00011100	 FS	file separator
+29	1D	00011101	GS	group separator
+30	1E	00011110	RS	record separator
+31	1F	00011111	US	unit separator
+
+32	20	00100000	Space	space
+33	21	00100001	!	exclamation mark
+34	22	00100010	"	double quote
+35	23	00100011	#	number
+36	24	00100100	$	dollar
+37	25	00100101	%	percent
+38	26	00100110	&	ampersand
+39	27	00100111	'	single quote
+40	28	00101000	(	left parenthesis
+41	29	00101001	)	right parenthesis
+42	2A	00101010	*	asterisk
+43	2B	00101011	+	plus
+44	2C	00101100	,	comma
+45	2D	00101101	-	minus
+46	2E	00101110	.	period
+47	2F	00101111	/	slash
+48	30	00110000	0	zero
+49	31	00110001	1	one
+50	32	00110010	2	two
+51	33	00110011	3	three
+52	34	00110100	4	four
+53	35	00110101	5	five
+54	36	00110110	6	six
+55	37	00110111	7	seven
+56	38	00111000	8	eight
+57	39	00111001	9	nine
+58	3A	00111010	:	colon
+59	3B	00111011	;	semicolon
+60	3C	00111100	<	less than
+61	3D	00111101	=	equality sign
+62	3E	00111110	>	greater than
+63	3F	00111111	?	question mark
+64	40	01000000	@	at sign
+65	41	01000001	A
+66	42	01000010	B
+67	43	01000011	C
+68	44	01000100	D
+69	45	01000101	E
+70	46	01000110	F
+71	47	01000111	G
+72	48	01001000	H
+73	49	01001001	I
+74	4A	01001010	J
+75	4B	01001011	K
+76	4C	01001100	L
+77	4D	01001101	M
+78	4E	01001110	N
+79	4F	01001111	O
+80	50	01010000	P
+81	51	01010001	Q
+82	52	01010010	R
+83	53	01010011	S
+84	54	01010100	T
+85	55	01010101	U
+86	56	01010110	V
+87	57	01010111	W
+88	58	01011000	X
+89	59	01011001	Y
+90	5A	01011010	Z
+91	5B	01011011	[	left square bracket
+92	5C	01011100	\	backslash
+93	5D	01011101	]	right square bracket
+94	5E	01011110	^	caret / circumflex
+95	5F	01011111	_	underscore
+96	60	01100000	`	grave / accent
+97	61	01100001	a
+98	62	01100010	b
+99	63	01100011	c
+100	64	01100100	d
+101	65	01100101	e
+102	66	01100110	f
+103	67	01100111	g
+104	68	01101000	h
+105	69	01101001	i
+106	6A	01101010	j
+107	6B	01101011	k
+108	6C	01101100	l
+109	6D	01101101	m
+110	6E	01101110	n
+111	6F	01101111	o
+112	70	01110000	p
+113	71	01110001	q
+114	72	01110010	r
+115	73	01110011	s
+116	74	01110100	t
+117	75	01110101	u
+118	76	01110110	v
+119	77	01110111	w
+120	78	01111000	x
+121	79	01111001	y
+122	7A	01111010	z
+123	7B	01111011	{	left curly bracket
+124	7C	01111100	|	vertical bar
+125	7D	01111101	}	right curly bracket
+126	7E	01111110	~	tilde
+127	7F	01111111	DEL	delete
