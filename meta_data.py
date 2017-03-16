@@ -1,6 +1,8 @@
-import re
+# import re
 import logging
 import sys
+from copy import copy
+from enum import IntEnum
 
 log = logging.getLogger('EmailParser')
 log.setLevel(0)
@@ -58,71 +60,65 @@ ISEMAIL_ELEMENT_DOMAIN_LIT_GEN = 'domain_general_literal'
 ISEMAIL_MAX_REPEAT = 9999
 ISEMAIL_MIN_REPEAT = 0
 
-class MetaList(object):
-    def __init__(self, dict_in):
-        self._by_value = {}
-        self._by_key = {}
-        for key, item in dict_in.items():
-            item['key'] = key
-            self._by_key[key] = item
-            try:
-                self._by_value[item['value']] = item
-            except KeyError:
-                pass
-
-    def __getitem__(self, item):
-        if isinstance(item, str):
-            return self._by_key[item]
-        else:
-            return self._by_value[item]
 
 
-class MetaLookup(object):
-    def __init__(self, categories, smtp, diags, references):
-        self.cat = MetaList(categories)
-        self.smtp = MetaList(smtp)
-        self.diags = MetaList(diags)
-        self.ref = MetaList(references)
+ISEMAIL_RESULTS = dict(
+    ISEMAIL_OK=0,
+    ISEMAIL_WARNING=100,
+    ISEMAIL_ERROR=255)
 
-    def __getitem__(self, item):
-        return self.diags[item]
+
+class ISEMAIL_RESULT_CODES(IntEnum):
+    OK = 1
+    WARNING = 2
+    ERROR = 3
+
 
 # <Categories>
 ISEMAIL_RESP_CATEGORIES = dict(
     ISEMAIL_VALID_CATEGORY=dict(
         name='Valid Address',
-        value=1,
-        description="Address is valid"),
-    ISEMAIL_DNSWARN = dict(
+        value=100,
+        description="Address is valid",
+        result=ISEMAIL_RESULT_CODES.OK),
+    
+    ISEMAIL_DNSWARN=dict(
         name='Valid Address (DNS Warning)',
-        value=7,
-        description="Address is valid but a DNS check was not successful"),
+        value=107,
+        description="Address is valid but a DNS check was not successful",
+        result=ISEMAIL_RESULT_CODES.WARNING),
 
-    ISEMAIL_RFC5321 = dict(
+    ISEMAIL_RFC5321=dict(
         name='Valid Address (unusual)',
-        value=15,
-        description="Address is valid for SMTP but has unusual elements"),
+        value=115,
+        description="Address is valid for SMTP but has unusual elements",
+        result=ISEMAIL_RESULT_CODES.WARNING),
 
-    ISEMAIL_CFWS = dict(
+    ISEMAIL_CFWS=dict(
         name='Valid Address (limited use)',
-        value=31,
-        description="Address is valid within the message but cannot be used unmodified for the envelope"),
+        value=131,
+        description="Address is valid within the message but cannot be used unmodified for the envelope",
+        result=ISEMAIL_RESULT_CODES.WARNING),
 
-    ISEMAIL_DEPREC = dict(
+    ISEMAIL_DEPREC=dict(
         name='Valid Address (deprecated)',
-        value=63,
-        description="Address contains deprecated elements but may still be valid in restricted contexts"),
+        value=500,
+        description="Address contains deprecated elements but may still be valid in restricted contexts",
+        result=ISEMAIL_RESULT_CODES.WARNING),
 
-    ISEMAIL_RFC5322 = dict(
+    ISEMAIL_RFC5322=dict(
         name='Valid Address (unusable)',
-        value=127,
-        description="The address is only valid according to the broad definition of RFC 5322. It is otherwise invalid."),
+        value=775,
+        description="The address is only valid according to the broad definition of RFC 5322. It is otherwise invalid.",
+        result=ISEMAIL_RESULT_CODES.WARNING),
 
-    ISEMAIL_ERR = dict(
+    ISEMAIL_ERR=dict(
         name='Invalid Address',
-        value=255,
-        description="Address is invalid for any purpose"),
-)
+        value=999,
+        description="Address is invalid for any purpose",
+        result=ISEMAIL_RESULT_CODES.ERROR),)
+
+
 # <SMTP>
 ISEMAIL_META_SMTP_RESP = {
     '2.1.5': {'value': 0, 'description': "250 2.1.5 ok"},
@@ -136,48 +132,52 @@ ISEMAIL_META_SMTP_RESP = {
 # 	<References>
 ISEMAIL_META_REFERENCES = {
     "local-part": dict(
+        key = "local-part",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
-        blockquote = ''
-            ''
-            'local-part      =   dot-atom / quoted-string / obs-local-part'
-            ''
-            'dot-atom        =   [CFWS] dot-atom-text [CFWS]'
-            ''
-            'dot-atom-text   =   1*atext *("." 1*atext)'
-            ''
-            'quoted-string   =   [CFWS]'
-            '                    DQUOTE *([FWS] qcontent) [FWS] DQUOTE'
-            '                    [CFWS]'
-            ''
-            'obs-local-part  =   word *("." word)'
-            ''
-            'word            =   atom / quoted-string'
-            ''
-            'atom            =   [CFWS] 1*atext [CFWS]',
+        blockquote=''
+                   ''
+                   'local-part      =   dot-atom / quoted-string / obs-local-part'
+                   ''
+                   'dot-atom        =   [CFWS] dot-atom-text [CFWS]'
+                   ''
+                   'dot-atom-text   =   1*atext *("." 1*atext)'
+                   ''
+                   'quoted-string   =   [CFWS]'
+                   '                    DQUOTE *([FWS] qcontent) [FWS] DQUOTE'
+                   '                    [CFWS]'
+                   ''
+                   'obs-local-part  =   word *("." word)'
+                   ''
+                   'word            =   atom / quoted-string'
+                   ''
+                   'atom            =   [CFWS] 1*atext [CFWS]',
         cite="RFC 5322 section 3.4.1"),
 
     "local-part-maximum": dict(
+        key = "local-part-maximum",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.5.3.1.1",
         blockquote=''
-            'The maximum total length of a user name or other local-part is 64'
-            'octets.',
+                   'The maximum total length of a user name or other local-part is 64'
+                   'octets.',
         cite='RFC 5322 section 4.5.3.1.1'),
 
     "obs-local-part": dict(
+        key = "obs-local-part",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
-            'obs-local-part  =   word *("." word)'
-            ''
-            'word            =   atom / quoted-string'
-            ''
-            'atom            =   [CFWS] 1*atext [CFWS]'
-            ''
-            'quoted-string   =   [CFWS]'
-            '                   DQUOTE *([FWS] qcontent) [FWS] DQUOTE'
-            '                   [CFWS]',
+                   'obs-local-part  =   word *("." word)'
+                   ''
+                   'word            =   atom / quoted-string'
+                   ''
+                   'atom            =   [CFWS] 1*atext [CFWS]'
+                   ''
+                   'quoted-string   =   [CFWS]'
+                   '                   DQUOTE *([FWS] qcontent) [FWS] DQUOTE'
+                   '                   [CFWS]',
         cite='RFC 5322 section 3.4.1'),
 
     "dot-atom": dict(
+        key = "dot-atom",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'dot-atom        =   [CFWS] dot-atom-text [CFWS]'
@@ -186,6 +186,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "quoted-string": dict(
+        key = "quoted-string",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'quoted-string   =   [CFWS]'
@@ -203,6 +204,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "CFWS-near-at": dict(
+        key = "CFWS-near-at",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'Comments and folding white space'
@@ -210,6 +212,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "SHOULD-NOT": dict(
+        key = "SHOULD-NOT",
         blockquote_cite="http://tools.ietf.org/html/rfc2119",
         blockquote=''
             '4. SHOULD NOT   This phrase, or the phrase "NOT RECOMMENDED" mean that'
@@ -221,6 +224,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 2119 section 4'),
 
     "atext": dict(
+        key = "atext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.2.3",
         blockquote=''
             'atext           =   ALPHA / DIGIT /    ; Printable US-ASCII'
@@ -237,6 +241,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.2.3'),
 
     "obs-domain": dict(
+        key = "obs-domain",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'obs-domain      =   atom *("." atom)'
@@ -245,6 +250,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "domain-RFC5322": dict(
+        key = "domain-RFC5322",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'domain          =   dot-atom / domain-literal / obs-domain'
@@ -255,11 +261,13 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "domain-RFC5321": dict(
+        key = "domain-RFC5321",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
         blockquote=''
             '   Domain         = sub-domain *("." sub-domain)',
         cite='RFC 5321 section 4.1.2'),
     "sub-domain": dict(
+        key = "sub-domain",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
         blockquote=''
             'Domain         = sub-domain *("." sub-domain)'
@@ -270,17 +278,20 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5321 section 4.1.2'),
 
     "label": dict(
+        key = "label",
         blockquote_cite="http://tools.ietf.org/html/rfc1035#section-2.3.4",
         blockquote=''
             '   labels          63 octets or less',
         cite='RFC 5321 section 4.1.2'),
 
     "CRLF": dict(
+        key = "CRLF",
         blockquote_cite="http://tools.ietf.org/html/rfc5234#section-2.3",
         blockquote='CRLF        =  %d13.10',
         cite='RFC 5234 section 2.3'),
 
     "CFWS": dict(
+        key = "CFWS",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.2.2",
         blockquote=''
             'CFWS            =   (1*([FWS] comment) [FWS]) / FWS'
@@ -300,11 +311,13 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.2.2'),
 
     "domain-literal": dict(
+        key = "domain-literal",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote='domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]',
         cite='RFC 5322 section 3.4.1'),
 
     "address-literal": dict(
+        key = "address-literal",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
         blockquote=''
             'address-literal  = "[" ( IPv4-address-literal /'
@@ -313,6 +326,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5321 section 4.1.2'),
 
     "address-literal-IPv4": dict(
+        key = "address-literal-IPv4",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.3",
         blockquote=''
             'IPv4-address-literal  = Snum 3("."  Snum)'
@@ -323,6 +337,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5321 section 4.1.3'),
 
     "address-literal-IPv6": dict(
+        key = "address-literal-IPv6",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.3",
         blockquote=''
             'IPv6-address-literal  = "IPv6:" IPv6-addr'
@@ -350,6 +365,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5321 section 4.1.3'),
 
     "dtext": dict(
+        key = "dtext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'dtext           =   %d33-90 /          ; Printable US-ASCII'
@@ -358,6 +374,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "obs-dtext": dict(
+        key = "obs-dtext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote=''
             'obs-dtext       =   obs-NO-WS-CTL / quoted-pair'
@@ -370,6 +387,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.4.1'),
 
     "qtext": dict(
+        key = "qtext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.2.4",
         blockquote=''
             'qtext           =   %d33 /             ; Printable US-ASCII'
@@ -379,6 +397,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.2.4'),
 
     "obs-qtext": dict(
+        key = "obs-qtext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-4.1",
         blockquote=''
             'obs-qtext       =   obs-NO-WS-CTL'
@@ -391,6 +410,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 4.1'),
 
     "ctext": dict(
+        key = "ctext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.2.3",
         blockquote=''
             'ctext           =   %d33-39 /          ; Printable US-ASCII'
@@ -400,6 +420,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.2.3'),
 
     "obs-ctext": dict(
+        key = "obs-ctext",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-4.1",
         blockquote=''
             'obs-qtext       =   obs-NO-WS-CTL'
@@ -412,6 +433,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 4.1'),
 
     "quoted-pair": dict(
+        key = "quoted-pair",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.2.1",
         blockquote=''
             'quoted-pair     =   ("\" (VCHAR / WSP)) / obs-qp'
@@ -421,6 +443,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 3.2.1'),
 
     "obs-qp": dict(
+        key = "obs-qp",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-4.1",
         blockquote=''
             'obs-qp          =   "\" (%d0 / obs-NO-WS-CTL / LF / CR)'
@@ -433,6 +456,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5322 section 4.1'),
 
     "TLD": dict(
+        key = "TLD",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-2.3.5",
         blockquote=''
             'In the case'
@@ -444,6 +468,7 @@ ISEMAIL_META_REFERENCES = {
         cite='RFC 5321 section 2.3.5'),
 
     "TLD-format": dict(
+        key = "TLD-format",
         blockquote_cite="http://www.rfc-editor.org/errata_search.php?eid=1353",
         blockquote=''
             'Errata ID 1081, reported 2007-11-20, identifies a problem with the'
@@ -522,6 +547,7 @@ ISEMAIL_META_REFERENCES = {
         cite='John Klensin, RFC 1123 erratum 1353'),
 
     "mailbox-maximum": dict(
+        key = "mailbox-maximum",
         blockquote_cite="http://www.rfc-editor.org/errata_search.php?eid=1690",
         blockquote=''
             'However, there is a restriction in RFC 2821 on the length of an'
@@ -531,16 +557,19 @@ ISEMAIL_META_REFERENCES = {
         cite='Dominic Sayers, RFC 3696 erratum 1690'),
 
     "domain-maximum": dict(
+        key = "domain-maximum",
         blockquote_cite="http://tools.ietf.org/html/rfc1035#section-4.5.3.1.2",
         blockquote='The maximum total length of a domain name or number is 255 octets.',
         cite='RFC 5321 section 4.5.3.1.2'),
 
     "mailbox": dict(
+        key = "mailbox",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
         blockquote='Mailbox        = Local-part "@" ( Domain / address-literal )',
         cite='RFC 5321 section 4.1.2'),
 
     "addr-spec": dict(
+        key = "addr-spec",
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote='addr-spec       =   local-part "@" domain',
         cite='RFC 5322 section 3.4.1'),
@@ -554,240 +583,240 @@ ISEMAIL_META_REFERENCES = {
 ISEMAIL_DIAG_RESPONSES = dict(
 
     VALID=dict(
-        value=0,
+        value=1000,
         description='Valid Email',
-        category='VALID_CATEGORY',
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_VALID_CATEGORY'],
         longdescription="Address is valid. Please note that this does not mean the address actually exists, nor even that the"
                     " domain actually exists. This address could be issued by the domain owner without breaking the rules"
                     " of any RFCs.",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_NO_MX_RECORD=dict(
-        value=5,
-        category='DNSWARN',
+        value=1005,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
         description="Couldn't find an MX record for this domain but an A-record does exist",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_NO_RECORD=dict(
-        value=6,
-        category='DNSWARN',
+        value=1006,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
         description="Couldn't find an MX record or an A-record for this domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     RFC5321_TLD=dict(
-        value=9,
-        category='RFC5321',
+        value=1009,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
         description="Address is valid but at a Top Level Domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD'],
     ),
     RFC5321_TLD_NUMERIC=dict(
-        value=10,
-        category='RFC5321',
+        value=1010,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
         description="Address is valid but the Top Level Domain begins with a number",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD-format'],
     ),
     RFC5321_QUOTED_STRING=dict(
-        value=11,
-        category='RFC5321',
+        value=1011,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
         description="Address is valid but contains a quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
     RFC5321_ADDRESS_LITERAL=dict(
-        value=12,
-        category='RFC5321',
+        value=1012,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
         description="Address is valid but at a literal address not a domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=(ISEMAIL_META_REFERENCES['address-literal'], ISEMAIL_META_REFERENCES['address-literal-IPv4'])
     ),
     RFC5321_IPV6_DEPRECATED=dict(
-        value=13,
-        category='DEPREC',
+        value=1013,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="Address is valid but contains a :: that only elides one zero group. All implementations must accept"
                     " and be able to handle any legitimate RFC 4291 format.",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     CFWS_COMMENT=dict(
-        value=17,
-        category='CFWS',
+        value=1017,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_CFWS'],
         description="Address contains comments",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['dot-atom'],
     ),
     CFWS_FWS=dict(
-        value=18,
-        category='CFWS',
+        value=1018,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_CFWS'],
         description="Address contains FWS",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     DEPREC_LOCAL_PART=dict(
-        value=33,
-        category='DEPREC',
+        value=1033,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="The local part is in a deprecated form",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['obs-local-part'],
     ),
     DEPREC_FWS=dict(
-        value=34,
-        category='DEPREC',
+        value=1034,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="Address contains an obsolete form of Folding White Space",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['obs-local-part'], ISEMAIL_META_REFERENCES['obs-domain'])
     ),
     DEPREC_QTEXT=dict(
-        value=35,
-        category='DEPREC',
+        value=1035,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="A quoted string contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-qtext'],
     ),
     DEPREC_QP=dict(
-        value=36,
-        category='DEPREC',
+        value=1036,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="A quoted pair contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-qp'],
     ),
     DEPREC_COMMENT=dict(
-        value=37,
-        category='DEPREC',
+        value=1037,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="Address contains a comment in a position that is deprecated",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['obs-local-part'], ISEMAIL_META_REFERENCES['obs-domain'])
     ),
     DEPREC_CTEXT=dict(
-        value=38,
-        category='DEPREC',
+        value=1038,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="A comment contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-ctext'],
     ),
     DEPREC_CFWS_NEAR_AT=dict(
-        value=49,
-        category='DEPREC',
+        value=1049,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
         description="Address contains a comment or Folding White Space around the @ sign",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['CFWS-near-at'], ISEMAIL_META_REFERENCES['SHOULD-NOT'])
     ),
     RFC5322_DOMAIN=dict(
-        value=65,
-        category='RFC5322',
+        value=1065,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="Address is RFC 5322 compliant but contains domain characters that are not allowed by DNS",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
     ),
     RFC5322_TOO_LONG=dict(
-        value=66,
-        category='RFC5322',
+        value=1066,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="Address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['mailbox-maximum'],
     ),
     RFC5322_LOCAL_TOO_LONG=dict(
-        value=67,
-        category='RFC5322',
+        value=1067,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The local part of the address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part-maximum'],
     ),
     RFC5322_DOMAIN_TOO_LONG=dict(
-        value=68,
-        category='RFC5322',
+        value=1068,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The domain part is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-maximum'],
     ),
     RFC5322_LABEL_TOO_LONG=dict(
-        value=69,
-        category='RFC5322',
+        value=1069,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The domain part contains an element that is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['label'],
     ),
     RFC5322_DOMAIN_LITERAL=dict(
-        value=70,
-        category='RFC5322',
+        value=1070,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The domain literal is not a valid RFC 5321 address literal",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-literal'],
     ),
     RFC5322_DOM_LIT_OBS_DTEXT=dict(
-        value=71,
-        category='RFC5322',
+        value=1071,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The domain literal is not a valid RFC 5321 address literal and it contains obsolete characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-dtext'],
     ),
     RFC5322_IPV6_GRP_COUNT=dict(
-        value=72,
-        category='RFC5322',
+        value=1072,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The IPv6 literal address contains the wrong number of groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_2X2X_COLON=dict(
-        value=73,
-        category='RFC5322',
+        value=1073,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The IPv6 literal address contains too many :: sequences",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_BAD_CHAR=dict(
-        value=74,
-        category='RFC5322',
+        value=1074,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The IPv6 address contains an illegal group of characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_MAX_GRPS=dict(
-        value=75,
-        category='RFC5322',
+        value=1075,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="The IPv6 address has too many groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_COLON_STRT=dict(
-        value=76,
-        category='RFC5322',
+        value=1076,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="IPv6 address starts with a single colon",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_COLON_END=dict(
-        value=77,
-        category='RFC5322',
+        value=1077,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
         description="IPv6 address ends with a single colon",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     ERR_EXPECTING_DTEXT=dict(
-        value=129,
-        category='ERR',
+        value=1129,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="A domain literal contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['dtext'],
     ),
     ERR_NO_LOCAL_PART=dict(
-        value=130,
-        category='ERR',
+        value=1130,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address has no local part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     ERR_NO_DOMAIN_PART=dict(
-        value=131,
-        category='ERR',
+        value=1131,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address has no domain part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=(ISEMAIL_META_REFERENCES['addr-spec'], ISEMAIL_META_REFERENCES['mailbox'])
     ),
     ERR_CONSECUTIVE_DOTS=dict(
-        value=132,
-        category='ERR',
+        value=1132,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="The address may not contain consecutive dots",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -796,57 +825,57 @@ ISEMAIL_DIAG_RESPONSES = dict(
             ISEMAIL_META_REFERENCES['domain-RFC5321'])
     ),
     ERR_ATEXT_AFTER_CFWS=dict(
-        value=133,
-        category='ERR',
+        value=1133,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address contains text after a comment or Folding White Space",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['local-part'], ISEMAIL_META_REFERENCES['domain-RFC5322'])
     ),
     ERR_ATEXT_AFTER_QS=dict(
-        value=134,
-        category='ERR',
+        value=1134,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address contains text after a quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     ERR_ATEXT_AFTER_DOMLIT=dict(
-        value=135,
-        category='ERR',
+        value=1135,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Extra characters were found after the end of the domain literal",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
     ),
     ERR_EXPECTING_QPAIR=dict(
-        value=136,
-        category='ERR',
+        value=1136,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="The address contains a character that is not allowed in a quoted pair",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['quoted-pair'],
     ),
     ERR_EXPECTING_ATEXT=dict(
-        value=137,
-        category='ERR',
+        value=1137,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['atext'],
     ),
     ERR_EXPECTING_QTEXT=dict(
-        value=138,
-        category='ERR',
+        value=1138,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="A quoted string contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['qtext'],
     ),
     ERR_EXPECTING_CTEXT=dict(
-        value=139,
-        category='ERR',
+        value=1139,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="A comment contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['qtext'],
     ),
     ERR_BACKSLASH_END=dict(
-        value=140,
-        category='ERR',
+        value=1140,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="The address can't end with a backslash",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=(
@@ -855,8 +884,8 @@ ISEMAIL_DIAG_RESPONSES = dict(
             ISEMAIL_META_REFERENCES['quoted-pair'])
     ),
     ERR_DOT_START=dict(
-        value=141,
-        category='ERR',
+        value=1141,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Neither part of the address may begin with a dot",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -865,8 +894,8 @@ ISEMAIL_DIAG_RESPONSES = dict(
             ISEMAIL_META_REFERENCES['domain-RFC5321'])
     ),
     ERR_DOT_END=dict(
-        value=142,
-        category='ERR',
+        value=1142,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Neither part of the address may end with a dot",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -875,71 +904,79 @@ ISEMAIL_DIAG_RESPONSES = dict(
             ISEMAIL_META_REFERENCES['domain-RFC5321'])
     ),
     ERR_DOMAIN_HYPHEN_START=dict(
-        value=143,
-        category='ERR',
+        value=1143,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="A domain or subdomain cannot begin with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
     ERR_DOMAIN_HYPHEN_END=dict(
-        value=144,
-        category='ERR',
+        value=1144,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="A domain or subdomain cannot end with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
     ERR_UNCLOSED_QUOTED_STR=dict(
-        value=145,
-        category='ERR',
+        value=1145,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Unclosed quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
     ERR_UNCLOSED_COMMENT=dict(
-        value=146,
-        category='ERR',
+        value=1146,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Unclosed comment",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_UNCLOSED_DOM_LIT=dict(
-        value=147,
-        category='ERR',
+        value=1147,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Domain literal is missing its closing bracket",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-literal'],
     ),
     ERR_FWS_CRLF_X2=dict(
-        value=148,
-        category='ERR',
+        value=1148,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Folding White Space contains consecutive CRLF sequences",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_FWS_CRLF_END=dict(
-        value=149,
-        category='ERR',
+        value=1149,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Folding White Space ends with a CRLF sequence",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_CR_NO_LF=dict(
-        value=150,
-        category='ERR',
+        value=1150,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address contains a carriage return that is not followed by a line feed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['CFWS'], ISEMAIL_META_REFERENCES['CRLF'])
     ),
     ERR_NO_DOMAIN_SEP=dict(
-        value=151,
-        category='ERR',
+        value=1151,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Address does not contain a domain seperator (@ sign)",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
+    ERR_MULT_FWS_IN_COMMENT=dict(
+        value=1152,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        description="Address contains multiple FWS in a comment",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+
     ERR_EMPTY_ADDRESS=dict(
-        value=255,
-        category='ERR',
+        value=1255,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Empty Address Passed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
@@ -947,9 +984,179 @@ ISEMAIL_DIAG_RESPONSES = dict(
 
 )
 
-META_LOOKUP = MetaLookup(
-    categories=ISEMAIL_RESP_CATEGORIES,
-    smtp=ISEMAIL_META_SMTP_RESP,
-    references=ISEMAIL_META_REFERENCES,
-    diags=ISEMAIL_DIAG_RESPONSES,
-)
+
+class MetaRef(object):
+    def __init__(self, ref_dict):
+        self.key = ref_dict['key']
+        self.cite_link = ref_dict['blockquote_cite']
+        self.cite = ref_dict['cite']
+        self.description = ref_dict['blockquote']
+
+    def __repr__(self):
+        return 'MetaRef(%s)' % self.key
+
+class MetaItem(object):
+    type_name = ''
+
+    def __init__(self, key, dict_in, parent):
+        self.key = key
+        self.parent = parent
+        self.value = dict_in['value']
+        self.description = dict_in['description']
+
+    def __repr__(self):
+        return '%s(%s)' % (self.type_name, self.key)
+
+
+class MetaCat(MetaItem):
+    type_name = 'Category'
+
+    def __init__(self, key, dict_in, parent):
+        super().__init__(key, dict_in, parent)
+        self.result = dict_in['result']
+        self.name = dict_in['name']
+
+        self._base_status = self.result
+        self._override_status = None
+
+    @property
+    def status(self):
+        return self._override_status or self._base_status
+
+
+
+class MetaDiag(MetaItem):
+    type_name = 'Diag'
+
+    def __init__(self, key, dict_in, parent):
+        super().__init__(key, dict_in, parent)
+
+        self.category = parent.categories[dict_in['category']['value']]
+        self.smtp = dict_in['smtp']['description']
+        self.reference = []
+        if 'reference' in dict_in:
+            if isinstance(dict_in['reference'], (list, tuple)):
+                for ref in dict_in['reference']:
+                    self.reference.append(MetaRef(ref))
+            else:
+                self.reference.append(MetaRef(dict_in['reference']))
+
+        self._base_status = self.category.status
+        self._override_status = None
+
+    @property
+    def status(self):
+        return self._override_status or self._base_status
+
+class MetaList(object):
+    def __init__(self, obj_type, parent, dict_in=None):
+        self._by_value = {}
+        self._by_key = {}
+        self._obj_type = obj_type
+        self._list_type = obj_type.type_name
+        self._parent = parent
+        if dict_in is not None:
+            self.extend(dict_in)
+
+    def add(self, obj_in):
+        if obj_in.key in self._by_key:
+            raise KeyError("MetaList(%s) already has key %s" % (self._list_type, obj_in.key))
+        else:
+            self._by_key[obj_in.key] = obj_in
+
+        if obj_in.key in self._parent.by_key:
+            raise KeyError("MetaLookup already has key %s" % obj_in.key)
+        else:
+            self._parent.by_key[obj_in.key] = obj_in
+
+        if obj_in.value in self._by_value:
+            raise KeyError("MetaList(%s) already has value %s" % (self._list_type, obj_in.value))
+        else:
+            self._by_value[obj_in.value] = obj_in
+
+        if obj_in.value in self._parent.by_value:
+            raise KeyError("MetaLookup already has value %s" % obj_in.value)
+        else:
+            self._parent.by_value[obj_in.value] = obj_in
+
+    def extend(self, dict_in):
+        for key, item in dict_in.items():
+            tmp_item = self._obj_type(key, item, parent=self._parent)
+            self.add(tmp_item)
+
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            return self._by_key[item]
+        else:
+            return self._by_value[item]
+
+    def __len__(self):
+        return len(self._by_key)
+
+    def __iter__(self):
+        for i in self._by_key.values():
+            yield i
+
+class MetaLookup(object):
+
+    def __init__(self, error_on_warning=False, *error_on_code):
+        self.by_value = {}
+        self.by_key = {}
+        self.results = ISEMAIL_RESULT_CODES
+        self.categories = MetaList(MetaCat, self, ISEMAIL_RESP_CATEGORIES)
+        self.diags = MetaList(MetaDiag, self, ISEMAIL_DIAG_RESPONSES)
+
+        self.error_codes = {}
+
+        if error_on_warning:
+            self.set_error_on_warning(reload=False)
+        if error_on_code:
+            self.set_error_on(*error_on_code, reload=False)
+
+        self._load_codes()
+
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            return self.by_key[item]
+        else:
+            return self.by_value[item]
+
+    def _load_codes(self):
+        self.error_codes.clear()
+        for c in self.diags:
+            if c.status == ISEMAIL_RESULT_CODES.ERROR:
+                self.error_codes[c.key] = c
+
+    def clear_overrides(self):
+        for c in self.categories:
+            c._override_status = None
+        for c in self.diags:
+            c._override_status = ISEMAIL_RESULT_CODES.ERROR
+            if c.status == ISEMAIL_RESULT_CODES.ERROR:
+                self.error_codes[c.key] = c
+
+    def set_error_on_warning(self, reload=True):
+        for c in self.categories:
+            c._override_status = ISEMAIL_RESULT_CODES.ERROR
+        if reload:
+            self._load_codes()
+
+    def set_error_on(self, *codes_to_error, reload=True):
+        for code in codes_to_error:
+            self._add_eo(code)
+        if reload:
+            self._load_codes()
+
+    def _add_eo(self, obj_in):
+        if isinstance(obj_in, (list, tuple)):
+            self.set_error_on(*obj_in)
+        else:
+            tmp_obj = self[obj_in]
+            tmp_obj._override_status = ISEMAIL_RESULT_CODES.ERROR
+
+    def is_error(self, diag):
+        return diag in self.error_codes
+
+
+META_LOOKUP = MetaLookup()
+
