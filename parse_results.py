@@ -136,8 +136,40 @@ class ParseResultFootball(object):
         self.length = 0
         if not keep_results:
             self.results.clear()
-        self.error = False
+            self.is_finished = False
+            self._refresh()
         return self
+
+    def remove(self, diag, position=None, length=None, rem_all=False):
+        rem_list = []
+        tmp_range = reversed(range(len(self.results)))
+
+        for i in tmp_range:
+            if self.results[i][0] == diag:
+                if rem_all:
+                    rem_list.append(i)
+
+                elif position is None:
+                    rem_list.append(i)
+                    break
+
+                else:
+                    if length is None and position == self.results[i][1]:
+                        rem_list.append(i)
+                    elif length == self.results[i][2] and position == self.results[i][1]:
+                        rem_list.append(i)
+
+        if rem_list:
+            for i in rem_list:
+                del self.results[i]
+            self.is_finished = False
+            self._refresh()
+        return len(rem_list)
+
+    def _refresh(self):
+        for i in self.results:
+            if META_LOOKUP.is_error(i[0]):
+                self.status = ISEMAIL_RESULT_CODES.ERROR
 
     def __iadd__(self, other):
         if isinstance(other, int):
@@ -156,6 +188,7 @@ class ParseResultFootball(object):
     __rsub__ = __isub__
 
     def merge(self, other):
+        self.is_finished = False
         self.length += other.length
         self.status = max(self.status, other.status)
         self.results.extend(other.results)
@@ -182,6 +215,7 @@ class ParseResultFootball(object):
                 self.length = kwargs['set']
 
         if tmp_res_tuple is not None:
+            self.is_finished = False
             self.results.append(tmp_res_tuple)            
             
             if META_LOOKUP.is_error(tmp_res_tuple[0]):

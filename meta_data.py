@@ -325,6 +325,13 @@ ISEMAIL_META_REFERENCES = {
             '                General-address-literal ) "]"',
         cite='RFC 5321 section 4.1.2'),
 
+    "address-literal-general": dict(
+        key="address-literal",
+        blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
+        blockquote=''
+                   ' General-address-literal  = Standardized-tag ":" 1*dcontent',
+        cite='RFC 5321 section 4.1.2'),
+
     "address-literal-IPv4": dict(
         key = "address-literal-IPv4",
         blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.3",
@@ -793,6 +800,74 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
+
+
+
+
+    RFC5322_IPV6_ADDR=dict(
+        value=1078,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is an IPv6 address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_FULL_ADDR=dict(
+        value=1079,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is a full IPv6 address",
+
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_COMP_ADDR=dict(
+        value=1080,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is a compressed IPv6 address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_IPV4_ADDR=dict(
+        value=1081,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is a full IPv6:IPv4 address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_IPV4_COMP_ADDR=dict(
+        value=1082,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is a compressed IPv6:IPv4 address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+
+    RFC5322_IPV4_ADDR=dict(
+        value=1083,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is an IPv6 address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv4'],
+    ),
+
+    RFC5322_GENERAL_LITERAL=dict(
+        value=1084,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address literal is a general address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-general'],
+    ),
+
+
+
+
+    ERR_INVALID_ADDR_LITERAL=dict(
+        value=1128,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        description="The address literal is not a valid address",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['address-literal'],
+    ),
+
     ERR_EXPECTING_DTEXT=dict(
         value=1129,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],

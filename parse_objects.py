@@ -3,6 +3,7 @@ from parse_results import ParseResultFootball,ParsingError
 # from collections import deque
 from functools import wraps
 
+
 def make_char_str(*chars_in):
     tmp_ret = []
     for char in chars_in:
@@ -16,8 +17,6 @@ def make_char_str(*chars_in):
     return ''.join(tmp_ret)
 
 
-
-
 def as_football(func):
     @wraps(func)
     def func_wrapper(self, position, *args, **kwargs):
@@ -28,14 +27,6 @@ def as_football(func):
         else:
             self.stage.append(func.__name__)
 
-        # position = self.pos(position)
-
-        """
-        if self.verbose == 3:
-            self.trace_level += 1
-            if self.trace_filter == -1 or self.trace_filter >= self.trace_level:
-                self.trace.append(TraceObj(self, self.cur_stage, self.stage_str, position, True, trace_level=self.trace_level))
-        """
         self.add_begin_trace(position)
 
         try:
@@ -45,18 +36,13 @@ def as_football(func):
             error_raised = err
             tmp_ret = err.results
 
-        # if isinstance(tmp_ret, int):
-        #      tmp_ret = ParseResultFootball(tmp_ret, stage=self.stage_str)
-
-        tmp_ret.stage = self.stage_str
+        try:
+            tmp_ret.stage = self.stage_str
+        except AttributeError as err:
+            raise AttributeError('%s : object = %r' % (err, tmp_ret))
 
         self.add_end_trace(position, tmp_ret, raise_error=raise_error)
-        """
-        if self.verbose == 3:
-            if self.trace_filter == -1 or self.trace_filter >= self.trace_level:
-                self.trace.append(TraceObj(self, self.cur_stage, self.stage_str, position, False, results=tmp_ret, trace_level=self.trace_level))
-            self.trace_level -= 1
-        """
+
         self.stage.pop()
 
         if raise_error:
@@ -178,7 +164,6 @@ class EmailParser(object):
     ATEXT = make_char_str(ALPHA, DIGIT, "!#$%&'+-/=?^_`{|}~")
     DCONTENT = make_char_str((33, 90), (94, 126))
 
-
     OBS_NO_WS_CTL = make_char_str((1, 8), (11, 12), (14, 31), 127)
 
     OBS_QP = make_char_str(0, OBS_NO_WS_CTL, LF, CR)
@@ -189,6 +174,8 @@ class EmailParser(object):
     CTEXT = make_char_str((33, 39), (42, 91), (93, 126))
     OBS_CTEXT = make_char_str(OBS_NO_WS_CTL, CTEXT)
 
+    DTEXT = DCONTENT
+    OBS_DTEXT = make_char_str(OBS_NO_WS_CTL, DTEXT)
 
     WSP = make_char_str(SP, HTAB)
 
@@ -356,6 +343,21 @@ class EmailParser(object):
                 return -1
         return -1
 
+    def count(self, position, search_for, stop_for=None, length=999):
+        tmp_ret = 0
+        tmp_pos = position
+        for c in self.remaining(position):
+            tmp_pos += 1
+            if tmp_pos == length:
+                return tmp_ret
+            if c in search_for:
+                tmp_ret += 1
+            if stop_for is not None and c in stop_for:
+                return tmp_ret
+        return tmp_ret
+
+
+
     """
     def parse(self, parse_for, position=None, prefix=None, postfix=None, add=0, **kwargs):
         tmp_pre = 0
@@ -407,12 +409,12 @@ class EmailParser(object):
             return self.simple_str(p4.parse_for, position, p4.min_count, p4.max_count)
     """
     @as_football
-    def simple_str(self,
-                   position: int,
-                   parse_for: str,
-                   min_count: int = -1,
-                   max_count: int = 99999,
-                   stage_name: str = None) -> ParseResultFootball:
+    def simple_char(self,
+                    position: int,
+                    parse_for: str,
+                    min_count: int = -1,
+                    max_count: int = 99999,
+                    stage_name: str = None) -> ParseResultFootball:
         tmp_ret = ParseResultFootball(self)
         for i in self.remaining(position):
             if i in parse_for:
@@ -428,21 +430,39 @@ class EmailParser(object):
             return tmp_ret
         return tmp_ret(set=0)
 
+    @as_football
+    def simple_str(self, position, parse_for, caps_sensitive=True, stage_name=None):
+        tmp_ret = ParseResultFootball(self)
+        tmp_len = len(parse_for)
+
+        tmp_check = self.mid(position, tmp_len)
+
+        if caps_sensitive:
+            tmp_check = tmp_check.lower()
+            parse_for = parse_for.lower()
+
+        if tmp_check == parse_for:
+            return tmp_ret(set=tmp_len)
+        else:
+            return tmp_ret
+
     def _try_action(self, position, action_dict):
         if isinstance(action_dict, dict):
+            action_dict = action_dict.copy()
             if 'string_in' in action_dict:
                 parse_for = action_dict.pop('string_in')
-                return self.simple_str(position, parse_for=parse_for, **action_dict)
+                return self.simple_char(position, parse_for=parse_for, **action_dict)
 
-            else:
+            elif 'function' in action_dict:
                 tmp_func = action_dict.pop('function')
                 return tmp_func(position, **action_dict)
+            else:
+                raise AttributeError('Invalid dictionary passed: %r' % action_dict)
         elif isinstance(action_dict, str):
-            return self.simple_str(position, parse_for=action_dict, stage_name=repr(action_dict))
+            return self.simple_char(position, parse_for=action_dict, stage_name=repr(action_dict))
 
         else:
             return action_dict(position)
-
 
     def try_or(self, position, *args):
         """
@@ -475,60 +495,96 @@ class EmailParser(object):
 
         return '', ParseResultFootball(self)
 
-    def try_and(self, position, *args):
-        """
+    def try_counted_and(self, position, *args, min_loop=1, max_loop=1):
 
-        """
+        final_loop_count = 0
         position = self.pos(position)
         tmp_ret = ParseResultFootball(self)
-        for act in args:
-            if isinstance(act, dict):
-                tmp_name = act.pop('name', '')
-            elif isinstance(act, str):
-                tmp_name = act
+        exit_break = False
+        empty_return = False
+
+        # self.add_note_trace('looping begin outside AND at: ', position + tmp_ret.l)
+        # self.trace_level += 1
+        for loop_count in range(max_loop):
+            tmp_loop_ret = ParseResultFootball(self)
+            self.add_begin_trace(position + tmp_ret.l)
+            # self.add_note_trace('looping begin inside  AND at: ', position + tmp_ret.l + tmp_loop_ret.l)
+            # self.trace_level += 1
+            for act in args:
+                if isinstance(act, dict):
+                    tmp_name = act.pop('name', '')
+                elif isinstance(act, str):
+                    tmp_name = act
+                else:
+                    tmp_name = act.__name__
+
+                tmp_ret_1 = self._try_action(position + tmp_ret.l + tmp_loop_ret.l, act)
+
+                if not tmp_ret_1:
+                    exit_break = True
+                    # self.add_note_trace('Breaking inside loop')
+                    break
+
+                tmp_loop_ret += tmp_ret_1
+
+            # self.trace_level -= 1
+            # self.add_note_trace('looping end inside  AND', position + tmp_ret.l + tmp_loop_ret.l)
+            self.add_end_trace(position + tmp_ret.l, tmp_ret)
+            if exit_break:
+                if tmp_loop_ret:
+                    # self.add_note_trace('Breaking outside loop - 1')
+                    break
+                else:
+                    tmp_ret += tmp_loop_ret
+                    # self.add_note_trace('Breaking outside loop - 2')
+                    break
+
             else:
-                tmp_name = act.__name__
+                if tmp_loop_ret:
+                    tmp_ret += tmp_loop_ret
+                else:
+                    # self.add_note_trace('Breaking outside loop - 3')
+                    break
 
-            tmp_ret_1 = self._try_action(position, act)
-            if tmp_ret.error:
-                return tmp_ret.add(tmp_ret_1)
-            elif not tmp_ret:
-                return ParseResultFootball(self)
-            tmp_ret += tmp_ret_1
+            final_loop_count += 1
 
+        # self.trace_level -= 1
+        # self.add_note_trace('looping end of outside AND at: ', position + tmp_ret.l)
+
+        if final_loop_count >= min_loop and not empty_return:
+            return final_loop_count, tmp_ret
+        else:
+            return 0, ParseResultFootball(self)
+
+    def try_and(self, position, *args, min_loop=1, max_loop=1):
+        count, tmp_ret = self.try_counted_and(position, *args, min_loop=min_loop, max_loop=max_loop)
         return tmp_ret
 
+    def ipv6_segment(self, position, min_count=1, max_count=7):
+        tmp_ret = self.ipv6_hex(position)
 
-    """
-    def ordered_str(self, parse_for, position=None, min_count=1, max_count=1):
-        if min_count > max_count:
-            raise AttributeError('Min (%s) cannot be larger than max (%s) !' % (min_count, max_count))
-        position = self.pos(position)
-        tmp_ret = 0
-        tmp_ret_char = 0
-        tmp_ret_count = 0
-        check_len = len(parse_for)
+        if tmp_ret:
+            if max_count == 1:
+                return 1, tmp_ret
 
-        for c in self.remaining(position):
-            if tmp_ret_count == max_count:
-                return tmp_ret
-            if c != parse_for[tmp_ret_char]:
-                if tmp_ret_count < min_count:
-                    return 0
-                else:
-                    return tmp_ret
-            tmp_ret_char += 1
-            if tmp_ret_char > (check_len - 1):
-                tmp_ret_char = 0
-                tmp_ret_count += 1
-                tmp_ret += check_len
+            if not self.at_end(position + tmp_ret.l + 1) and \
+                    self.this_char(position + tmp_ret.l) == ':' and \
+                    self.this_char(position + tmp_ret.l + 1) == ':' and \
+                    min_count <= 1:
+                self.add_note_trace('Double Colons found, exiting')
+                return 1, tmp_ret
 
-        if tmp_ret_count < min_count:
-            return 0
+            tmp_colon_str = {'string_in': self.COLON, 'min_count': 1, 'max_count': 1}
+            tmp_count, tmp_ret_2 = self.try_counted_and(position + tmp_ret.l,
+                                                        tmp_colon_str,
+                                                        self.ipv6_hex, min_loop=min_count-1, max_loop=max_count-1)
         else:
-            return tmp_ret
-    """
+            return 0, ParseResultFootball(self)
 
+        if tmp_ret_2:
+            return tmp_count+1, tmp_ret(tmp_ret_2)
+        else:
+            return 0, ParseResultFootball(self)
 
 
     # **********************************************************************************
@@ -592,11 +648,22 @@ class EmailParser(object):
         [1150]              ERR_CR_NO_LF  Address contains a carriage return that is not followed by a line feed (ISEMAIL_ERR)
         [1151]         ERR_NO_DOMAIN_SEP  Address does not contain a domain seperator (@ sign) (ISEMAIL_ERR)
         [1255]         ERR_EMPTY_ADDRESS  Empty Address Passed (ISEMAIL_ERR)
+
+
+        ???
+                    [1037]            DEPREC_COMMENT  Address contains a comment in a position that is deprecated (ISEMAIL_DEPREC)
+        [1137]       ERR_EXPECTING_ATEXT  Address contains a character that is not allowed (ISEMAIL_ERR)
+
+    Maximums:
+        Username or local part = 64    RFC5322_LOCAL_TOO_LONG
+        total address length = 254 RFC5322_TOO_LONG
+        domain name = 255 RFC5322_DOMAIN_TOO_LONG
+        domain name label = 63 : RFC5322_LABEL_TOO_LONG
+
     """
 
-    # TODO: THIS
     @as_football
-    def address_spec(self):
+    def address_spec(self, position):
 
         """
         addr-spec       =   local-part "@" domain
@@ -616,10 +683,23 @@ class EmailParser(object):
         [1134]        ERR_ATEXT_AFTER_QS  Address contains text after a quoted string (ISEMAIL_ERR)
 
         """
+        tmp_ret = self.local_part(position)
 
-    # TODO: THIS
+        if tmp_ret:
+            tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.AT, min_count=1, max_count=1, stage_name='AT')
+
+            if tmp_ret_2:
+                tmp_ret_3 = self.domain(position + tmp_ret.l + tmp_ret_2.l)
+
+                if tmp_ret_3:
+                    tmp_ret += tmp_ret_2
+                    tmp_ret += tmp_ret_3
+
+        return tmp_ret
+
+
     @as_football
-    def local_part(self):
+    def local_part(self, position):
         """        
         local-part      =   dot-atom / quoted-string / obs-local-part
             // http://tools.ietf.org/html/rfc5321#section-4.5.3.1.1
@@ -632,77 +712,74 @@ class EmailParser(object):
 
         """
 
+        tmp_option, tmp_ret = self.try_or(position,
+                                          self.dot_atom,
+                                          self.quoted_string,
+                                          self.obs_local_part)
+        return tmp_ret
 
-    # TODO: THIS
+
     @as_football
-    def dot_atom(self):
+    def dot_atom(self, position):
         """
         dot-atom        =   [CFWS] dot-atom-text [CFWS]
-        [1137]       ERR_EXPECTING_ATEXT  Address contains a character that is not allowed (ISEMAIL_ERR)
         """
+        tmp_ret = self.cfws(position)
+
+        tmp_ret += self.dot_atom_text(position + tmp_ret.l)
+
+        tmp_ret += self.cfws(position + tmp_ret.l)
+
+        return tmp_ret
+
 
     @as_football
     def dot_atom_text(self, position):
         """
             dot-atom-text   =   1*atext *("." 1*atext)
         """
-        """
-        # position = self.pos(position)
-        tmp_ret = ParseResultFootball(self)
-        tmp_ret += self.simple_str(self.ATEXT, position)
+        tmp_ret = self.simple_char(position, self.ATEXT, stage_name='ATEXT')
 
         if self.at_end(position + tmp_ret):
             return tmp_ret
 
         if tmp_ret:
-            while True:
-                tmp_sub = ParseResultFootball(self)
-                if self.this_char(position + tmp_ret) == ".":
-                    tmp_sub += 1
-                    tmp_sub += self.simple_str(self.ATEXT, position + tmp_ret.l + 1)
-                    if tmp_sub > 1:
-                        tmp_ret += tmp_sub
-                    else:
-                        return tmp_ret
-                else:
-                    return tmp_ret
-                if self.at_end(position + tmp_ret):
-                    return tmp_ret
+            tmp_ret += self.try_and(position + tmp_ret.l, self.DOT, self.ATEXT, min_loop=0, max_loop=9999)
+
         return tmp_ret
-        """
 
-    """
-    def dot_atom_text_sub(self, position):
-        position = self.pos(position)
-        tmp_ret = 0
-        if self.this_char(position) == ".":
-            tmp_ret += 1
-            tmp_ret += self.simple_str(self.ATEXT, position+tmp_ret)
-            if tmp_ret > 1:
-                return tmp_ret
-        return 0
-    """
 
-    # TODO: THIS
     @as_football
-    def obs_local_part(self):
+    def obs_local_part(self, position):
         """
             obs-local-part = word *("." word)
-                    [1037]            DEPREC_COMMENT  Address contains a comment in a position that is deprecated (ISEMAIL_DEPREC)
 
         """
+        tmp_ret = self.word(position)
 
-    # TODO: THIS
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_ret += self.try_and(position + tmp_ret.l,
+                                {'string_in': self.DOT, 'min_count': 1, 'max_count': 1, 'stage_name': 'DOT'},
+                                self.word,
+                                min_loop=0, max_loop=256)
+
+        return tmp_ret
+
+
     @as_football
-    def word(self):
+    def word(self, position):
         """
             word = atom / quoted-string
         """
+        tmp_act, tmp_ret = self.try_or(position,
+                               self.atom,
+                               self.quoted_string)
+        return tmp_ret
 
-
-    # TODO: THIS
     @as_football
-    def atom(self):
+    def atom(self, position):
         """
                 atom = [CFWS] 1*atext [CFWS]
 
@@ -710,9 +787,19 @@ class EmailParser(object):
                 // If it's just one atom that is quoted then it's an RFC 5322 obsolete form
         """
 
-    # TODO: THIS
+        tmp_ret = self.cfws(position)
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.ATEXT, stage_name='ATEXT')
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+        tmp_ret += self.cfws(position + tmp_ret.l)
+        return tmp_ret
+
     @as_football
-    def domain(self):
+    def domain(self, position):
 
         """
         domain          =   dot-atom / domain-literal / address_literal /obs-domain
@@ -810,7 +897,9 @@ class EmailParser(object):
             //   However, a valid host name can never have the dotted-decimal
             //   form #.#.#.#, since this change does not permit the highest-level
             //   component label to start with a digit even if it is not all-numeric.
-    
+
+            domain          =   dot-atom / domain-literal / address_literal /obs-domain
+
          [1005]      DNSWARN_NO_MX_RECORD  Couldn't find an MX record for this domain but an A-record does exist (ISEMAIL_DNSWARN)
         [1006]         DNSWARN_NO_RECORD  Couldn't find an MX record or an A-record for this domain (ISEMAIL_DNSWARN)
         [1065]            RFC5322_DOMAIN  Address is RFC 5322 compliant but contains domain characters that are not allowed by DNS (ISEMAIL_RFC5322)
@@ -818,22 +907,39 @@ class EmailParser(object):
         [1069]    RFC5322_LABEL_TOO_LONG  The domain part contains an element that is too long (ISEMAIL_RFC5322)
         [1143]   ERR_DOMAIN_HYPHEN_START  A domain or subdomain cannot begin with a hyphen (ISEMAIL_ERR)
         [1144]     ERR_DOMAIN_HYPHEN_END  A domain or subdomain cannot end with a hyphen (ISEMAIL_ERR)
-
         """
 
-    # TODO: THIS
+        tmp_act, tmp_ret = self.try_or(position,
+                              self.dot_atom,
+                              self.domain_literal,
+                              self.address_literal,
+                              self.obs_domain)
+
+        return tmp_ret
+
     @as_football
-    def domain_addr(self):
+    def domain_addr(self, position):
         """
         domain-addr = sub-domain *("." sub-domain)
         [1009]               RFC5321_TLD  Address is valid but at a Top Level Domain (ISEMAIL_RFC5321)
         [1010]       RFC5321_TLD_NUMERIC  Address is valid but the Top Level Domain begins with a number (ISEMAIL_RFC5321)
 
         """
+        tmp_ret = self.sub_domain(position)
 
-    # TODO: THIS
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_ret += self.try_and(position + tmp_ret.l,
+                                {'string_in': self.DOT, 'min_count': 1, 'max_count': 1, 'stage_name': 'DOT'},
+                                self.sub_domain,
+                                min_loop=0, max_loop=256)
+
+        return tmp_ret
+
+
     @as_football
-    def sub_domain(self):
+    def sub_domain(self, position):
         """"
             sub-domain     = Let-dig [Ldh-str]
 
@@ -851,20 +957,28 @@ class EmailParser(object):
             // labels          63 octets or less
 
         """
+        tmp_ret = self.simple_char(position, self.LET_DIG, stage_name='LET_DIG')
+        if tmp_ret:
+            tmp_ret += self.ldh_str(position + tmp_ret.l)
 
+            return tmp_ret
+        else:
+            return ParseResultFootball(self)
 
-    # TODO: THIS
     @as_football
-    def let_str(self):
+    def let_str(self, position):
         """
                 Ldh-str        = *( ALPHA / DIGIT / "-" ) Let-dig
         """
+        tmp_ret = self.simple_char(position, self.LDH_STR, stage_name='LDH_STR')
 
+        if tmp_ret and self.this_char(position + tmp_ret.l-1) in self.LET_DIG:
+            return tmp_ret
 
+        return ParseResultFootball(self)
 
-    # TODO: THIS
     @as_football
-    def domain_literal(self):
+    def domain_literal(self, position):
         """
         domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
         // Domain literal must be the only component
@@ -873,113 +987,233 @@ class EmailParser(object):
         [1129]       ERR_EXPECTING_DTEXT  A domain literal contains a character that is not allowed (ISEMAIL_ERR)
         [1135]    ERR_ATEXT_AFTER_DOMLIT  Extra characters were found after the end of the domain literal (ISEMAIL_ERR)
         [1147]      ERR_UNCLOSED_DOM_LIT  Domain literal is missing its closing bracket (ISEMAIL_ERR)
-
-
         """
 
-    # TODO: THIS
+        tmp_ret = self.cfws(position)
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.OPENSQBRACKET, min_count=1, max_count=1, stage_name='OpenSquareBracket')
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+
+        tmp_ret_2 = ParseResultFootball(self)
+
+        while True:
+            tmp_ret_3 = self.fws(position + tmp_ret.l + tmp_ret_2)
+
+            tmp_ret_4 = self.dtext(position + tmp_ret.l + tmp_ret_2.l + tmp_ret_3)
+
+            if tmp_ret_4:
+                tmp_ret_3 += tmp_ret_4
+            else:
+                break
+
+            if tmp_ret_3:
+                tmp_ret_2 += tmp_ret_3
+            else:
+                break
+
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_3
+        else:
+            return ParseResultFootball(self)
+
+        tmp_ret += self.fws(position + tmp_ret.l)
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.CLOSESQBRACKET, min_count=1, max_count=1, stage_name='CloseSquareBracket')
+
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+        else:
+            return tmp_ret(diag='ERR_UNCLOSED_DOM_LIT', begin=position, length=tmp_ret.l)
+
+        tmp_ret += self.cfws(position + tmp_ret.l)
+
+        return tmp_ret
+
+
     @as_football
-    def dtext(self):
+    def dtext(self, position):
 
         """
             dtext           =   %d33-90 /          ; Printable US-ASCII
                                %d94-126 /         ;  characters not including
                                obs-dtext          ;  "[", "]", or "\"
         """
+        tmp_act, tmp_ret = self.try_or(position,
+                                       self.dtext_sub,
+                                       self.obs_dtext)
+        return tmp_ret
 
-    # TODO: THIS
     @as_football
-    def obs_dtext(self):
+    def dtext_sub(self, position):
+
+        """
+            dtext           =   %d33-90 /          ; Printable US-ASCII
+                               %d94-126 /         ;  characters not including
+                               obs-dtext          ;  "[", "]", or "\"
+        """
+        return self.simple_char(position, self.DTEXT, stage_name='DTEXT')
+
+    @as_football
+    def obs_dtext(self, position):
 
         """
                 obs-dtext       =   obs-NO-WS-CTL / quoted-pair
         [1071] RFC5322_DOM_LIT_OBS_DTEXT  The domain literal is not a valid RFC 5321 address literal and it contains obsolete characters (ISEMAIL_RFC5322)
 
         """
+        tmp_ret = ParseResultFootball(self)
 
-    # TODO: THIS
+        while True:
+            tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.OBS_DTEXT, stage_name='OBS_DTEXT')
+
+            tmp_ret_2 += self.quoted_pair(position + tmp_ret.l + tmp_ret_2.l)
+
+            if tmp_ret_2:
+                tmp_ret += tmp_ret_2
+            else:
+                break
+
+        return tmp_ret(diag='RFC5322_DOM_LIT_OBS_DTEXT', begin=position, length=tmp_ret.l)
+
+
     @as_football
-    def obs_domain(self):
+    def obs_domain(self, position):
         """
         obs-domain      =   atom *("." atom)
                 [1037]            DEPREC_COMMENT  Address contains a comment in a position that is deprecated (ISEMAIL_DEPREC)
 
         """
 
-    # TODO: THIS
+        tmp_ret = self.atom(position)
+
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_ret += self.try_and(position + tmp_ret.l,
+                                {'string_in': self.DOT, 'min_count': 1, 'max_count': 1, 'stage_name': 'DOT'},
+                                self.atom,
+                                min_loop=0, max_loop=256)
+
+        return tmp_ret
+
     @as_football
-    def address_literal(self):
+    def address_literal(self, position):
         """
         address-literal  = "[" ( IPv4-address-literal /
                         IPv6-address-literal /
                         General-address-literal ) "]"
 
         [1012]   RFC5321_ADDRESS_LITERAL  Address is valid but at a literal address not a domain (ISEMAIL_RFC5321)
+        ERR_UNCLOSED_DOM_LIT  Unclosed domain literal.
 
+        ERR_INVALID_ADDR_LITERAL
         """
+        tmp_ret = self.simple_char(position, self.OPENSQBRACKET, min_count=1, max_count=1, stage_name='OPEN_SQ_BRACKET')
 
-    # TODO: THIS
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_count, tmp_ret_2 = self.try_or(position + tmp_ret.l,
+                                self.ipv4_address_literal,
+                                self.ipv6_address_literal,
+                                self.general_address_literal
+                                )
+        if not tmp_ret_2:
+            tmp_ret = ParseResultFootball(self)
+            return tmp_ret(diag='ERR_INVALID_ADDR_LITERAL', begin=position, length=tmp_ret_2.l + 1)
+
+        tmp_ret += tmp_ret_2
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.CLOSESQBRACKET, min_count=1, max_count=1, stage_name='CLOSE_SQ_BRACKET')
+
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+            return tmp_ret
+        else:
+            tmp_ret_3 = ParseResultFootball(self)
+            return tmp_ret_3(diag='ERR_UNCLOSED_DOM_LIT', begin=position, length=tmp_ret.l + tmp_ret_2.l)
+
     @as_football
-    def general_address_literal(self):
+    def general_address_literal(self, position):
         """
-            General-address-literal  = Standardized-tag ":" 1*dcontent
-        """
+        General-address-literal  = Standardized-tag ":" 1*dcontent
 
-    # TODO: THIS
+                RFC5322_GENERAL_LITERAL
+
+        """
+        tmp_ret = self.try_and(position,
+                            self.standardized_tag,
+                            {'string_in': self.COLON, 'min_count': 1, 'max_count': 1, 'stage_name': 'COLON'},
+                            {'string_in': self.DCONTENT, 'stage_name': 'DCONTENT'})
+        if tmp_ret:
+            return tmp_ret(diag='RFC5322_GENERAL_LITERAL', begin=position, length=tmp_ret.l)
+        else:
+            return ParseResultFootball(self)
+
     @as_football
-    def standardized_tag(self):
+    def standardized_tag(self, position):
         """
                 Standardized-tag  = Ldh-str
                                  ; Standardized-tag MUST be specified in a
                                  ; Standards-Track RFC and registered with IANA
         """
+        return self.ldh_str(position)
 
     @as_football
-    def ldh_str(self, position=None):
+    def ldh_str(self, position):
         """
             Ldh-str = *( ALPHA / DIGIT / "-" ) Let-dig
         """
-        """
-        tmp_ret = self.simple_str(self.LDH_STR, position)
-        while self.this_char(position+tmp_ret-1) == "-":
+        tmp_ret = self.simple_char(position, self.LDH_STR, stage_name='LDH_STR')
+
+        while self.this_char(position+tmp_ret.l-1) == "-":
             tmp_ret -= 1
             if tmp_ret == 0:
                 return tmp_ret
         return tmp_ret
-        """
-
-    # TODO: THIS
-    @as_football
-    def ipv4_address_literal(self):
-        """
-            IPv4-address-literal  = Snum 3("."  Snum)
-        """
 
     @as_football
-    def snum(self, position=None):
+    def ipv4_address_literal(self, position):
+        """
+        IPv4-address-literal  = Snum 3("."  Snum)
+
+        RFC5322_IPV4_ADDR
+
+        """
+        tmp_ret = self.try_and(position,
+                            self.snum,
+                            self.DOT, self.snum,
+                            self.DOT, self.snum,
+                            self.DOT, self.snum)
+
+        if tmp_ret:
+            return tmp_ret(diag='RFC5322_IPV4_ADDR', begin=position, length=tmp_ret.l)
+        else:
+            return ParseResultFootball(self)
+
+    @as_football
+    def snum(self, position):
         """
                 Snum           = 1*3DIGIT
                               ; representing a decimal integer
                               ; value in the range 0 through 255
         """
-        """
-        tmp_ret = self.simple_str(self.DIGIT, position=position, max_count=3)
-        tmp_num_len = tmp_ret
-        if tmp_ret == 3:
-            if self.this_char(position) not in "012":
-                return 0
-            elif self.this_char(position) == "2":
-                if self.this_char(position+1) in '012345' and self.this_char(position+1) in '012345':
-                    return 3
-                else:
-                    return 0
+        tmp_ret = self.simple_char(position, self.DIGIT, max_count=3, stage_name='DIGIT')
+        if tmp_ret:
+            tmp_str = self.mid(position, tmp_ret.l)
+
+            tmp_digit = int(tmp_str)
+            if tmp_digit > 255:
+                return ParseResultFootball(self)
 
         return tmp_ret
-        """
-    # TODO: THIS
-    @as_football
-    def ipv6_address_literal(self):
 
+    @as_football
+    def ipv6_address_literal(self, position):
         """
             IPv6-address-literal  = "IPv6:" IPv6-addr
         [1013]   RFC5321_IPV6_DEPRECATED  Address is valid but contains a :: that only elides one zero group. All implementations must accept and be able to handle any legitimate RFC 4291 format. (ISEMAIL_DEPREC)
@@ -990,50 +1224,124 @@ class EmailParser(object):
         [1076]   RFC5322_IPV6_COLON_STRT  IPv6 address starts with a single colon (ISEMAIL_RFC5322)
         [1077]    RFC5322_IPV6_COLON_END  IPv6 address ends with a single colon (ISEMAIL_RFC5322)
 
+        RFC5322_IPV6_ADDR
         """
+        tmp_ret = self.simple_str(position, "IPv6:", stage_name='IPV6')
 
-    # TODO: THIS
+        if tmp_ret:
+            tmp_ret_2 = self.ipv6_addr(position + tmp_ret.l)
+
+            if tmp_ret_2:
+                tmp_ret += tmp_ret_2
+                return tmp_ret(diag='RFC5322_IPV6_ADDR', begin=position, length=tmp_ret.l)
+
+        return ParseResultFootball(self)
+
     @as_football
-    def ipv6_addr(self):
-
+    def ipv6_addr(self, position):
         """
                 IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
         """
 
-    # TODO: THIS
-    @as_football
-    def ipv6_hex(self):
+        tmp_count, tmp_ret = self.try_or(position,
+                                           self.ipv6_full,
+                                           self.ipv6v4_full,
+                                           self.ipv6v4_comp,
+                                           self.ipv6_comp,
+                                           )
+        return tmp_ret
 
-        """
-                IPv6-hex       = 1*4HEXDIG
-        """
-    # TODO: THIS
     @as_football
-    def ipv6_full(self):
+    def ipv6_hex(self, position):
+        """
+        IPv6-hex       = 1*4HEXDIG
+        """
+        return self.simple_char(position, self.HEXDIG, min_count=1, max_count=4, stage_name='HEXDIG')
+
+    @as_football
+    def ipv6_full(self, position):
         """
                 IPv6-full      = IPv6-hex 7(":" IPv6-hex)
+                RFC5322_IPV6_FULL_ADDR
+
         """
-    # TODO: THIS
+        tmp_count, tmp_ret = self.ipv6_segment(position, max_count=8, min_count=8)
+        if tmp_ret:
+            return tmp_ret(diag='RFC5322_IPV6_FULL_ADDR', begin=position, length=tmp_ret.l)
+        else:
+            return ParseResultFootball(self)
+
     @as_football
-    def ipv6_comp(self):
+    def ipv6_comp(self, position):
         """
                 IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
                               [IPv6-hex *5(":" IPv6-hex)]
                               ; The "::" represents at least 2 16-bit groups of
                               ; zeros.  No more than 6 groups in addition to the
                               ; "::" may be present.
-        """
+              RFC5322_IPV6_COMP_ADDR
 
-    # TODO: THIS
+        """
+        tmp_pre_count, tmp_ret = self.ipv6_segment(position, min_count=1, max_count=6)
+
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.COLON, min_count=2, max_count=2, stage_name='DCOLON')
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+        tmp_post_count, tmp_ret_2 = self.ipv6_segment(position + tmp_ret.l, min_count=1, max_count=6)
+
+        if not tmp_ret_2:
+            tmp_ret_2 = self.ipv6_hex(position + tmp_ret.l)
+            if not tmp_ret_2:
+                return ParseResultFootball(self)
+            tmp_post_count = 1
+
+        tmp_ret += tmp_ret_2
+        if (tmp_pre_count + tmp_post_count) > 6:
+            self.add_note_trace('Segment count: %s + %s, exceeds 6, failing' % (tmp_pre_count, tmp_post_count) )
+            return ParseResultFootball(self)
+
+        else:
+            self.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count) )
+            return tmp_ret(diag='RFC5322_IPV6_COMP_ADDR', begin=position, length=tmp_ret.l)
+
     @as_football
-    def ipv6v4_full(self):
+    def ipv6v4_full(self, position):
         """
                 IPv6v4-full    = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
+
+                        RFC5322_IPV6_IPV4_ADDR
+
         """
 
-    # TODO: THIS
+        tmp_count, tmp_ret = self.ipv6_segment(position, min_count=6, max_count=6)
+
+        if tmp_ret:
+            tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.COLON, min_count=1, max_count=1)
+        else:
+            return ParseResultFootball(self)
+
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+            tmp_ret_2 = self.ipv4_address_literal(position + tmp_ret.l)
+        else:
+            return ParseResultFootball(self)
+
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+        else:
+            return ParseResultFootball(self)
+
+        tmp_ret.remove('RFC5322_IPV4_ADDR')
+        return tmp_ret(diag='RFC5322_IPV6_IPV4_ADDR', begin=position, length=tmp_ret.l)
+
     @as_football
-    def ipv6v4_comp(self):
+    def ipv6v4_comp(self, position):
         """
                 IPv6v4-comp    = [IPv6-hex *3(":" IPv6-hex)] "::"
                               [IPv6-hex *3(":" IPv6-hex) ":"]
@@ -1041,31 +1349,94 @@ class EmailParser(object):
                               ; The "::" represents at least 2 16-bit groups of
                               ; zeros.  No more than 4 groups in addition to the
                               ; "::" and IPv4-address-literal may be present.
-        """
+                RFC5322_IPV6_IPV4_COMP_ADDR
 
+
+        """
+        tmp_pre_count, tmp_ret = self.ipv6_segment(position, min_count=1, max_count=3)
+
+        if not tmp_ret:
+            return ParseResultFootball(self)
+
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.COLON, min_count=2, max_count=2, stage_name='DCOLON')
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+        tmp_post_count, tmp_ret_2 = self.ipv6_segment(position + tmp_ret.l, min_count=1, max_count=3)
+
+        if not tmp_ret_2 or tmp_post_count == 1:
+            return ParseResultFootball(self)
+
+        self.add_note_trace('found end of ipv6 segments at segment: %s RESTARTING' % str(tmp_post_count))
+
+        tmp_colon_count = self.count(position + tmp_ret.l + tmp_ret_2.l, search_for=':', length=10)
+        self.add_note_trace('Checking for more colons, found %s more in %s' % (tmp_colon_count, self.mid(position + tmp_ret.l + tmp_ret_2.l, 10)))
+
+        if tmp_colon_count == 1:
+            tmp_post_count += 1
+
+        tmp_post_count, tmp_ret_2 = self.ipv6_segment(position + tmp_ret.l, min_count=tmp_post_count-1, max_count=tmp_post_count-1)
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        self.add_note_trace('should be start of IPv4 segment')
+
+        tmp_ret += tmp_ret_2
+        tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.COLON, min_count=1, max_count=1, stage_name='COLON')
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+        tmp_ret_2 = self.ipv4_address_literal(position + tmp_ret.l)
+
+        if not tmp_ret_2:
+            return ParseResultFootball(self)
+
+        tmp_ret += tmp_ret_2
+
+        if tmp_pre_count + tmp_post_count > 4:
+            self.add_note_trace('Segment count: %s + %s, exceeds 4, failing' % (tmp_pre_count, tmp_post_count))
+            return ParseResultFootball(self)
+
+        else:
+            self.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count))
+            tmp_ret.remove('RFC5322_IPV4_ADDR')
+            return tmp_ret(diag='RFC5322_IPV6_IPV4_COMP_ADDR', begin=position, length=tmp_ret.l)
 
     @as_football
     def cfws(self, position):
         """
-        CFWS            =   (1*([FWS] comment) [FWS]) / FWS
+        CFWS            =   <sub_cfws> / FWS
+
+            //          (1*([FWS] comment) [FWS]) / FWS
+            // http://tools.ietf.org/html/rfc5322#section-3.4.1
+            //   Comments and folding white space
+            //   SHOULD NOT be used around the "@" in the addr-spec.
+
+        """
+        tmp_ret = self.try_or(position, self.sub_cfws, self.fws)
+        return tmp_ret[1]
+
+    @as_football
+    def sub_cfws(self, position):
+        """
+        sub_CFWS = (1*([FWS] comment) [FWS])
             // http://tools.ietf.org/html/rfc5322#section-3.4.1
             //   Comments and folding white space
             //   SHOULD NOT be used around the "@" in the addr-spec.
 
         """
 
-        """
         tmp_ret = self.fws(position)
-        tmp_ret += self.comment(position+tmp_ret.l)
-        tmp_ret += self.fws(position + tmp_ret.l)
-
-        if tmp_ret or tmp_ret.error:
-            return tmp_ret
-
-        return self.fws(position)
-        """
-
-        return self.try_and(position, self.fws, self.comment, self.fws)
+        tmp_ret += self.no_at(position + tmp_ret.l)
+        tmp_ret += self.comment(position + tmp_ret.l)
+        if tmp_ret:
+            tmp_ret += self.no_at(position + tmp_ret.l)
+            tmp_ret += self.fws(position + tmp_ret.l)
+        return tmp_ret
 
     @as_football
     def comment(self, position):
@@ -1088,7 +1459,7 @@ class EmailParser(object):
 
         """
 
-        tmp_ret = self.simple_str(position, self.OPENPARENTHESIS, min_count=1, max_count=1, stage_name='OpenParen')
+        tmp_ret = self.simple_char(position, self.OPENPARENTHESIS, min_count=1, max_count=1, stage_name='OpenParen')
 
         self.add_note_trace('Return from openparen = %s' % tmp_ret.l)
 
@@ -1097,20 +1468,18 @@ class EmailParser(object):
 
         last_was_fws = False
 
-        # action_at = dict(name='at', string_in=self.AT, stage_name='AT', min_count=1, max_count=1)
-        # action_fws = dict(name='fws', function=self.fws)
-        # action_ccontent = dict(name='ccontent', function=self.ccontent)
-
         while True:
-            action_name, tmp_loop_1 = self.try_or(position + tmp_ret.l, self.AT, self.ccontent, self.fws)
+            action_name, tmp_loop_1 = self.try_or(position + tmp_ret.l, self.no_at, self.ccontent, self.fws)
 
             if action_name == '':
                 break
 
-            elif action_name == self.AT:
-                return tmp_ret(diag='DEPREC_CFWS_NEAR_AT', begin=position + tmp_ret.l + 1, length=tmp_ret.l)(set=0)
+            elif action_name == 'no_at':
+                tmp_ret += tmp_loop_1
+                last_was_fws = False
 
             elif action_name == 'fws':
+                tmp_loop_1.remove('CFWS_FWS')
                 if last_was_fws:
                     tmp_ret += tmp_loop_1
                     return tmp_ret(begin=position + tmp_ret.l,
@@ -1127,8 +1496,8 @@ class EmailParser(object):
 
             tmp_ret += tmp_loop_1
 
-        tmp_last_quote = self.simple_str(position+tmp_ret.l, self.CLOSEPARENTHESIS,
-                                         min_count=1, max_count=1, stage_name='CloseParen')
+        tmp_last_quote = self.simple_char(position + tmp_ret.l, self.CLOSEPARENTHESIS,
+                                          min_count=1, max_count=1, stage_name='CloseParen')
 
         if tmp_last_quote:
             return tmp_ret(tmp_last_quote)(diag='CFWS_COMMENT', begin=position, length=tmp_ret.l)
@@ -1154,7 +1523,7 @@ class EmailParser(object):
 
         """
 
-        tmp_ret = self.simple_str(position, self.CTEXT, stage_name='CTEXT')
+        tmp_ret = self.simple_char(position, self.CTEXT, stage_name='CTEXT')
 
         if tmp_ret:
             return tmp_ret
@@ -1168,7 +1537,7 @@ class EmailParser(object):
         [1038]              DEPREC_CTEXT  A comment contains a deprecated character (ISEMAIL_DEPREC)
         """
 
-        tmp_ret = self.simple_str(position, self.OBS_CTEXT, stage_name='OBS_CTEXT')
+        tmp_ret = self.simple_char(position, self.OBS_CTEXT, stage_name='OBS_CTEXT')
 
         if tmp_ret:
             return tmp_ret(diag='DEPREC_CTEXT', begin=position, length=tmp_ret.l)
@@ -1233,7 +1602,6 @@ class EmailParser(object):
             tmp_ret(diag='CFWS_FWS', begin=position, length=tmp_ret.l)
         return tmp_ret
 
-    # TODO: add error checking for @ in FWS
     @as_football
     def fws_sub(self, position=None):
         """
@@ -1242,7 +1610,7 @@ class EmailParser(object):
         """
         tmp_ret = ParseResultFootball(self)
 
-        tmp_ret += self.simple_str(position, self.WSP, stage_name='WSP')
+        tmp_ret += self.simple_char(position, self.WSP, stage_name='WSP')
 
         if not tmp_ret:
             return ParseResultFootball(self)
@@ -1256,7 +1624,7 @@ class EmailParser(object):
             if not tmp_ret_crlf:
                 return tmp_ret
 
-            tmp_ret_2 = self.simple_str(position+tmp_ret.l+tmp_ret_crlf.l, self.WSP, max_count=1, stage_name='WSP')
+            tmp_ret_2 = self.simple_char(position + tmp_ret.l + tmp_ret_crlf.l, self.WSP, max_count=1, stage_name='WSP')
 
             if tmp_ret_2:
                 return tmp_ret(tmp_ret_2).add(tmp_ret_crlf)
@@ -1291,31 +1659,6 @@ class EmailParser(object):
 
             return ParseResultFootball(self)
 
-    # TODO: THIS
-    @as_football
-    def obs_no_ws_ctl(self):
-        """
-        obs-NO-WS-CTL   =   %d1-8 /            ; US-ASCII control
-                           %d11 /             ;  characters that do not
-                           %d12 /             ;  include the carriage
-                           %d14-31 /          ;  return, line feed, and
-                           %d127              ;  white space characters
-        """
-
-    # TODO: THIS
-    @as_football
-    def specials(self):
-        '''    
-        specials        =   "(" / ")" /        ; Special characters that do
-                           "&lt;" / "&gt;" /        ;  not appear in atext
-                           "[" / "]" /
-                           ":" / ";" /
-                           "@" / "\" /
-                           "," / "." /
-                           DQUOTE
-        
-        '''
-
     @as_football
     def quoted_string(self, position):
         """
@@ -1338,11 +1681,13 @@ class EmailParser(object):
 
         """
         tmp_ret = self.cfws(position)
-        tmp_ret += self.simple_str(position+tmp_ret.l, self.DQUOTE, min_count=1, max_count=1, stage_name='DQUOTE')
 
-        if not tmp_ret:
+        tmp_init_dquote = self.simple_char(position + tmp_ret.l, self.DQUOTE, min_count=1, max_count=1, stage_name='DQUOTE')
+
+        if tmp_init_dquote:
+            tmp_ret += tmp_init_dquote
+        else:
             return ParseResultFootball(self)
-
 
         last_was_fws = False
         while True:
@@ -1351,6 +1696,7 @@ class EmailParser(object):
             tmp_loop_1 = self.fws(position + tmp_ret.l)
 
             if tmp_loop_1:
+                tmp_loop_1.remove('CFWS_FWS')
                 if last_was_fws:
                     tmp_ret += tmp_loop_1
                     return tmp_ret(begin=position + tmp_ret.l,
@@ -1366,11 +1712,14 @@ class EmailParser(object):
             else:
                 break
 
-        tmp_last_quote = self.simple_str(position+tmp_ret.l, self.DQUOTE,
-                                         min_count=1, max_count=1, stage_name='DQUOTE')
+        tmp_last_quote = self.simple_char(position + tmp_ret.l, self.DQUOTE,
+                                          min_count=1, max_count=1, stage_name='DQUOTE')
 
         if tmp_last_quote:
-            return tmp_ret(tmp_last_quote)(diag='RFC5321_QUOTED_STRING', begin=position, length=tmp_ret.l)
+            tmp_ret += tmp_last_quote
+            tmp_ret(diag='RFC5321_QUOTED_STRING', begin=position, length=tmp_ret.l)
+            tmp_ret += self.cfws(position + tmp_ret.l)
+            return tmp_ret
         else:
             return tmp_ret(diag='ERR_UNCLOSED_QUOTED_STR', begin=position, length=tmp_ret.l)
 
@@ -1390,7 +1739,7 @@ class EmailParser(object):
                                obs-qtext
         """
 
-        tmp_ret = self.simple_str(position, self.QTEXT, stage_name='QTEXT')
+        tmp_ret = self.simple_char(position, self.QTEXT, stage_name='QTEXT')
 
         if tmp_ret:
             return tmp_ret
@@ -1406,7 +1755,7 @@ class EmailParser(object):
 
         """
 
-        tmp_ret = self.simple_str(position, self.OBS_QTEXT, stage_name='OBS_QTEXT')
+        tmp_ret = self.simple_char(position, self.OBS_QTEXT, stage_name='OBS_QTEXT')
 
         if tmp_ret:
             return tmp_ret(diag='DEPREC_QTEXT', begin=position, length=tmp_ret.l)
@@ -1430,7 +1779,7 @@ class EmailParser(object):
 
         """
 
-        tmp_ret = self.simple_str(position, self.BACKSLASH, min_count=1, max_count=1, stage_name='BACKSLASH')
+        tmp_ret = self.simple_char(position, self.BACKSLASH, min_count=1, max_count=1, stage_name='BACKSLASH')
 
         if tmp_ret and self.at_end(position+1):
             tmp_ret(diag='ERR_EXPECTING_QPAIR', length=1, begin=position)
@@ -1467,7 +1816,7 @@ class EmailParser(object):
                 // The maximum sizes specified by RFC 5321 are octet counts, so we must include the backslash
         '''
 
-        return self.simple_str(position, self.VCHAR_WSP, max_count=1, stage_name="VCHAR/WSP")
+        return self.simple_char(position, self.VCHAR_WSP, max_count=1, stage_name="VCHAR/WSP")
 
     @as_football
     def obs_qp(self, position: int) -> ParseResultFootball:
@@ -1477,7 +1826,7 @@ class EmailParser(object):
         [1036]                 DEPREC_QP  A quoted pair contains a deprecated character (ISEMAIL_DEPREC)
 
         '''
-        tmp_ret = self.simple_str(position, self.OBS_QP, max_count=1, stage_name="OBS_QP")
+        tmp_ret = self.simple_char(position, self.OBS_QP, max_count=1, stage_name="OBS_QP")
         if tmp_ret:
             return tmp_ret(diag="DEPREC_QP", begin=position, length=tmp_ret.l)
         else:
@@ -1509,6 +1858,14 @@ class EmailParser(object):
                         return tmp_ret
             else:
                 return tmp_ret(diag='ERR_CR_NO_LF', begin=position, length=2)
+        return tmp_ret
+
+    @as_football
+    def no_at(self, position):
+        tmp_ret = ParseResultFootball(self)
+        tmp_ret += self.simple_char(position, self.AT, max_count=1, stage_name='AT')
+        if tmp_ret:
+            tmp_ret(diag='DEPREC_CFWS_NEAR_AT', begin=position, length=1)
         return tmp_ret
 
 
