@@ -726,12 +726,15 @@ class EmailParser(object):
         """
         tmp_ret = self.cfws(position)
 
-        tmp_ret += self.dot_atom_text(position + tmp_ret.l)
+        tmp_ret_2 = self.dot_atom_text(position + tmp_ret.l)
 
-        tmp_ret += self.cfws(position + tmp_ret.l)
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+            tmp_ret += self.cfws(position + tmp_ret.l)
 
-        return tmp_ret
+            return tmp_ret
 
+        return ParseResultFootball(self)
 
     @as_football
     def dot_atom_text(self, position):
@@ -739,12 +742,32 @@ class EmailParser(object):
             dot-atom-text   =   1*atext *("." 1*atext)
         """
         tmp_ret = self.simple_char(position, self.ATEXT, stage_name='ATEXT')
-
-        if self.at_end(position + tmp_ret):
+        self.add_note_trace('1 tmp_ret.l = ' + str(tmp_ret.l ))
+        if self.at_end(position + tmp_ret.l):
             return tmp_ret
 
+        self.add_note_trace('2 tmp_ret.l = ' + str(tmp_ret.l ))
+
         if tmp_ret:
-            tmp_ret += self.try_and(position + tmp_ret.l, self.DOT, self.ATEXT, min_loop=0, max_loop=9999)
+            while True:
+                self.add_note_trace('3 position = ' + str(position))
+
+                self.add_note_trace('3 tmp_ret.l = ' + str(tmp_ret.l))
+                tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.DOT, min_count=1, max_count=1, stage_name='DOT')
+                self.add_note_trace('4 tmp_ret.l = ' + str(tmp_ret.l))
+                self.add_note_trace('4 tmp_ret_2.l = ' + str(tmp_ret_2.l))
+
+                if tmp_ret_2:
+                    tmp_ret_3 = self.simple_char(position + tmp_ret.l + tmp_ret_2.l, self.ATEXT, stage_name='ATEXT')
+                    self.add_note_trace('5 tmp_ret.l = ' + str(tmp_ret.l))
+                    self.add_note_trace('5 tmp_ret_2.l = ' + str(tmp_ret_2.l))
+                    self.add_note_trace('5 tmp_ret_3.l = ' + str(tmp_ret_3.l))
+
+                    if tmp_ret_3:
+                        tmp_ret_2 += tmp_ret_3
+                        tmp_ret += tmp_ret_2
+                        continue
+                break
 
         return tmp_ret
 
@@ -925,17 +948,53 @@ class EmailParser(object):
         [1010]       RFC5321_TLD_NUMERIC  Address is valid but the Top Level Domain begins with a number (ISEMAIL_RFC5321)
 
         """
-        tmp_ret = self.sub_domain(position)
+        tmp_ret = self.sub_alpha_domain(position)
+        if not tmp_ret:
+            tmp_ret = self.sub_domain(position)
+            if tmp_ret:
+                tmp_ret(diag='RFC5321_TLD_NUMERIC', begin=position, length=tmp_ret.l)
 
         if not tmp_ret:
             return ParseResultFootball(self)
 
-        tmp_ret += self.try_and(position + tmp_ret.l,
+        tmp_ret_2 = self.try_and(position + tmp_ret.l,
                                 {'string_in': self.DOT, 'min_count': 1, 'max_count': 1, 'stage_name': 'DOT'},
                                 self.sub_domain,
                                 min_loop=0, max_loop=256)
 
+        if tmp_ret_2:
+            tmp_ret += tmp_ret_2
+        else:
+            tmp_ret(diag='RFC5321_TLD', begin=position, length=tmp_ret.l)
+
         return tmp_ret
+
+    @as_football
+    def sub_alpha_domain(self, position):
+        """"
+            sub-domain     = Let-dig [Ldh-str]
+
+            // Nowhere in RFC 5321 does it say explicitly that the
+            // domain part of a Mailbox must be a valid domain according
+            // to the DNS standards set out in RFC 1035, but this *is*
+            // implied in several places. For instance, wherever the idea
+            // of host routing is discussed the RFC says that the domain
+            // must be looked up in the DNS. This would be nonsense unless
+            // the domain was designed to be a valid DNS domain. Hence we
+            // must conclude that the RFC 1035 restriction on label length
+            // also applies to RFC 5321 domains.
+            //
+            // http://tools.ietf.org/html/rfc1035#section-2.3.4
+            // labels          63 octets or less
+
+        """
+        tmp_ret = self.simple_char(position, self.ALPHA, stage_name='ALPHA')
+        if tmp_ret:
+            tmp_ret += self.ldh_str(position + tmp_ret.l)
+
+            return tmp_ret
+        else:
+            return ParseResultFootball(self)
 
 
     @as_football
@@ -972,7 +1031,11 @@ class EmailParser(object):
         """
         tmp_ret = self.simple_char(position, self.LDH_STR, stage_name='LDH_STR')
 
-        if tmp_ret and self.this_char(position + tmp_ret.l-1) in self.LET_DIG:
+
+        while tmp_ret and self.this_char(position + tmp_ret.l-1) not in self.LET_DIG:
+            tmp_ret -= 1
+
+        if tmp_ret:
             return tmp_ret
 
         return ParseResultFootball(self)
@@ -980,7 +1043,9 @@ class EmailParser(object):
     @as_football
     def domain_literal(self, position):
         """
-        domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+        domain-literal  =   [CFWS] "[" domain_literal_sub "]" [CFWS]
+
+        // domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
         // Domain literal must be the only component
 
         [1070]    RFC5322_DOMAIN_LITERAL  The domain literal is not a valid RFC 5321 address literal (ISEMAIL_RFC5322)
@@ -998,29 +1063,12 @@ class EmailParser(object):
 
         tmp_ret += tmp_ret_2
 
-        tmp_ret_2 = ParseResultFootball(self)
+        tmp_ret_2 = self.domain_literal_sub(position + tmp_ret.l)
 
-        while True:
-            tmp_ret_3 = self.fws(position + tmp_ret.l + tmp_ret_2)
-
-            tmp_ret_4 = self.dtext(position + tmp_ret.l + tmp_ret_2.l + tmp_ret_3)
-
-            if tmp_ret_4:
-                tmp_ret_3 += tmp_ret_4
-            else:
-                break
-
-            if tmp_ret_3:
-                tmp_ret_2 += tmp_ret_3
-            else:
-                break
-
-        if tmp_ret_2:
-            tmp_ret += tmp_ret_3
-        else:
+        if not tmp_ret_2:
             return ParseResultFootball(self)
 
-        tmp_ret += self.fws(position + tmp_ret.l)
+        tmp_ret += tmp_ret_2
 
         tmp_ret_2 = self.simple_char(position + tmp_ret.l, self.CLOSESQBRACKET, min_count=1, max_count=1, stage_name='CloseSquareBracket')
 
@@ -1033,6 +1081,29 @@ class EmailParser(object):
 
         return tmp_ret
 
+
+    @as_football
+    def domain_literal_sub(self, position):
+        """
+        domain-literal-sub  =   *([FWS] dtext) [FWS]
+        """
+
+        tmp_ret = ParseResultFootball(self)
+        while True:
+            tmp_ret_fws = self.fws(position + tmp_ret.l)
+
+            tmp_ret_dtext = self.dtext(position + tmp_ret.l + tmp_ret_fws.l)
+
+            if tmp_ret_dtext:
+                tmp_ret += tmp_ret_fws
+                tmp_ret += tmp_ret_dtext
+            else:
+                break
+
+        if tmp_ret:
+            tmp_ret += self.fws(position + tmp_ret.l)
+
+        return tmp_ret
 
     @as_football
     def dtext(self, position):
@@ -1077,7 +1148,10 @@ class EmailParser(object):
             else:
                 break
 
-        return tmp_ret(diag='RFC5322_DOM_LIT_OBS_DTEXT', begin=position, length=tmp_ret.l)
+        if tmp_ret:
+            return tmp_ret(diag='RFC5322_DOM_LIT_OBS_DTEXT', begin=position, length=tmp_ret.l)
+        else:
+            return ParseResultFootball(self)
 
 
     @as_football

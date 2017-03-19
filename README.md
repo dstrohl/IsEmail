@@ -115,3 +115,17 @@ Diags
 [1150]              ERR_CR_NO_LF  Address contains a carriage return that is not followed by a line feed (ISEMAIL_ERR)
 [1151]         ERR_NO_DOMAIN_SEP  Address does not contain a domain seperator (@ sign) (ISEMAIL_ERR)
 [1255]         ERR_EMPTY_ADDRESS  Empty Address Passed (ISEMAIL_ERR)
+
+
+
+Breakout String:
+
+blah@blah.com
+
+blah    :  local part
+    blah    :  ATEXT
+        blah    :  FWS
+        blah    :  FWS
+
+@       : AT
+blah.com

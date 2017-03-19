@@ -1,5 +1,5 @@
 import unittest
-from parse_results import ParseEmailResult, ParseResultFootball
+from parse_results import ParseResultFootball
 from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES
 
 
@@ -153,6 +153,9 @@ class TestMetaLookup(unittest.TestCase):
         tmp_ret.sort()
         print('\n'.join(tmp_ret))
 
+
+        print('\n\n\n')
+        print(repr(list(META_LOOKUP.diags._by_key.items())))
 
 class TestParseEmailResults(unittest.TestCase):
     def test_add_ok_result(self):
