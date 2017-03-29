@@ -35,6 +35,9 @@ Date       Diagnoses    Version Notes
 <meta version="3.03">
 """
 
+ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS = []
+
+
 # function control
 ISEMAIL_MIN_THRESHOLD = 16
 ISEMAIL_MAX_THREASHOLD = 255
@@ -580,6 +583,31 @@ ISEMAIL_META_REFERENCES = {
         blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
         blockquote='addr-spec       =   local-part "@" domain',
         cite='RFC 5322 section 3.4.1'),
+
+    "liberal_domain": dict(
+        key="liberal_domain",
+        blockquote_cite=" http://tools.ietf.org/html/rfc5322#section-3.4.1",
+        blockquote='domain          =   dot-atom / domain-literal / address_literal /obs-domain'
+            '---------------------------------------------------------------------------------------------'
+            '; NB For SMTP mail, the domain-literal is restricted by RFC5321 as follows:'
+            'Mailbox        = Local-part "@" ( domain-addr / address-literal )'
+            '-----------------------------------------------------------------------------------------'
+
+            '// http://tools.ietf.org/html/rfc5322#section-3.4.1'
+            '//      Note: A liberal syntax for the domain portion of addr-spec is'
+            '//      given here.  However, the domain portion contains addressing'
+            '//      information specified by and used in other protocols (e.g.,'
+            '//      [RFC1034], [RFC1035], [RFC1123], [RFC5321]).  It is therefore'
+            '//      incumbent upon implementations to conform to the syntax of'
+            '//      addresses for the context in which they are used.'
+            '// is_email() authors note: its not clear how to interpret this in'
+            '// the context of a general email address validator. The conclusion I'
+            '// have reached is this: "addressing information" must comply with'
+            '// RFC 5321 (and in turn RFC 1035), anything that is "semantically'
+            '// invisible" must comply only with RFC 5322.',
+
+        cite='RFC 5322 section 3.4.1'),
+
 }
 # </editor-fold>
 
@@ -596,6 +624,12 @@ ISEMAIL_DIAG_RESPONSES = dict(
         longdescription="Address is valid. Please note that this does not mean the address actually exists, nor even that the"
                     " domain actually exists. This address could be issued by the domain owner without breaking the rules"
                     " of any RFCs.",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+    ),
+    DNSWARN_INVALID_TLD=dict(
+        value=1004,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        description="Top Level Domain is not in the list of available TLDs",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_NO_MX_RECORD=dict(
@@ -800,10 +834,6 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-
-
-
-
     RFC5322_IPV6_ADDR=dict(
         value=1078,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
@@ -840,7 +870,6 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
-
     RFC5322_IPV4_ADDR=dict(
         value=1083,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
@@ -848,7 +877,6 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv4'],
     ),
-
     RFC5322_GENERAL_LITERAL=dict(
         value=1084,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
@@ -856,10 +884,13 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-general'],
     ),
-
-
-
-
+    RFC5322_LIMITED_DOMAIN=dict(
+        value=1085,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        description="The address is valid for RFC5322, but not RFC5321",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['liberal_domain'],
+    ),
     ERR_INVALID_ADDR_LITERAL=dict(
         value=1128,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
@@ -1048,13 +1079,18 @@ ISEMAIL_DIAG_RESPONSES = dict(
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
-
     ERR_EMPTY_ADDRESS=dict(
         value=1255,
         category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
         description="Empty Address Passed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+    ERR_UNKNOWN=dict(
+        value=1256,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        description="Unknown Error parsing email",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
     ),
 
 )
@@ -1080,7 +1116,10 @@ class MetaItem(object):
         self.description = dict_in['description']
 
     def __repr__(self):
-        return '%s(%s)' % (self.type_name, self.key)
+        if hasattr(self, 'status'):
+            return '%s(%s) [%s]' % (self.type_name, self.key, self.status.name)
+        else:
+            return '%s(%s)' % (self.type_name, self.key)
 
 
 class MetaCat(MetaItem):
@@ -1116,8 +1155,11 @@ class MetaDiag(MetaItem):
             else:
                 self.reference.append(MetaRef(dict_in['reference']))
 
-        self._base_status = self.category.status
         self._override_status = None
+
+    @property
+    def _base_status(self):
+        return self.category.status
 
     @property
     def status(self):
@@ -1165,6 +1207,12 @@ class MetaList(object):
         else:
             return self._by_value[item]
 
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return item in self._by_key
+        else:
+            return item in self._by_value
+
     def __len__(self):
         return len(self._by_key)
 
@@ -1196,6 +1244,12 @@ class MetaLookup(object):
         else:
             return self.by_value[item]
 
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return item in self.by_key
+        else:
+            return item in self.by_value
+
     def _load_codes(self):
         self.error_codes.clear()
         for c in self.diags:
@@ -1206,13 +1260,17 @@ class MetaLookup(object):
         for c in self.categories:
             c._override_status = None
         for c in self.diags:
-            c._override_status = ISEMAIL_RESULT_CODES.ERROR
+            c._override_status = None
             if c.status == ISEMAIL_RESULT_CODES.ERROR:
                 self.error_codes[c.key] = c
 
-    def set_error_on_warning(self, reload=True):
+    def set_error_on_warning(self, set_to=True, reload=True):
         for c in self.categories:
-            c._override_status = ISEMAIL_RESULT_CODES.ERROR
+            if set_to and c._base_status == ISEMAIL_RESULT_CODES.WARNING:
+                c._override_status = ISEMAIL_RESULT_CODES.ERROR
+            else:
+                c._override_status = None
+
         if reload:
             self._load_codes()
 
@@ -1228,6 +1286,9 @@ class MetaLookup(object):
         else:
             tmp_obj = self[obj_in]
             tmp_obj._override_status = ISEMAIL_RESULT_CODES.ERROR
+
+    def status(self, diag):
+        return self[diag].status
 
     def is_error(self, diag):
         return diag in self.error_codes

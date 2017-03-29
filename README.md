@@ -117,15 +117,79 @@ Diags
 [1255]         ERR_EMPTY_ADDRESS  Empty Address Passed (ISEMAIL_ERR)
 
 
+New:
+DNSWARN_INVALID_TLD
+ERR_UNKNOWN
+RFC5322_LIMITED_DOMAIN
 
-Breakout String:
 
-blah@blah.com
+* DEPREC_CFWS_NEAR_AT
+# DEPREC_COMMENT
+# DEPREC_LOCAL_PART
+# DNSWARN_NO_MX_RECORD
+# DNSWARN_NO_RECORD
+# ERR_ATEXT_AFTER_CFWS
+# ERR_ATEXT_AFTER_DOMLIT
+# ERR_ATEXT_AFTER_QS
+# ERR_BACKSLASH_END
+# ERR_CONSECUTIVE_DOTS
+# ERR_DOMAIN_HYPHEN_END
+# ERR_DOMAIN_HYPHEN_START
+# ERR_DOT_END
+# ERR_DOT_START
+# ERR_EMPTY_ADDRESS
+# ERR_EXPECTING_ATEXT
+# ERR_EXPECTING_CTEXT
+# ERR_EXPECTING_DTEXT
+# ERR_EXPECTING_QTEXT
+# ERR_NO_DOMAIN_PART
+# ERR_NO_DOMAIN_SEP
+# ERR_NO_LOCAL_PART
+# RFC5321_ADDRESS_LITERAL
+# RFC5322_DOMAIN
+# RFC5322_DOMAIN_LITERAL
+# RFC5322_DOMAIN_TOO_LONG
+# RFC5322_LABEL_TOO_LONG
+# RFC5322_LOCAL_TOO_LONG
+# RFC5322_TOO_LONG
+*  VALID
 
-blah    :  local part
-    blah    :  ATEXT
-        blah    :  FWS
-        blah    :  FWS
+Not handled
+RFC5321_IPV6_DEPRECATED
+RFC5322_IPV6_2X2X_COLON
+RFC5322_IPV6_BAD_CHAR
+RFC5322_IPV6_COLON_END
+RFC5322_IPV6_COLON_STRT
+RFC5322_IPV6_GRP_COUNT
+RFC5322_IPV6_MAX_GRPS
 
-@       : AT
-blah.com
+
+Address Specifications (summary):
+    address-spec = local-part "@" domain
+        local-part = dot-atom / quoted-string / obs-local-part
+            dot-atom = [CFWS] dot-atom-text [CFWS]
+                dot-atom-text = 1*atext *("." 1*atext)
+
+            quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+
+            obs-local-part = word *("." word)
+                word = atom / quoted-string
+                    quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+                    atom = [CFWS] 1*atext [CFWS]
+
+
+        domain = domain-addr / address-literal / dot-atom / domain-literal / obs-domain
+
+            domain-addr = sub-domain *("." sub-domain)
+                sub-domain = Let-dig [Ldh-str]
+
+            address-literal = "[" ( IPv4-address-literal / IPv6-address-literal / General-address-literal ) "]"
+
+            dot-atom = [CFWS] dot-atom-text [CFWS]
+                dot-atom-text = 1*atext *("." 1*atext)
+                    atext = <atext>
+
+            domain-literal = [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+
+            obs-domain = atom *("." atom)
+                atom = [CFWS] 1*atext [CFWS]

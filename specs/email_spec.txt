@@ -1,3 +1,38 @@
+Address Specifications (summary):
+    address-spec = local-part "@" domain
+        local-part = dot-atom / quoted-string / obs-local-part
+            dot-atom = [CFWS] dot-atom-text [CFWS]
+                dot-atom-text = 1*atext *("." 1*atext)
+
+            quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+
+            obs-local-part = word *("." word)
+                word = atom / quoted-string
+                    quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+                    atom = [CFWS] 1*atext [CFWS]
+
+
+        domain = domain-addr / address-literal / dot-atom / domain-literal / obs-domain
+
+            domain-addr = sub-domain *("." sub-domain)
+                sub-domain = Let-dig [Ldh-str]
+
+            address-literal = "[" ( IPv4-address-literal / IPv6-address-literal / General-address-literal ) "]"
+
+            dot-atom = [CFWS] dot-atom-text [CFWS]
+                dot-atom-text = 1*atext *("." 1*atext)
+                    atext = <atext>
+
+            domain-literal = [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
+
+            obs-domain = atom *("." atom)
+                atom = [CFWS] 1*atext [CFWS]
+
+
+******************************************************************************************************
+
+
+
 addr-spec       =   local-part "@" domain
 
     local-part      =   dot-atom / quoted-string / obs-local-part
@@ -504,3 +539,10 @@ Dec	Hex	Binary	Character Description
 125	7D	01111101	}	right curly bracket
 126	7E	01111110	~	tilde
 127	7F	01111111	DEL	delete
+
+
+
+====================================
+codes=['']
+error=True
+
