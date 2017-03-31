@@ -1,6 +1,6 @@
 import unittest
 from parse_objects import EmailParser, make_char_str
-from meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS
+from meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE
 
 ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS.append('http')
 
@@ -9,8 +9,8 @@ DIAGS = tmp_list.copy()
 
 
 NOT_IN_DIAGS = ['RFC5321_IPV6_DEPRECATED', 'RFC5322_IPV6_2X2X_COLON', 'RFC5322_IPV6_BAD_CHAR',
-                'RFC5322_IPV6_COLON_END', 'RFC5322_IPV6_COLON_STRT', 'RFC5322_IPV6_GRP_COUNT', 'RFC5322_IPV6_MAX_GRPS']
-
+                'RFC5322_IPV6_COLON_END', 'RFC5322_IPV6_COLON_STRT', 'RFC5322_IPV6_GRP_COUNT', 'RFC5322_IPV6_MAX_GRPS',
+                'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN']
 for diag in NOT_IN_DIAGS:
     DIAGS.remove(diag)
 
@@ -142,7 +142,7 @@ class MyTestData(object):
         # tmp_meth = getattr(tep, self.method_name)
 
         # test_ret = tep.run_method_test(tmp_meth, position=self.position, **self.kwargs)
-        test_ret = tep.parse(email_in=self.string_in, method=self.method_name, position=self.position, **self.kwargs)
+        test_ret = tep(email_in=self.string_in, method=self.method_name, position=self.position, **self.kwargs)
 
         if not self.defs.ret_football:
             if test_ret.length == self.result_length:
@@ -229,27 +229,6 @@ class MyTestData(object):
 class TestEmailParser(unittest.TestCase):
     TRACE_LEVEL = 9999    
     TEP = EmailParser(verbose=3, trace_filter=TRACE_LEVEL)
-    
-    #@classmethod
-    # def setUpClass(cls):
-
-    #    pass
-    # tmp_list = list(META_LOOKUP.diags._by_key.keys())
-    # cls.DIAGS = tmp_list.copy()
-
-    # print('\n\nDiags Count = %s\n\n' % len(cls.DIAGS))
-
-    # def setUp(self):
-    #    self.RUNTEST = -1
-
-    @classmethod
-    def tearDownClass(cls):
-        print('\n\n')
-        DIAGS.sort()
-        tmp_str = '\n'.join(DIAGS)
-        print(tmp_str)
-        print('\n\nCount = %s' % len(DIAGS))
-        #cls.assertCountEqual(cls, [], cls.DIAGS)
 
     def run_test_data(self, test_defs):
         if test_defs.limit_to != -1:
@@ -353,23 +332,165 @@ class TestEmailParser(unittest.TestCase):
     def test_zzzz_for_diags(self):
         tmp_len = len(DIAGS)
         DIAGS.sort()
-        tmp_str = '\n'.join(DIAGS)
-        print(tmp_str)
-        print('\n\nCount = %s' % len(DIAGS))
-        #cls.assertCountEqual(cls, [], cls.DIAGS)
+        tmp_str = '\n\n'
+        tmp_str += '\n'.join(DIAGS)
+        tmp_str += '\n'
         self.assertEquals(tmp_len, 0, msg=tmp_str)
+
+    def make_ls(self, *length, chars='X', prefix='', postfix=''):
+        tmp_ret = []
+        for l in length:
+            tmp_ret.append(''.ljust(l, chars[0]))
+        return '%s%s%s' % (prefix, '.'.join(tmp_ret), postfix)
 
     # ********************************************************
     #  PARSING TESTS
     # ********************************************************
 
     def test_address_spec(self):
-        self.fail()
+        address_too_long = self.make_ls(50) + '@' + self.make_ls(50, 50, 50, 50, 50)
+        domain_too_long = self.make_ls(50, 50, 50, 50, 50, 50, prefix='dan@')
+        local_too_long = self.make_ls(50, 50, postfix='@test.com')
+        label_too_long = self.make_ls(100,50, prefix='dan@')
+
         td = MyTestDefs(
             limit_to=-1,
+            history_level=3,
+            # trace_filter=4,
             method_name='address_spec',
             tests=[
-                MyTestData(1, '', 7, history_str=''),
+                # valod addresses
+                MyTestData(100, 'dan@example.com', 15, codes=['VALID'], history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'),
+                MyTestData(101, '"dan"@example.com', 17,
+                           codes=['RFC5321_QUOTED_STRING'],
+                           history_str='address_spec(local_part(quoted_string(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # empty address
+
+                MyTestData(201, '', 0, error=True,
+                           codes=['ERR_EMPTY_ADDRESS'],
+                           history_str=''
+                           ),
+
+                # address too long
+                MyTestData(202, address_too_long, 305, error=False,
+                           codes=['RFC5322_TOO_LONG'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # local part too long
+                MyTestData(203, local_too_long, 110, error=False,
+                           codes=['RFC5322_LOCAL_TOO_LONG'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'
+                           ),
+
+
+                # domain part too long
+                MyTestData(204, domain_too_long, 309, error=False,
+                           codes=['RFC5322_DOMAIN_TOO_LONG', 'RFC5322_TOO_LONG'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # segment too long
+                MyTestData(205, label_too_long, 155, error=False,
+                           codes=['RFC5322_LABEL_TOO_LONG'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # cfws near at (good pre-dot-atom)
+                MyTestData(301, '(bef@ore)foobar(after)@example.com', 34, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_COMMENT', 'DEPREC_LOCAL_PART'],
+                           history_str='address_spec(local_part(obs_local_part(...)), at, domain(domain_addr(...)))'
+                           ),
+                # cfws near at (good pre-QS)
+                MyTestData(302, '(bef@ore)"foobar"(after)@example.com', 36, error=False,
+                           codes=['CFWS_COMMENT', 'RFC5321_QUOTED_STRING'],
+                           history_str='address_spec(local_part(quoted_string(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # cfws near at (good pre-obs_local_part)
+                MyTestData(303, '(before)foobar(af@ter).hello@example.com', 40, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_COMMENT', 'DEPREC_LOCAL_PART'],
+                           history_str='address_spec(local_part(obs_local_part(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # cfws near at (good post-dot-atom)
+                MyTestData(304, 'foobar@(before)example.com(aft@er)', 34, error=False,
+                           codes=['CFWS_COMMENT', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(dot_atom(...)))'
+                           ),
+
+                # cfws near at (good post dom_lit)
+                MyTestData(305, 'foobar@(before)[example.com](aft@er)', 36, error=False,
+                           codes=['CFWS_COMMENT', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_literal(...)))'
+                           ),
+
+                # cfws near at (good post obs_domain)
+                MyTestData(306, 'foobar@another.(bef@ore)example.com(after)', 42, error=False,
+                           codes=['CFWS_COMMENT', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(obs_domain(...)))'
+                           ),
+
+                # cfws near at (bad pre-dot-atom)
+                MyTestData(351, '(before)foobar.test(afte@r)@example.com', 39, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'DEPREC_COMMENT', 'DEPREC_LOCAL_PART'],
+                           history_str='address_spec(local_part(obs_local_part(...)), at, domain(domain_addr(...)))'
+                           ),
+                # cfws near at (bad pre-QS)
+                MyTestData(352, '(before)"foobar"(aft@er)@example.com', 36, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'RFC5321_QUOTED_STRING'],
+                           history_str='address_spec(local_part(quoted_string(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # cfws near at (bad pre-obs_local_part)
+                MyTestData(353, '(before)foobar(after).(before)foobar(aft@er)@example.com', 56, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'DEPREC_COMMENT', 'DEPREC_LOCAL_PART'],
+                           history_str='address_spec(local_part(obs_local_part(...)), at, domain(domain_addr(...)))'
+                           ),
+
+                # cfws near at (bad post-dot-atom)
+                MyTestData(354, 'foobar@(be@fore)example.com(after)', 34, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(dot_atom(...)))'
+                           ),
+
+                # cfws near at (bad post dom_lit)
+                MyTestData(355, 'foobar@(befo@re)[example.com](after)', 36, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL',
+                                  'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_literal(...)))'
+                           ),
+
+                # cfws near at (bad post obs_domain)
+                MyTestData(356, 'foobar@(bef@ore)example(after).(before)com(after)', 49, error=False,
+                           codes=['CFWS_COMMENT', 'DEPREC_CFWS_NEAR_AT', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='address_spec(local_part(dot_atom(...)), at, domain(obs_domain(...)))'
+                           ),
+
+                # no domain
+                MyTestData(401, 'dan@', 0, error=True,
+                           codes=['ERR_NO_DOMAIN_PART'],
+                           history_str=''
+                           ),
+
+                # no domain sep
+                MyTestData(501, 'dan.strohl', 0, error=True,
+                           codes=['ERR_NO_DOMAIN_SEP'],
+                           history_str=''
+                           ),
+
+                # no local part
+                MyTestData(601, '@dan.com', 0, error=True,
+                           codes=['ERR_NO_LOCAL_PART'],
+                           history_str=''
+                           ),
+                # ERR_EXPECTING_QTEXT
+                MyTestData(701, '" "@test.com', 0, error=True, history_str='',
+                           codes=['ERR_EXPECTING_QTEXT'],
+                           ),
+
             ]
         )
         self.run_test_data(td)
@@ -468,13 +589,13 @@ class TestEmailParser(unittest.TestCase):
                            codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'],
                            history_str='local_part(obs_local_part(word(atom(atext)), single_dot, word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))))'),
                 MyTestData(3006, 'test."this is (a comment) inside a quote.test.test', 0,
-                           codes=['ERR_UNCLOSED_QUOTED_STR'], error=True, history_str=''),
+                           codes=['ERR_DOT_END'], error=True, history_str=''),
 
                 MyTestData(3007, '.word', 0, history_str='', codes=['ERR_DOT_START'], error=True),
                 MyTestData(3008, '..word and another word', 0, history_str='', codes=['ERR_DOT_START'], error=True),
-                MyTestData(3009, '"this is a word"..', 0, codes=['ERR_ATEXT_AFTER_QS', 'ERR_DOT_END', 'RFC5321_QUOTED_STRING'], error=True),
+                MyTestData(3009, '"this is a word"..', 0, codes=['ERR_DOT_END', 'RFC5321_QUOTED_STRING'], error=True),
                 MyTestData(3010, '"this is (a comment) inside a quote".', 0, error=True,
-                           codes=['ERR_ATEXT_AFTER_QS', 'ERR_DOT_END', 'RFC5321_QUOTED_STRING'],
+                           codes=['ERR_DOT_END', 'RFC5321_QUOTED_STRING'],
                            history_str=''),
 
             ]
@@ -521,7 +642,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(2010, '\t\r\nabc.123.456 \t', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
 
                 MyTestData(2011, '.abc.def', 0, codes=['ERR_DOT_START'], error=True),
-                MyTestData(2012, 'abc.', 0, codes=['ERR_EXPECTING_ATEXT', 'RFC5321_TLD'], error=True),
+                MyTestData(2012, 'abc.', 0, codes=['ERR_DOT_END', 'RFC5321_TLD'], error=True),
                 MyTestData(2013, '123..456', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
                 MyTestData(2014, '#$%.#$%..', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
                 MyTestData(2015, ',abc.123.456', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
@@ -536,7 +657,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
                 MyTestData(3002, '[\\rtest]', 8, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
-                MyTestData(3004, '[\r\nfoo][bar', 0),
+                MyTestData(3004, '[\r\nfoo][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(3005, '"\r\nfoo[bar', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
 
                 # no closing
@@ -549,7 +670,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
                 MyTestData(3104, '[ foo-bar]', 10, codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
-                MyTestData(3105, '[\t\t\r\nfoo][bar', 0),
+                MyTestData(3105, '[\t\t\r\nfoo][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws after
                 MyTestData(3106, '[\\rtest ]', 9,
@@ -559,7 +680,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(3107, '[foobar  ]', 10,
                            codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
-                MyTestData(3108, '[\r\nfoo\t][bar', 0),
+                MyTestData(3108, '[\r\nfoo\t][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws both
                 MyTestData(3109, '[ \\rtest ]', 10,
@@ -576,13 +697,13 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket))'),
                 MyTestData(3201, '\t\t[foo[bar]', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True,
                            history_str=''),
-                MyTestData(3202, ' \r\n [\r\nfoo][bar', 0),
+                MyTestData(3202, ' \r\n [\r\nfoo][bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws after
                 MyTestData(3203, '[\\rtest](this is a post comment)\r\n', 0, codes=['ERR_FWS_CRLF_END'], error=True,
                            history_str=''),
                 MyTestData(3204, '[foo[bar] \r\n ', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
-                MyTestData(3205, '[\r\nfoo] \t\t [bar', 0),
+                MyTestData(3205, '[\r\nfoo] \t\t [bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws both
                 MyTestData(3206, '(comment beore) [\\rtest] (and after)', 36,
@@ -591,7 +712,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket, cfws(...)))'),
                 MyTestData(3207, ' [foo[bar] \t\t', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True,
                            history_str=''),
-                MyTestData(3208, '\t[\r\nfoo] [bar', 0),
+                MyTestData(3208, '\t[\r\nfoo] [bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # mixed
                 MyTestData(3302, '(comment before)[ \\rtest]', 25,
@@ -600,7 +721,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket))'),
                 MyTestData(3303, '(comment before)[foo[bar ] ', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_COMMENT'],
                            error=True, history_str=''),
-                MyTestData(3304, '\t\t[ \r\nfoo](and after)\t[bar', 0),
+                MyTestData(3304, '\t\t[ \r\nfoo](and after)\t[bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 MyTestData(3401, '(comment before)[ \\rtest] blah', 0,
                            codes=['RFC5322_DOM_LIT_OBS_DTEXT', 'ERR_ATEXT_AFTER_DOMLIT', 'CFWS_COMMENT', 'CFWS_FWS'],
@@ -772,6 +893,27 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(5005, '(this is a comment) atom (this is a comment).this_is_atom."This_is_a_quote"', 0,
                            codes=['CFWS_COMMENT', 'CFWS_FWS', 'ERR_EXPECTING_ATEXT', 'RFC5322_DOMAIN',
                                   'RFC5322_LIMITED_DOMAIN'], error=True, history_str=''),
+
+                # *********************
+                # Misc Errors
+                # *********************
+
+                # ERR_BACKSLASH_END
+                MyTestData(6001, 'test.com\\', 0, error=True, history_str='',
+                           codes=['ERR_BACKSLASH_END'],
+                           ),
+
+                # ERR_DOMAIN_HYPHEN_END
+                MyTestData(6002, 'test.com-', 0, error=True, history_str='',
+                           codes=['ERR_DOMAIN_HYPHEN_END', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           ),
+
+                # ERR_EXPECTING_DTEXT
+                MyTestData(6003, '[ ]', 0, error=True, history_str='',
+                           codes=['ERR_EXPECTING_DTEXT'],
+                           ),
+
+
             ]
         )
         self.run_test_data(td)
@@ -934,7 +1076,7 @@ class TestEmailParser(unittest.TestCase):
             tests=[
                 MyTestData(1, '[test]', 6, codes=['RFC5322_DOMAIN_LITERAL'], history_str='domain_literal(open_sq_bracket, dtext, close_sq_bracket)'),
                 MyTestData(2, '[\\rtest]', 8, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
-                MyTestData(4, '[\r\nfoo][bar', 0, history_str=''),
+                MyTestData(4, '[\r\nfoo][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(5, '"\r\nfoo[bar', 0, history_str=''),
 
                 # no closing
@@ -944,12 +1086,12 @@ class TestEmailParser(unittest.TestCase):
                 # fws before
                 MyTestData(103, '[\t\\rtest]', 9, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(104, '[ foo-bar]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext, close_sq_bracket)'),
-                MyTestData(105, '[\t\t\r\nfoo][bar', 0, history_str=''),
+                MyTestData(105, '[\t\t\r\nfoo][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws after
                 MyTestData(106, '[\\rtest ]', 9, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
                 MyTestData(107, '[foobar  ]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext, fws(wsp), close_sq_bracket)'),
-                MyTestData(108, '[\r\nfoo\t][bar', 0, history_str=''),
+                MyTestData(108, '[\r\nfoo\t][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws both
                 MyTestData(109, '[ \\rtest ]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
@@ -958,22 +1100,22 @@ class TestEmailParser(unittest.TestCase):
                 # cfws before
                 MyTestData(200, '(This is a comment)[\\rtest]', 27, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT','CFWS_COMMENT'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(201, '\t\t[foo[bar]', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True, history_str=''),
-                MyTestData(202, ' \r\n [\r\nfoo][bar', 0, history_str=''),
+                MyTestData(202, ' \r\n [\r\nfoo][bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws after
                 MyTestData(203, '[\\rtest](this is a post comment)\r\n', 0, codes=['ERR_FWS_CRLF_END'], error=True, history_str=''),
                 MyTestData(204, '[foo[bar] \r\n ', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
-                MyTestData(205, '[\r\nfoo] \t\t [bar', 0, history_str=''),
+                MyTestData(205, '[\r\nfoo] \t\t [bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws both
                 MyTestData(206, '(comment beore) [\\rtest] (and after)', 36, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
                 MyTestData(207, ' [foo[bar] \t\t', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True, history_str=''),
-                MyTestData(208, '\t[\r\nfoo] [bar', 0, history_str=''),
+                MyTestData(208, '\t[\r\nfoo] [bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # mixed
                 MyTestData(302, '(comment before)[ \\rtest]', 25, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(303, '(comment before)[foo[bar ] ', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_COMMENT'], error=True, history_str=''),
-                MyTestData(304, '\t\t[ \r\nfoo](and after)\t[bar', 0, history_str=''),
+                MyTestData(304, '\t\t[ \r\nfoo](and after)\t[bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 MyTestData(401, '(comment before)[ \\rtest] blah', 0,
                            codes=['RFC5322_DOM_LIT_OBS_DTEXT', 'ERR_ATEXT_AFTER_DOMLIT', 'CFWS_COMMENT', 'CFWS_FWS'],
@@ -1682,8 +1824,90 @@ class TestEmailParser(unittest.TestCase):
         )
         self.run_test_data(td)
 
-    def test_domain_lookup(self):
-        self.fail()
+
+class TestParseNames(unittest.TestCase):
+    tep = EmailParser()
+
+
+    def _full_ret_string(self, test, test_ret):
+        tmp_ret = '\n\n'
+
+        tmp_ret += 'Run Number: %s\n' % test[0]
+        tmp_ret += 'Checked String: %r\n\n' % test[1]
+
+        tmp_ret += 'Length: %s\n' % test_ret.length
+
+        tmp_ret += 'Error Flag: %r\n' % test_ret.error
+        tmp_ret += 'Local_part: %r\n' % test_ret.local
+        tmp_ret += 'Domain_part: %r\n' % test_ret.domain
+
+        tmp_ret += 'Local_comments: %r\n' % test_ret.local_comments
+        tmp_ret += 'Domain_comments: %r\n' % test_ret.domain_comments
+
+        ret_codes = list(test_ret.diags())
+        ret_codes.sort()
+
+        tmp_ret += 'Codes: %r\n' % ret_codes
+
+        tmp_hist = test_ret.history.short_desc()
+
+        tmp_ret += 'History: %s\n\n' % tmp_hist
+
+        return tmp_ret
+
+    def test_parse_names(self):
+
+        test_data = [
+            # (1, 'address', 'local_part', 'domain_part', ['local comments'], ['domain_comments'], address_type),
+
+            (100, 'dan@example.com', 'dan', 'example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (101, '(comment1)dan@example.com', 'dan', 'example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (102, 'dan(comment2)@example.com', 'dan', 'example.com', ['comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (103, '(comment1)dan(comment2)@example.com', 'dan', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+
+            (200, ' "dan"@example.com', 'dan', 'example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (201, '(comment1)" dan"@example.com', ' dan', 'example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (202, '"dan"( comment2)@example.com', 'dan', 'example.com', [' comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (203, '(comment1)"dan"(comment2)@example.com', 'dan', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+
+            (300, 'dan.strohl@example.com', 'dan.strohl', 'example.com', [], [], True, False),
+            (301, '(comment1)dan. (comment2)strohl@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (302, 'dan(comment1).(comment2)strohl@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (303, '(comment1)dan(comment2).strohl(comment3"hello")@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2', 'comment3"hello"'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+
+            (304, 'dan@[example of a dot com]', 'dan', 'example of a dot com', [], [], ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT),
+            (305, 'dan@(comment1)[test:example of a dot com](comment2)', 'dan', 'test:example of a dot com', [], ['comment1', 'comment2'], ISEMAIL_DOMAIN_TYPE.GENERAL_LIT),
+            (306, 'dan@[1.1.1.1]', 'dan', '1.1.1.1', [], [], ISEMAIL_DOMAIN_TYPE.IPv4),
+            (307, 'dan@[ipv6:1:1:1:1:1:1:1:1]', 'dan', '1:1:1:1:1:1:1:1', [], [], ISEMAIL_DOMAIN_TYPE.IPv6),
+
+            (400, 'dan@(comment1)example(comment2). (comment3)com', 'dan', 'example.com', [], ['comment1', 'comment2', 'comment3'], ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS),
+            ]
+
+        LIMIT_TO = -1
+
+        if LIMIT_TO != -1:
+            with self.subTest('LIMITING TEST TO %s' % LIMIT_TO):
+                self.fail('ALERT, this test is limited.')
+
+        for test in test_data:
+            test_name = '#%s - %s' % (test[0], test[1])
+            with self.subTest(test_name):
+                if LIMIT_TO == -1 or LIMIT_TO == test[0]:
+                    tmp_res = self.tep(test[1])
+
+                    with self.subTest(test_name + ' - local'):
+                        self.assertEquals(tmp_res.local, test[2], self._full_ret_string(test, tmp_res))
+                    with self.subTest(test_name + ' - domain'):
+                        self.assertEquals(tmp_res.domain, test[3], self._full_ret_string(test, tmp_res))
+                    with self.subTest(test_name + ' - local_comments'):
+                        self.assertCountEqual(tmp_res.local_comments, test[4], self._full_ret_string(test, tmp_res))
+                    with self.subTest(test_name + ' - domain_comments'):
+                        self.assertCountEqual(tmp_res.domain_comments, test[5],self._full_ret_string(test, tmp_res))
+                    with self.subTest(test_name + ' - domain_type'):
+                        self.assertEquals(tmp_res.domain_type, test[6], self._full_ret_string(test, tmp_res))
+
+
+
 
 class TestDomainLookup(unittest.TestCase):
 

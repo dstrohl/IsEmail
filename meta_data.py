@@ -64,17 +64,26 @@ ISEMAIL_MAX_REPEAT = 9999
 ISEMAIL_MIN_REPEAT = 0
 
 
-
+"""
 ISEMAIL_RESULTS = dict(
     ISEMAIL_OK=0,
     ISEMAIL_WARNING=100,
     ISEMAIL_ERROR=255)
-
+"""
 
 class ISEMAIL_RESULT_CODES(IntEnum):
     OK = 1
     WARNING = 2
     ERROR = 3
+
+
+class ISEMAIL_DOMAIN_TYPE(IntEnum):
+    DNS = 1
+    DOMAIN_LIT = 2
+    GENERAL_LIT = 3
+    IPv4 = 4
+    IPv6 = 5
+    OTHER_NON_DNS = 6
 
 
 # <Categories>

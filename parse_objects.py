@@ -2,7 +2,7 @@
 from parse_results import ParseResultFootball,ParsingError, ParseResultEmptyFootball
 # from collections import deque
 from functools import wraps
-from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS
+from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE
 
 def make_char_str(*chars_in):
     tmp_ret = []
@@ -17,14 +17,15 @@ def make_char_str(*chars_in):
     return ''.join(tmp_ret)
 
 
-def as_football(segment=True):
+def as_football(segment=True, comment=False, skip=False):
     def football_decorator(func):
         @wraps(func)
         def func_wrapper(self, position, *args, non_segment=False, **kwargs):
             is_segment = segment and not non_segment
             raise_error = False
             error_raised = None
-            
+            tmp_near_at_flag = self.near_at_flag
+
             stage_name = kwargs.get('stage_name', func.__name__)        
             self.stage.append(stage_name)
     
@@ -35,8 +36,13 @@ def as_football(segment=True):
             if not self.at_end(position):
 
                 try:
+                    # self.add_note_trace('** checking near_at_flag: %s' % self.near_at_flag)
+
                     tmp_ret = func(self, position, *args, **kwargs)
+                    # self.add_note_trace('** checking at_in_cfws: %s' % self.at_in_cfws)
+
                 except ParsingError as err:
+                    self.near_at_flag = tmp_near_at_flag
                     raise_error = True
                     error_raised = err
                     tmp_ret = err.results
@@ -53,13 +59,19 @@ def as_football(segment=True):
                 tmp_ret.children.clear()
                 tmp_ret.segment_name = ''
 
+            if not tmp_ret or tmp_ret.error:
+                self.near_at_flag = tmp_near_at_flag
+
             self.add_end_trace(position, tmp_ret, raise_error=raise_error)
     
             self.stage.pop()
     
             if raise_error:
                 raise error_raised
-    
+
+            if tmp_ret and not tmp_ret.error:
+                if comment:
+                    tmp_ret.add_comment(position, tmp_ret.length)
             return tmp_ret
     
         return func_wrapper
@@ -360,6 +372,9 @@ class EmailParser(object):
             return tmp_ret
 
     def parse(self, email_in=None, method=None, position=0, lookup_domain=None, **kwargs):
+        if email_in == '' or email_in is None:
+            tmp_ret = self._empty
+            return tmp_ret('ERR_EMPTY_ADDRESS', raise_on_error=False)
         if lookup_domain is not None:
             tmp_lookup_domain = self.lookup_domain
             self.lookup_domain = lookup_domain
@@ -374,17 +389,16 @@ class EmailParser(object):
 
         try:
             tmp_ret = method(position, **kwargs)
-
-            if lookup_domain is not None:
-                self.lookup_domain = tmp_lookup_domain
-
-            if tmp_ret:
-                tmp_ret.finish()
-            return tmp_ret
         except ParsingError as err:
             tmp_ret = err.results
+
+        if lookup_domain is not None:
+            self.lookup_domain = tmp_lookup_domain
+
+        if tmp_ret:
             tmp_ret.finish()
-            return tmp_ret
+        return tmp_ret
+    __call__ = parse
 
     def this_char(self, position):
         position = self.pos(position)
@@ -535,12 +549,12 @@ class EmailParser(object):
             # self.add_note_trace('looping begin inside  AND at: ', position + tmp_ret.l + tmp_loop_ret.l)
             # self.trace_level += 1
             for act in args:
-                if isinstance(act, dict):
-                    tmp_name = act.pop('name', '')
-                elif isinstance(act, str):
-                    tmp_name = act
-                else:
-                    tmp_name = act.__name__
+                # if isinstance(act, dict):
+                #     tmp_name = act.pop('name', '')
+                # elif isinstance(act, str):
+                #     tmp_name = act
+                # else:
+                #     tmp_name = act.__name__
 
                 tmp_ret_1 = self._try_action(position + tmp_ret.l + tmp_loop_ret.l, act)
 
@@ -635,9 +649,6 @@ class EmailParser(object):
             else:
                 self.add_note_trace('     return A')
                 return 'A', res_a
-
-
-
 
     # TODO: Finish this
     def check_domain(self, domain):
@@ -736,7 +747,7 @@ class EmailParser(object):
 
     """
 
-    @as_football()
+    @as_football(skip=True)
     def address_spec(self, position):
 
         """
@@ -759,8 +770,11 @@ class EmailParser(object):
         """
         self.in_local_part = True
         self.in_domain_part = False
+        self.near_at_flag = False
         tmp_ret = self._empty
-        if self.at_end(position):
+        self.add_note_trace('Address Length: ' + str(self.email_len))
+        if self.email_len == 0:
+            self.add_note_trace('Empty address')
             return tmp_ret('ERR_EMPTY_ADDRESS')
         tmp_ret += self.local_part(position)
 
@@ -771,21 +785,28 @@ class EmailParser(object):
             if tmp_ret.l > 64:
                 tmp_ret('RFC5322_LOCAL_TOO_LONG')
 
+            self.add_note_trace('checking at_in_cfws: %s' % self.at_in_cfws)
+
             if self.at_in_cfws:
+                self.add_note_trace('Adding DEPREC_CFWS_NEAR_AT')
                 tmp_ret('DEPREC_CFWS_NEAR_AT')
 
-            tmp_ret_2 = self.at(position)
-            self.near_at_flag = True
+            tmp_ret_2 = self.at(position + tmp_ret)
 
+            self.near_at_flag = True
             self.in_domain_part = True
             self.in_local_part = False
 
             if tmp_ret_2:
+                tmp_ret_2.at_loc = position + tmp_ret
+
                 tmp_ret_3 = self.domain(position + tmp_ret + tmp_ret_2)
 
                 if tmp_ret_3:
                     tmp_ret += tmp_ret_2
                     tmp_ret += tmp_ret_3
+                    if tmp_ret_3 > 255:
+                        tmp_ret('RFC5322_DOMAIN_TOO_LONG')
                 else:
                     tmp_ret(tmp_ret_2, 'ERR_NO_DOMAIN_PART')
             else:
@@ -797,11 +818,27 @@ class EmailParser(object):
             else:
                 if tmp_ret.l > 254:
                     tmp_ret('RFC5322_TOO_LONG')
+
+            if not tmp_ret.results:
                 tmp_ret('VALID')
         else:
-            tmp_ret('ERR_UNKNOWN')
+            tmp_ret += self.at(position)
+            if tmp_ret:
+                tmp_ret('ERR_NO_LOCAL_PART')
+            else:
+                tmp_ret('ERR_UNKNOWN')
         return tmp_ret
 
+    def local_part_skip(self, position, football):
+        skip_next = False
+        if football and not football.error:
+            if self.at_end(position + football) and not football.error:
+                self.add_note_trace('Skipping due to at the end (and no error)')
+                skip_next = True
+            elif self.this_char(position + football) == self.AT and not football.error:
+                self.add_note_trace('Skipping due to @ next (and no error)')
+                skip_next = True
+        return skip_next
 
     @as_football()
     def local_part(self, position):
@@ -831,10 +868,10 @@ class EmailParser(object):
         except ParsingError as err:
             tmp_ret_2 = err.results
 
-        if tmp_ret_2 and not self.at_end(position + tmp_ret_2) and self.this_char(position + tmp_ret_2) != self.AT and not tmp_ret_2.error:
-            skip_next = True
+        skip_next = self.local_part_skip(position, tmp_ret_2)
 
         if not skip_next:
+            self.add_note_trace('Trying Quoted String')
             try:
                 tmp_ret_3 = self.quoted_string(position)
 
@@ -845,28 +882,26 @@ class EmailParser(object):
             if tmp_ch == 'B':
                 is_qs = True
 
-        if tmp_ret_2 and not self.at_end(position + tmp_ret_2) and self.this_char(position + tmp_ret_2) != self.AT and not tmp_ret_2.error:
-            skip_next = True
+            skip_next = self.local_part_skip(position, tmp_ret_3)
+        else:
+            self.add_note_trace('skipping Quoted String')
 
         if not skip_next:
             try:
+                self.add_note_trace('trying obs-local-part')
                 tmp_ret_3 = self.obs_local_part(position)
 
             except ParsingError as err:
                 tmp_ret_3 = err.results
 
-
-
             tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
             if tmp_ch == 'B':
                 is_qs = False
+        else:
+            self.add_note_trace('skipping obs-local-part')
 
         tmp_ret(tmp_ret_2, raise_on_error=False)
 
-
-        '''
-
-        '''
         self.add_note_trace('Returning length: ' + str(tmp_ret))
         if not self.at_end(position + tmp_ret):
             self.add_note_trace('not at the end, checking next char: ' + self.this_char(position + tmp_ret))
@@ -875,13 +910,15 @@ class EmailParser(object):
                 # errors_to_add.append('ERR_DOT_END')
                 tmp_ret('ERR_DOT_END', raise_on_error=False)
 
-        if tmp_ret and ((not self.at_end(position + tmp_ret)) or (not self.at_end(position + tmp_ret) and self.this_char(position + tmp_ret) != self.AT)):
-            if is_qs:
-                self.add_note_trace('adding ERR_ATEXT_AFTER_QS for QS')
-                tmp_ret('ERR_ATEXT_AFTER_QS', raise_on_error=False)
-            else:
-                self.add_note_trace('adding ERR_EXPECTING_ATEXT')
-                tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
+        if tmp_ret:
+            if not self.at_end(position + tmp_ret):
+                if self.this_char(position + tmp_ret) != self.AT:
+                    if is_qs:
+                        self.add_note_trace('adding ERR_ATEXT_AFTER_QS for QS')
+                        tmp_ret('ERR_ATEXT_AFTER_QS', raise_on_error=False)
+                    else:
+                        self.add_note_trace('adding ERR_EXPECTING_ATEXT')
+                        tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
 
         if 'DEPREC_LOCAL_PART' in tmp_ret and 'CFWS_COMMENT' in tmp_ret:
             tmp_ret('DEPREC_COMMENT')
@@ -892,21 +929,21 @@ class EmailParser(object):
 
         return tmp_ret
 
-
     @as_football()
     def dot_atom(self, position):
         """
         dot-atom        =   [CFWS] dot-atom-text [CFWS]
         """
         tmp_ret = self._empty
-        tmp_ret += self.cfws(position, ban_at=self.in_domain_part)
+        tmp_ret += self.cfws(position)
         self.near_at_flag = False
+        self.at_in_cfws = False
 
         tmp_ret_2 = self.dot_atom_text(position + tmp_ret)
 
         if tmp_ret_2:
             tmp_ret += tmp_ret_2
-            tmp_ret_cfws = self.cfws(position + tmp_ret, ban_at=self.in_local_part)
+            tmp_ret_cfws = self.cfws(position + tmp_ret)
 
             if tmp_ret_cfws and \
                     not self.at_end(position + tmp_ret + tmp_ret_cfws) and \
@@ -914,10 +951,13 @@ class EmailParser(object):
                 tmp_ret('ERR_ATEXT_AFTER_CFWS')
 
             tmp_ret += tmp_ret_cfws
-            self.at_in_cfws = False
 
+            # if tmp_ret.error and self.in_domain_part:
+            #    self.near_at_flag = True
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
             return tmp_ret
-
+        # if self.in_domain_part:
+        #    self.near_at_flag = True
         return self._empty
 
     @as_football()
@@ -984,6 +1024,7 @@ class EmailParser(object):
         """
             word = atom / quoted-string
         """
+        self.at_in_cfws = False
         tmp_ret = self._empty
         tmp_act, tmp_ret2 = self.try_or(position,
                                self.atom,
@@ -1002,11 +1043,13 @@ class EmailParser(object):
         tmp_ret = self._empty
 
         tmp_ret += self.cfws(position)
+        # tmp_near_at_flag = self.near_at_flag
         self.near_at_flag = False
 
         tmp_ret_2 = self.atext(position + tmp_ret)
 
         if not tmp_ret_2:
+            # self.near_at_flag = tmp_near_at_flag
             return self._empty
 
         tmp_ret += tmp_ret_2
@@ -1020,6 +1063,8 @@ class EmailParser(object):
                 tmp_ret('ERR_ATEXT_AFTER_CFWS')
 
         tmp_ret += tmp_ret_cfws
+        # if not tmp_ret or tmp_ret.error:
+        #     self.near_at_flag = tmp_near_at_flag
 
         return tmp_ret
 
@@ -1204,18 +1249,21 @@ class EmailParser(object):
         if tmp_ret > 255:
             tmp_ret('RFC5322_DOMAIN_TOO_LONG')
 
-        tmp_char = self.this_char(position + tmp_ret - 1)
-        self.add_note_trace('Final domain char = ' + tmp_char)
-        if tmp_char == self.HYPHEN:
-            tmp_ret('ERR_DOMAIN_HYPHEN_END')
-        elif tmp_char == self.DOT:
-            tmp_ret('ERR_DOT_END')
-        elif tmp_char == self.BACKSLASH:
-            tmp_ret('ERR_BACKSLASH_END')
+        tmp_len = tmp_ret + position
+        if tmp_len == self.email_len or tmp_len == self.email_len -1:
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                tmp_ret('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                tmp_ret('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                tmp_ret('ERR_BACKSLASH_END')
 
         if not self.at_end(position + tmp_ret):
             return tmp_ret('ERR_EXPECTING_ATEXT')
 
+        # tmp_ret._set_domain_type()
         return tmp_ret
 
     @as_football()
@@ -1247,6 +1295,7 @@ class EmailParser(object):
         else:
             tmp_ret('RFC5321_TLD')
 
+        tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
         return tmp_ret
 
     @as_football()
@@ -1338,11 +1387,13 @@ class EmailParser(object):
         """
         tmp_ret = self._empty
 
-        tmp_ret += self.cfws(position, ban_at=True)
+        tmp_ret += self.cfws(position)
+        # tmp_near_at_flag = self.near_at_flag
         self.near_at_flag = False
         tmp_ret_2 = self.open_sq_bracket(position + tmp_ret.l)
 
         if not tmp_ret_2:
+            # self.near_at_flag = tmp_near_at_flag
             return self._empty
 
         tmp_ret += tmp_ret_2
@@ -1369,7 +1420,8 @@ class EmailParser(object):
                 return tmp_ret('ERR_EXPECTING_DTEXT')
             tmp_ret_2 += self.fws(position + tmp_ret + tmp_ret_2)
         else:
-            return self._empty
+            # self.near_at_flag = tmp_near_at_flag
+            return tmp_ret('ERR_EXPECTING_DTEXT')
 
         tmp_ret += tmp_ret_2
 
@@ -1377,7 +1429,11 @@ class EmailParser(object):
 
         if tmp_ret_2:
             tmp_ret += tmp_ret_2
+            if tmp_ret.l == 2:
+                return tmp_ret('ERR_EXPECTING_DTEXT')
+
         else:
+            # self.near_at_flag = tmp_near_at_flag
             return tmp_ret('ERR_UNCLOSED_DOM_LIT')
 
         tmp_ret += self.cfws(position + tmp_ret)
@@ -1385,8 +1441,10 @@ class EmailParser(object):
         if tmp_ret and not self.at_end(position + tmp_ret + 1):
             tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
 
+        # if tmp_ret.error or not tmp_ret:
+        #     self.near_at_flag = tmp_near_at_flag
+        tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT
         return tmp_ret('RFC5322_DOMAIN_LITERAL')
-
 
     @as_football()
     def domain_literal_sub(self, position):
@@ -1460,7 +1518,6 @@ class EmailParser(object):
         else:
             return self._empty
 
-
     @as_football()
     def obs_domain(self, position):
         """
@@ -1477,6 +1534,8 @@ class EmailParser(object):
                                 self.single_dot,
                                 self.atom,
                                 min_loop=0, max_loop=256)
+
+        tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS
 
         return tmp_ret
 
@@ -1543,6 +1602,7 @@ class EmailParser(object):
                             self.colon,
                             self.dcontent)
         if tmp_ret_2:
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.GENERAL_LIT
             return tmp_ret('RFC5322_GENERAL_LITERAL', tmp_ret_2)
         else:
             return self._empty
@@ -1594,6 +1654,7 @@ class EmailParser(object):
                             self.single_dot, self.snum)
 
         if tmp_ret:
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.IPv4
             return tmp_ret('RFC5322_IPV4_ADDR')
         else:
             return self._empty
@@ -1637,6 +1698,7 @@ class EmailParser(object):
 
             if tmp_ret_2:
                 tmp_ret += tmp_ret_2
+                tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.IPv6
                 return tmp_ret('RFC5322_IPV6_ADDR')
 
         return self._empty
@@ -1826,8 +1888,8 @@ class EmailParser(object):
             tmp_ret.remove('RFC5322_IPV4_ADDR')
             return tmp_ret('RFC5322_IPV6_IPV4_COMP_ADDR')
 
-    @as_football()
-    def cfws(self, position, ban_at=False):
+    @as_football(skip=True)
+    def cfws(self, position):
         """
         CFWS   =   (1*([FWS] comment) [FWS]) / FWS
             // http://tools.ietf.org/html/rfc5322#section-3.4.1
@@ -1845,25 +1907,26 @@ class EmailParser(object):
             tmp_ret += tmp_ret_comment
             tmp_ret += self.fws(position + tmp_ret)
 
-            tmp_find = self.count(position, self.AT, length=tmp_ret.l - 1)
-            if tmp_find > 0:
-                self.at_in_cfws = True
-                if ban_at or self.near_at_flag:
+            # tmp_find = self.count(position, self.AT, length=tmp_ret.l)
+            # self.add_note_trace('pre (1) checking for AT count: %s in: %s' % (tmp_find, self.mid(position, tmp_ret.l)))
+
+            if tmp_ret:
+                self.at_in_cfws = self.AT in self.mid(position, tmp_ret.l)
+                if self.at_in_cfws and self.near_at_flag:
                     tmp_ret('DEPREC_CFWS_NEAR_AT')
-            else:
-                self.at_in_cfws = False
+
+            # self.add_note_trace('post (1) checking at_in_cfws: %s' % self.at_in_cfws)
 
             return tmp_ret
 
         tmp_ret += self.fws(position)
 
-        tmp_find = self.count(position, self.AT, length=tmp_ret.l - 1)
-        if tmp_find > 0:
-            self.at_in_cfws = True
-            if ban_at or self.near_at_flag:
+        if tmp_ret:
+            self.at_in_cfws = self.AT in self.mid(position, tmp_ret.l)
+            if self.at_in_cfws and self.near_at_flag:
                 tmp_ret('DEPREC_CFWS_NEAR_AT')
-        else:
-            self.at_in_cfws = False
+
+        # self.add_note_trace('post (2) checking at_in_cfws: %s' % self.at_in_cfws)
 
         return tmp_ret
 
@@ -1885,7 +1948,7 @@ class EmailParser(object):
             tmp_ret += self.fws(position + tmp_ret.l)
         return tmp_ret
 
-    @as_football()
+    @as_football(comment=True)
     def comment(self, position):
         """
             comment         =   "(" *([FWS] ccontent) [FWS] ")"
