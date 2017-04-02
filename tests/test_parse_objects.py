@@ -1,6 +1,7 @@
 import unittest
 from parse_objects import EmailParser, make_char_str
-from meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE
+from meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from dns_functions import DNSTimeoutError
 
 ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS.append('http')
 
@@ -10,12 +11,42 @@ DIAGS = tmp_list.copy()
 
 NOT_IN_DIAGS = ['RFC5321_IPV6_DEPRECATED', 'RFC5322_IPV6_2X2X_COLON', 'RFC5322_IPV6_BAD_CHAR',
                 'RFC5322_IPV6_COLON_END', 'RFC5322_IPV6_COLON_STRT', 'RFC5322_IPV6_GRP_COUNT', 'RFC5322_IPV6_MAX_GRPS',
-                'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN']
+                'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN', 'DNSWARN_COMM_ERROR']
 for diag in NOT_IN_DIAGS:
     DIAGS.remove(diag)
 
 print('\n\nDiags Count = %s\n\n' % len(DIAGS))
 
+
+def full_ret_string(test_num, test_string, test_ret, extra_string=''):
+    tmp_ret = '\n\n'
+
+    tmp_ret += 'Run Number: %s\n' % test_num
+    tmp_ret += 'Checked String: %r\n\n' % test_string
+
+    tmp_ret += 'Length: %s\n' % test_ret.length
+
+    tmp_ret += 'Error Flag: %r\n' % test_ret.error
+    tmp_ret += 'Local_part: %r\n' % test_ret.local
+    tmp_ret += 'Domain_part: %r\n' % test_ret.domain
+
+    tmp_ret += 'Local_comments: %r\n' % test_ret.local_comments
+    tmp_ret += 'Domain_comments: %r\n' % test_ret.domain_comments
+
+    ret_codes = list(test_ret.diags())
+    ret_codes.sort()
+
+    tmp_ret += 'Codes: %r\n' % ret_codes
+
+    tmp_hist = test_ret.history.short_desc()
+
+    tmp_ret += 'History: %s\n' % tmp_hist
+
+    tmp_ret += 'Extra Info: %r\n\n' % extra_string
+
+    tmp_ret += 'Trace:\n%s\n\n' % test_ret.trace_str
+
+    return tmp_ret
 
 class TestMakeParseString(unittest.TestCase):
 
@@ -125,7 +156,8 @@ class MyTestData(object):
 
         tmp_hist = test_ret.history.short_desc()
 
-        tmp_ret += 'History: %s\n\n' % tmp_hist
+        tmp_ret += 'History: %s\n' % tmp_hist
+        tmp_ret += 'Trace:\n%s\n\n' % test_ret.trace_str
 
         return tmp_ret
 
@@ -865,8 +897,9 @@ class TestEmailParser(unittest.TestCase):
                            codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
                 MyTestData(4502, '[http:foobar]', 13,
-                           codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_DOMAIN', 'RFC5322_GENERAL_LITERAL',
+                                  'RFC5322_LIMITED_DOMAIN'],
+                           history_str='domain(address_literal(open_sq_bracket, general_address_literal(...), close_sq_bracket))'),
 
                 # Enclosure fail
                 MyTestData(4601, '[1.1.1.1', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
@@ -1826,61 +1859,35 @@ class TestEmailParser(unittest.TestCase):
 
 
 class TestParseNames(unittest.TestCase):
-    tep = EmailParser()
-
-
-    def _full_ret_string(self, test, test_ret):
-        tmp_ret = '\n\n'
-
-        tmp_ret += 'Run Number: %s\n' % test[0]
-        tmp_ret += 'Checked String: %r\n\n' % test[1]
-
-        tmp_ret += 'Length: %s\n' % test_ret.length
-
-        tmp_ret += 'Error Flag: %r\n' % test_ret.error
-        tmp_ret += 'Local_part: %r\n' % test_ret.local
-        tmp_ret += 'Domain_part: %r\n' % test_ret.domain
-
-        tmp_ret += 'Local_comments: %r\n' % test_ret.local_comments
-        tmp_ret += 'Domain_comments: %r\n' % test_ret.domain_comments
-
-        ret_codes = list(test_ret.diags())
-        ret_codes.sort()
-
-        tmp_ret += 'Codes: %r\n' % ret_codes
-
-        tmp_hist = test_ret.history.short_desc()
-
-        tmp_ret += 'History: %s\n\n' % tmp_hist
-
-        return tmp_ret
+    tep = EmailParser(trace_filter=9999, verbose=3)
 
     def test_parse_names(self):
 
         test_data = [
             # (1, 'address', 'local_part', 'domain_part', ['local comments'], ['domain_comments'], address_type),
 
-            (100, 'dan@example.com', 'dan', 'example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (101, '(comment1)dan@example.com', 'dan', 'example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (102, 'dan(comment2)@example.com', 'dan', 'example.com', ['comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (103, '(comment1)dan(comment2)@example.com', 'dan', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (100, 'dan@example.com', 'dan', 'example.com', 'dan@example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (101, '(comment1)dan@example.com', 'dan', 'example.com', 'dan@example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (102, 'dan(comment2)@example.com', 'dan', 'example.com', 'dan@example.com', ['comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (103, '(comment1)dan(comment2)@example.com', 'dan', 'example.com', 'dan@example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
 
-            (200, ' "dan"@example.com', 'dan', 'example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (201, '(comment1)" dan"@example.com', ' dan', 'example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (202, '"dan"( comment2)@example.com', 'dan', 'example.com', [' comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (203, '(comment1)"dan"(comment2)@example.com', 'dan', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (200, ' "dan"@example.com', 'dan', 'example.com', '"dan"@example.com', [], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (201, '(comment1)" dan"@example.com', ' dan', 'example.com', '" dan"@example.com', ['comment1'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (202, '"dan"( comment2)@example.com', 'dan', 'example.com', '"dan"@example.com', [' comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (203, '(comment1)"dan"(comment2)@example.com', 'dan', 'example.com', '"dan"@example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
 
-            (300, 'dan.strohl@example.com', 'dan.strohl', 'example.com', [], [], True, False),
-            (301, '(comment1)dan. (comment2)strohl@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (302, 'dan(comment1).(comment2)strohl@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
-            (303, '(comment1)dan(comment2).strohl(comment3"hello")@example.com', 'dan.strohl', 'example.com', ['comment1', 'comment2', 'comment3"hello"'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (300, 'dan.strohl@example.com', 'dan.strohl', 'example.com', 'dan.strohl@example.com', [], [], True, False),
+            (301, '(comment1)dan. (comment2)strohl@example.com', 'dan.strohl', 'example.com', 'dan.strohl@example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (302, 'dan(comment1).(comment2)strohl@example.com', 'dan.strohl', 'example.com', 'dan.strohl@example.com', ['comment1', 'comment2'], [], ISEMAIL_DOMAIN_TYPE.DNS),
+            (303, '(comment1)dan(comment2).strohl(comment3"hello")@example.com', 'dan.strohl', 'example.com', 'dan.strohl@example.com', ['comment1', 'comment2', 'comment3"hello"'], [], ISEMAIL_DOMAIN_TYPE.DNS),
 
-            (304, 'dan@[example of a dot com]', 'dan', 'example of a dot com', [], [], ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT),
-            (305, 'dan@(comment1)[test:example of a dot com](comment2)', 'dan', 'test:example of a dot com', [], ['comment1', 'comment2'], ISEMAIL_DOMAIN_TYPE.GENERAL_LIT),
-            (306, 'dan@[1.1.1.1]', 'dan', '1.1.1.1', [], [], ISEMAIL_DOMAIN_TYPE.IPv4),
-            (307, 'dan@[ipv6:1:1:1:1:1:1:1:1]', 'dan', '1:1:1:1:1:1:1:1', [], [], ISEMAIL_DOMAIN_TYPE.IPv6),
+            (304, 'dan@[example of a dot com]', 'dan', 'example of a dot com', 'dan@[example of a dot com]', [], [], ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT),
+            (305, 'dan@(comment1)[test:example of a dot com](comment2)', 'dan', 'test:example of a dot com', 'dan@[test:example of a dot com]', [], ['comment1', 'comment2'], ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT),
+            (306, 'dan@[http:example_of_a_dot_com]', 'dan', ['http', 'example_of_a_dot_com'], 'dan@[http:example_of_a_dot_com]', [], [], ISEMAIL_DOMAIN_TYPE.GENERAL_LIT),
+            (307, 'dan@[1.1.1.1]', 'dan', '1.1.1.1', 'dan@[1.1.1.1]', [], [], ISEMAIL_DOMAIN_TYPE.IPv4),
+            (308, 'dan@[ipv6:1:1:1:1:1:1:1:1]', 'dan', '1:1:1:1:1:1:1:1', 'dan@[ipv6:1:1:1:1:1:1:1:1]', [], [], ISEMAIL_DOMAIN_TYPE.IPv6),
 
-            (400, 'dan@(comment1)example(comment2). (comment3)com', 'dan', 'example.com', [], ['comment1', 'comment2', 'comment3'], ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS),
+            (400, 'dan@(comment1)example(comment2). (comment3)com', 'dan', 'example.com', 'dan@example.com', [], ['comment1', 'comment2', 'comment3'], ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS),
             ]
 
         LIMIT_TO = -1
@@ -1896,26 +1903,94 @@ class TestParseNames(unittest.TestCase):
                     tmp_res = self.tep(test[1])
 
                     with self.subTest(test_name + ' - local'):
-                        self.assertEquals(tmp_res.local, test[2], self._full_ret_string(test, tmp_res))
+                        self.assertEquals(tmp_res.local, test[2], full_ret_string(test[0], test[1], tmp_res))
                     with self.subTest(test_name + ' - domain'):
-                        self.assertEquals(tmp_res.domain, test[3], self._full_ret_string(test, tmp_res))
+                        self.assertEquals(tmp_res.domain, test[3], full_ret_string(test[0], test[1], tmp_res))
+                    with self.subTest(test_name + ' -  full'):
+                        self.assertEquals(str(tmp_res), test[4], full_ret_string(test[0], test[1], tmp_res))
                     with self.subTest(test_name + ' - local_comments'):
-                        self.assertCountEqual(tmp_res.local_comments, test[4], self._full_ret_string(test, tmp_res))
+                        self.assertCountEqual(tmp_res.local_comments, test[5], full_ret_string(test[0], test[1], tmp_res))
                     with self.subTest(test_name + ' - domain_comments'):
-                        self.assertCountEqual(tmp_res.domain_comments, test[5],self._full_ret_string(test, tmp_res))
+                        self.assertCountEqual(tmp_res.domain_comments, test[6], full_ret_string(test[0], test[1], tmp_res))
                     with self.subTest(test_name + ' - domain_type'):
-                        self.assertEquals(tmp_res.domain_type, test[6], self._full_ret_string(test, tmp_res))
-
-
+                        self.assertEquals(tmp_res.domain_type, test[7], full_ret_string(test[0], test[1], tmp_res))
 
 
 class TestDomainLookup(unittest.TestCase):
 
-    def test_domain_lookup(self):
-        self.fail()
+    def test_lookup(self):
+        LL = ISEMAIL_DNS_LOOKUP_LEVELS
+        DNS_RESP = ['DNSWARN_INVALID_TLD', 'DNSWARN_NO_RECORD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_COMM_ERROR']
 
-    def test_mx_lookup(self):
-        self.fail()
+        test_data = [
+            # (num, domain_name, lookup_type, expected_return, raised_error, kwargs_dict)
+            (1, 'dan@example.com', LL.NO_LOOKUP, ''),
 
-    def test_tld_lookup(self):
-        self.fail()
+            (100, 'dan@example.com', LL.TLD_MATCH, ''),
+            (101, 'dan@example.foobar', LL.TLD_MATCH, 'DNSWARN_INVALID_TLD'),
+
+            (201, 'dan@example.com', LL.ANY_RECORD, ''),
+            (202, 'dan@example.foobar', LL.ANY_RECORD, 'DNSWARN_INVALID_TLD'),
+            (203, 'dan@no_domain.example.com', LL.ANY_RECORD, 'DNSWARN_NO_RECORD'),
+
+            (301, 'dan@iana.org', LL.MX_RECORD, ''),
+            (302, 'dan@example.foobar', LL.MX_RECORD, 'DNSWARN_INVALID_TLD'),
+            (303, 'dan@no_domain.example.com', LL.MX_RECORD, 'DNSWARN_NO_RECORD'),
+            (304, 'dan@example.com', LL.MX_RECORD, 'DNSWARN_NO_MX_RECORD'),
+
+            # comm error
+            (601, 'dan@example.com', LL.ANY_RECORD, 'DNSWARN_COMM_ERROR', None, {'dns_servers': '127.0.0.1', 'dns_timeout': 1}),
+            (602, 'dan@example.com', LL.ANY_RECORD, '', DNSTimeoutError, {'dns_servers': '127.0.0.1', 'dns_timeout': 1, 'raise_on_error': True}),
+
+            # no tld list
+            (701, 'dan@example.com', LL.TLD_MATCH, '', AttributeError, {'tld_list': []}),
+            (702, 'dan@example.com', LL.ANY_RECORD, '', None, {'tld_list': []}),
+
+            # manual TLD list
+            (801, 'dan@example.foobar', LL.TLD_MATCH, '', None, {'tld_list': ['BLAH', 'FOOBAR']}),
+            (802, 'dan@example.com', LL.TLD_MATCH, 'DNSWARN_INVALID_TLD', None, {'tld_list': ['BLAH', 'FOOBAR']}),
+
+            # force server
+            (901, 'dan@example.com', LL.ANY_RECORD, '', None, {'dns_servers': '8.8.8.8'}),
+
+            # no dns names
+            (1001, 'dan@[example.com]', LL.MX_RECORD, ''),
+            (1003, 'dan@[1.2.3.4]', LL.MX_RECORD, ''),
+            (1004, 'dan@[ipv6:1:1:1:1:1:1:1:1]', LL.MX_RECORD, ''),
+
+        ]
+
+        LIMIT_TO = -1
+
+        if LIMIT_TO != -1:
+            with self.subTest('LIMITING TEST TO %s' % LIMIT_TO):
+                self.fail('ALERT, this test is limited.')
+
+        for test in test_data:
+            test_name = '#%s - %s' % (test[0], test[1])
+            with self.subTest(test_name):
+                if LIMIT_TO == -1 or LIMIT_TO == test[0]:
+                    if len(test) > 5:
+                        emv = EmailParser(**test[5])
+                    else:
+                        emv = EmailParser()
+
+                    if len(test) > 4 and test[4] is not None:
+                        with self.subTest(test_name + ' - Exception'):
+                            with self.assertRaises(test[4]):
+                                tmp_ret = emv(test[1], dns_lookup_level=test[2])
+                    else:
+                        tmp_ret = emv(test[1], dns_lookup_level=test[2])
+                        for resp in DNS_RESP:
+                            with self.subTest(test_name + ' - response - ' + resp):
+                                tmp_check = resp in tmp_ret
+                                if resp == test[3]:
+                                    tmp_msg = full_ret_string(test[0], test[1], tmp_ret,
+                                                              '%s IS NOT in the responses' % resp)
+                                    self.assertTrue(tmp_check, msg=tmp_msg)
+                                else:
+                                    tmp_msg = full_ret_string(test[0], test[1], tmp_ret,
+                                                              '%s IS in the responses (and should not be' % resp)
+                                    self.assertFalse(tmp_check, msg=tmp_msg)
+
+

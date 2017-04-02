@@ -47,6 +47,7 @@ ISEMAIL_MAX_THREASHOLD = 255
 
 # Element types
 
+'''
 ISEMAIL_ELEMENT_LOCALPART = 'local_part'
 ISEMAIL_ELEMENT_COMMENT = 'comment'
 ISEMAIL_ELEMENT_QUOTEDSTRING = 'quoted_string'
@@ -55,14 +56,14 @@ ISEMAIL_ELEMENT_DOMAINPART = 'domain_part'
 ISEMAIL_ELEMENT_DOMAIN_LIT_IPV4 = 'domain_ipv4_literal'
 ISEMAIL_ELEMENT_DOMAIN_LIT_IPV6 = 'domain_ipv6_literal'
 ISEMAIL_ELEMENT_DOMAIN_LIT_GEN = 'domain_general_literal'
-
+'''
 
 # ISEMAIL_IP_REGEX = re.compile(r'(?P<address>(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')
 # ISEMAIL_IP_REGEX_GOOD_CHAR = re.compile(r'^[0-9A-Fa-f]{0,4}$')
-
+'''
 ISEMAIL_MAX_REPEAT = 9999
 ISEMAIL_MIN_REPEAT = 0
-
+'''
 
 """
 ISEMAIL_RESULTS = dict(
@@ -84,6 +85,15 @@ class ISEMAIL_DOMAIN_TYPE(IntEnum):
     IPv4 = 4
     IPv6 = 5
     OTHER_NON_DNS = 6
+
+class ISEMAIL_DNS_LOOKUP_LEVELS(IntEnum):
+    NO_LOOKUP = 0
+    TLD_MATCH = 1
+    ANY_RECORD = 2
+    MX_RECORD = 3
+
+
+
 
 
 # <Categories>
@@ -633,6 +643,12 @@ ISEMAIL_DIAG_RESPONSES = dict(
         longdescription="Address is valid. Please note that this does not mean the address actually exists, nor even that the"
                     " domain actually exists. This address could be issued by the domain owner without breaking the rules"
                     " of any RFCs.",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+    ),
+    DNSWARN_COMM_ERROR=dict(
+        value=1003,
+        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        description="There was an error communicating with DNS",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_INVALID_TLD=dict(

@@ -1,8 +1,21 @@
-from dns import resolver, reversename
+__all__ = ['DNSTimeoutError', 'DNSCommError', 'dns_lookup']
+
+from meta_data import ISEMAIL_DNS_LOOKUP_LEVELS
+try:
+    from dns import resolver, reversename
+    from dns import exception as dns_except
+    USE_SOCKETS = False
+except ImportError:
+    import socket
+    USE_SOCKETS = True
+
+#Uses dnspython if it exists, otherwise will use socket, in which case MX lookup is not possible.
+
 
 # DNS TLD's from:
 # http://data.iana.org/TLD/tlds-alpha-by-domain.txt
-# Version 2017032901, Last Updated Thu Mar 30 07:07:01 2017 UTC', '',
+#   Version 2017032901, Last Updated Thu Mar 30 07:07:01 2017 UTC
+
 DNS_TLD = ['AAA', 'AARP', 'ABARTH', 'ABB', 'ABBOTT', 'ABBVIE', 'ABC', 'ABLE', 'ABOGADO', 'ABUDHABI', 'AC', 'ACADEMY',
            'ACCENTURE', 'ACCOUNTANT', 'ACCOUNTANTS', 'ACO', 'ACTIVE', 'ACTOR', 'AD', 'ADAC', 'ADS', 'ADULT', 'AE',
            'AEG', 'AERO', 'AETNA', 'AF', 'AFAMILYCOMPANY', 'AFL', 'AFRICA', 'AG', 'AGAKHAN', 'AGENCY', 'AI', 'AIG',
@@ -147,43 +160,137 @@ DNS_TLD = ['AAA', 'AARP', 'ABARTH', 'ABB', 'ABBOTT', 'ABBVIE', 'ABC', 'ABLE', 'A
            'ZIPPO', 'ZM', 'ZONE', 'ZUERICH', 'ZW']
 
 
-def tld_match(host_name, tld_list=None):
-    tld_list = tld_list or DNS_TLD
-    domain_list = host_name.split('.')
-    tld_item = domain_list[-1]
-    tld_item = tld_item.upper()
-    return tld_item in tld_list
+class DNSTimeoutError(Exception):
+    def __init__(self, orig_error):
+        self.orig_error = orig_error
+
+    def __str__(self):
+        return str(self.orig_error)
 
 
-def has_mx_rec(host_name):
-    print('MX------------------------')
-    try:
-        answers = resolver.query(host_name, 'MX')
-        for rdata in answers:
-            print('Host', rdata.exchange, 'has preference', rdata.preference)
-    except resolver.NXDOMAIN:
-        print('no dns entry')
+class DNSCommError(Exception):
+    def __init__(self, orig_error):
+        self.orig_error = orig_error
+
+    def __str__(self):
+        return str(self.orig_error)
 
 
-def has_mx_from_ip(ip_addr):
-    n = reversename.from_address(ip_addr)
+def dns_lookup(domain_name,
+               lookup_level,
+               servers=None,
+               timeout=None,
+               tld_list=None,
+               raise_on_comm_error=True,
+               force_sockets=False):
 
-    print('IP------------------------')
-    print(n)
-    print(reversename.to_address(n))
-    if n:
-        print('has answers')
+    dns_python_resolver = None
+
+    if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP:
+        return ''
+
+    if not tld_list == []:
+        tld_list = tld_list or DNS_TLD
+
+        domain_list = domain_name.split('.')
+        tld_item = domain_list[-1]
+        tld_item = tld_item.upper()
+        tmp_match = tld_item in tld_list
+
+        if not tmp_match:
+            return 'DNSWARN_INVALID_TLD'
+        else:
+            if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.TLD_MATCH:
+                return ''
     else:
-        print('no_answers')
+        if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.TLD_MATCH:
+            raise AttributeError('Cannot match TLD without TLD list')
 
+    if force_sockets:
+        if not USE_SOCKETS:
+            import socket
+        use_sockets = True
+    else:
+        use_sockets = USE_SOCKETS
 
+    if use_sockets:
+        if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.MX_RECORD:
+            raise ImportError('DNS Python (http://www.dnspython.org/) not available, MX lookups not available')
+        if servers is not None:
+            raise AttributeError('Servers cannot be set when using the socket library')
+        if timeout is not None:
+            socket.settimeout(timeout)
+    else:
+        if servers is not None or timeout is not None:
+            dns_python_resolver = resolver.Resolver()
+            if servers is not None:
+                if isinstance(servers, str):
+                    servers = [servers]
+                    dns_python_resolver.nameservers = servers
+            if timeout is not None:
+                dns_python_resolver.lifetime = float(timeout)
+        else:
+            dns_python_resolver = resolver
 
-def has_dns_entry(host_name):
-    print('DNS------------------------')
-    try:
-        answers = resolver.query(host_name)
-        for rdata in answers:
-            print('Address', rdata.address)
-    except resolver.NXDOMAIN:
-        print('no domain')
+    if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.MX_RECORD:
+        if not use_sockets:
+            try:
+                answers = dns_python_resolver.query(domain_name, 'MX')
+                return ''
+            except resolver.NXDOMAIN:
+                return 'DNSWARN_NO_RECORD'
+            except resolver.NoAnswer:
+                pass
+            except resolver.Timeout as err:
+                if raise_on_comm_error:
+                    raise DNSTimeoutError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+            except dns_except.DNSException as err:
+                if raise_on_comm_error:
+                    raise DNSCommError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+        else:
+            raise ImportError('DNS Python (http://www.dnspython.org/) not available, MX lookups not available')
 
+    if lookup_level in (ISEMAIL_DNS_LOOKUP_LEVELS.ANY_RECORD, ISEMAIL_DNS_LOOKUP_LEVELS.MX_RECORD):
+        if not use_sockets:
+            try:
+                answers = dns_python_resolver.query(domain_name)
+            except resolver.NXDOMAIN:
+                return 'DNSWARN_NO_RECORD'
+            except resolver.Timeout as err:
+                if raise_on_comm_error:
+                    raise DNSTimeoutError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+            except dns_except.DNSException as err:
+                if raise_on_comm_error:
+                    raise DNSCommError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+
+            if lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.MX_RECORD:
+                return 'DNSWARN_NO_MX_RECORD'
+            else:
+                return ''
+        else:
+            try:
+                answer = socket.getaddrinfo(domain_name, 80)
+            except socket.gaierror:
+                return 'DNSWARN_NO_RECORD'
+            except socket.timeout as err:
+                if raise_on_comm_error:
+                    raise DNSTimeoutError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+            except socket.error as err:
+                if raise_on_comm_error:
+                    raise DNSCommError(err)
+                else:
+                    return 'DNSWARN_COMM_ERROR'
+
+            return ''
+
+    raise AttributeError('Invalid Lookup Level')

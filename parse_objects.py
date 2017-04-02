@@ -1,8 +1,8 @@
 
-from parse_results import ParseResultFootball,ParsingError, ParseResultEmptyFootball
+from parse_results import ParseResultFootball,ParsingError
 # from collections import deque
 from functools import wraps
-from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE
+from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
 
 def make_char_str(*chars_in):
     tmp_ret = []
@@ -47,7 +47,7 @@ def as_football(segment=True, comment=False, skip=False):
                     error_raised = err
                     tmp_ret = err.results
 
-                if not isinstance(tmp_ret, (ParseResultFootball, ParseResultEmptyFootball)):
+                if not isinstance(tmp_ret, (ParseResultFootball)):
                     raise AttributeError('invalid return object = %r' % tmp_ret)
 
             else:
@@ -147,9 +147,9 @@ class TraceObj(object):
                 tmp_raised = ''
 
             if self.results.l == 0 or self.results.error:
-                tmp_str = '%send      %s : %s  -- %s ' % (tmp_indent, tmp_raised, self.stage_name, self.results)
+                tmp_str = '%send      %s : %s  -- %r ' % (tmp_indent, tmp_raised, self.stage_name, self.results)
             else:
-                tmp_str = '%send       (%r) %s : %s  -- %s ' % (tmp_indent,
+                tmp_str = '%send       (%r) %s : %s  -- %r ' % (tmp_indent,
                                                                 self.parser.mid(self.position, self.results.length),
                                                                 tmp_raised,
                                                                 self.stage_name,
@@ -212,9 +212,15 @@ class EmailParser(object):
 
     # test_text = ''
 
-    def __init__(self, email_in=None, verbose=0, error_on_warning=False,
-                 error_on_category=None, error_on_diag=None, trace_filter=-1,
-                 lookup_domain=False, tlds=None):
+    def __init__(self,
+                 email_in=None,
+                 verbose=0,
+                 trace_filter=-1,
+                 raise_on_error=False,
+                 dns_lookup_level=None,
+                 dns_servers=None,
+                 dns_timeout=None,
+                 tld_list=None):
         """
         :param email_in:  the email to parse
         :param verbose:
@@ -226,8 +232,10 @@ class EmailParser(object):
         :param error_on_category:
         :param error_on_diag:
         """
-        self.lookup_domain=lookup_domain
-        self.tlds = tlds
+        self._dns_lookup_level = dns_lookup_level or ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP
+        self._dns_servers = dns_servers
+        self._dns_timeout = dns_timeout
+        self._tld_list = tld_list
         self.email_in = ''
         self.result = None
         self.position = -1
@@ -237,9 +245,11 @@ class EmailParser(object):
         self.email_list = []
         self.cleaned = []
         self.verbose = verbose
-        self.error_on_warning = error_on_warning
-        self.error_on_category = error_on_category
-        self.error_on_diag = error_on_diag
+        # self.error_on_warning = error_on_warning
+        # self.error_on_category = error_on_category
+        # self.error_on_diag = error_on_diag
+        self._raise_on_error = raise_on_error
+
         if email_in is not None:
             self.setup(email_in)
 
@@ -371,13 +381,19 @@ class EmailParser(object):
             tmp_ret.finish()
             return tmp_ret
 
-    def parse(self, email_in=None, method=None, position=0, lookup_domain=None, **kwargs):
+    def parse(self, email_in=None, method=None, position=0, dns_lookup_level=None, **kwargs):
         if email_in == '' or email_in is None:
+
             tmp_ret = self._empty
-            return tmp_ret('ERR_EMPTY_ADDRESS', raise_on_error=False)
-        if lookup_domain is not None:
-            tmp_lookup_domain = self.lookup_domain
-            self.lookup_domain = lookup_domain
+            tmp_ret('ERR_EMPTY_ADDRESS', raise_on_error=False)
+            tmp_ret.finish(dns_lookup_level=dns_lookup_level)
+
+            if tmp_ret.error and self._raise_on_error:
+                raise ParsingError(results=tmp_ret)
+
+            return tmp_ret
+
+        dns_lookup_level = dns_lookup_level or self._dns_lookup_level
 
         if method is None:
             method = self.address_spec
@@ -392,12 +408,14 @@ class EmailParser(object):
         except ParsingError as err:
             tmp_ret = err.results
 
-        if lookup_domain is not None:
-            self.lookup_domain = tmp_lookup_domain
-
         if tmp_ret:
-            tmp_ret.finish()
+            tmp_ret.finish(dns_lookup_level)
+
+        if tmp_ret.error and self._raise_on_error:
+            raise ParsingError(results=tmp_ret)
+
         return tmp_ret
+
     __call__ = parse
 
     def this_char(self, position):
@@ -902,7 +920,7 @@ class EmailParser(object):
 
         tmp_ret(tmp_ret_2, raise_on_error=False)
 
-        self.add_note_trace('Returning length: ' + str(tmp_ret))
+        self.add_note_trace('Returning length: ' + str(tmp_ret.l))
         if not self.at_end(position + tmp_ret):
             self.add_note_trace('not at the end, checking next char: ' + self.this_char(position + tmp_ret))
             if self.this_char(position + tmp_ret) == self.DOT:
@@ -954,7 +972,8 @@ class EmailParser(object):
 
             # if tmp_ret.error and self.in_domain_part:
             #    self.near_at_flag = True
-            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
+            if self.in_domain_part:
+                tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
             return tmp_ret
         # if self.in_domain_part:
         #    self.near_at_flag = True
@@ -1233,11 +1252,16 @@ class EmailParser(object):
                 self.add_note_trace('Should be ipv6 address domain literal')
                 tmp_ret_2 = self.address_literal(position)
             else:
-                self.add_note_trace('Should be non-ip-address domain literal')
-                tmp_ret_2 = self.domain_literal(position)
+                self.add_note_trace('trying address literal')
+                tmp_ret_2 = self.address_literal(position)
                 if tmp_ret_2:
                     tmp_ret_2('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
                 # return tmp_ret(tmp_ret_2)
+                else:
+                    self.add_note_trace('Should be non-ip-address domain literal')
+                    tmp_ret_2 = self.domain_literal(position)
+                    if tmp_ret_2:
+                        tmp_ret_2('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
             if tmp_ret_2:
                 if not self.at_end(position + tmp_ret_2):
                     tmp_ret_2('ERR_ATEXT_AFTER_DOMLIT')
