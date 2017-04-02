@@ -371,29 +371,29 @@ class EmailParser(object):
                     note_text=note_str,
                     raise_error=raise_error))
 
-    def run_method_test(self, method, *args, **kwargs):
-        try:
-            tmp_ret = method(*args, **kwargs)
-            tmp_ret.finish()
-            return tmp_ret
-        except ParsingError as err:
-            tmp_ret = err.results
-            tmp_ret.finish()
-            return tmp_ret
+    def parse(self,
+              email_in=None,
+              method=None,
+              position=0,
+              dns_lookup_level=None,
+              raise_on_error=False,
+              **kwargs):
 
-    def parse(self, email_in=None, method=None, position=0, dns_lookup_level=None, **kwargs):
-        if email_in == '' or email_in is None:
-
-            tmp_ret = self._empty
-            tmp_ret('ERR_EMPTY_ADDRESS', raise_on_error=False)
-            tmp_ret.finish(dns_lookup_level=dns_lookup_level)
-
-            if tmp_ret.error and self._raise_on_error:
-                raise ParsingError(results=tmp_ret)
-
-            return tmp_ret
+        return_football = kwargs.pop('return_football', False)
 
         dns_lookup_level = dns_lookup_level or self._dns_lookup_level
+        raise_on_error = raise_on_error or self._raise_on_error
+
+        if email_in == '' or email_in is None:
+            tmp_ret = self._empty
+            tmp_ret('ERR_EMPTY_ADDRESS', raise_on_error=False)
+            if return_football:
+                if raise_on_error and tmp_ret.error:
+                    raise ParsingError(tmp_ret)
+                else:
+                    return tmp_ret
+
+            return tmp_ret.finish(dns_lookup_level=dns_lookup_level, raise_on_error=raise_on_error)
 
         if method is None:
             method = self.address_spec
@@ -408,14 +408,13 @@ class EmailParser(object):
         except ParsingError as err:
             tmp_ret = err.results
 
-        if tmp_ret:
-            tmp_ret.finish(dns_lookup_level)
+        if return_football:
+            if raise_on_error and tmp_ret.error:
+                raise ParsingError(tmp_ret)
+            else:
+                return tmp_ret
 
-        if tmp_ret.error and self._raise_on_error:
-            raise ParsingError(results=tmp_ret)
-
-        return tmp_ret
-
+        return tmp_ret.finish(dns_lookup_level=dns_lookup_level, raise_on_error=raise_on_error)
     __call__ = parse
 
     def this_char(self, position):

@@ -24,8 +24,6 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
     tmp_ret += 'Run Number: %s\n' % test_num
     tmp_ret += 'Checked String: %r\n\n' % test_string
 
-    tmp_ret += 'Length: %s\n' % test_ret.length
-
     tmp_ret += 'Error Flag: %r\n' % test_ret.error
     tmp_ret += 'Local_part: %r\n' % test_ret.local
     tmp_ret += 'Domain_part: %r\n' % test_ret.domain
@@ -33,7 +31,7 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
     tmp_ret += 'Local_comments: %r\n' % test_ret.local_comments
     tmp_ret += 'Domain_comments: %r\n' % test_ret.domain_comments
 
-    ret_codes = list(test_ret.diags())
+    ret_codes = list(test_ret.diag(show_all=True))
     ret_codes.sort()
 
     tmp_ret += 'Codes: %r\n' % ret_codes
@@ -44,7 +42,7 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
 
     tmp_ret += 'Extra Info: %r\n\n' % extra_string
 
-    tmp_ret += 'Trace:\n%s\n\n' % test_ret.trace_str
+    tmp_ret += 'Trace:\n%s\n\n' % test_ret.trace
 
     return tmp_ret
 
@@ -174,7 +172,7 @@ class MyTestData(object):
         # tmp_meth = getattr(tep, self.method_name)
 
         # test_ret = tep.run_method_test(tmp_meth, position=self.position, **self.kwargs)
-        test_ret = tep(email_in=self.string_in, method=self.method_name, position=self.position, **self.kwargs)
+        test_ret = tep(email_in=self.string_in, method=self.method_name, position=self.position, return_football=True, **self.kwargs)
 
         if not self.defs.ret_football:
             if test_ret.length == self.result_length:
@@ -1971,9 +1969,9 @@ class TestDomainLookup(unittest.TestCase):
             with self.subTest(test_name):
                 if LIMIT_TO == -1 or LIMIT_TO == test[0]:
                     if len(test) > 5:
-                        emv = EmailParser(**test[5])
+                        emv = EmailParser(verbose=2, **test[5])
                     else:
-                        emv = EmailParser()
+                        emv = EmailParser(verbose=2)
 
                     if len(test) > 4 and test[4] is not None:
                         with self.subTest(test_name + ' - Exception'):
