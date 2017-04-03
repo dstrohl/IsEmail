@@ -1,6 +1,6 @@
 
-from meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
-from dns_functions import dns_lookup
+from IsEmail.meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from IsEmail.dns_functions import dns_lookup
 
 def _make_list(obj_in):
     if isinstance(obj_in, (str, int)):
