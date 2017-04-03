@@ -1,6 +1,6 @@
 import unittest
-from parse_results import ParseResultFootball, ParsingError
-from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES
+from IsEmail.parse_results import ParseResultFootball, ParsingError
+from IsEmail.meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES
 
 class ParserFixture(object):
     def __init__(self, email_in=''):
