@@ -1,8 +1,8 @@
 import unittest
-from parse_objects import make_char_str, EmailParser
-from tests.email_test_data import TESTS
-from meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, META_LOOKUP, ISEMAIL_RESULT_CODES
-from parse_results import ParseShortResult, ParseFullResult, ParsingError
+from IsEmail.parse_objects import make_char_str, EmailParser
+from IsEmail.tests.email_test_data import TESTS
+from IsEmail.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, META_LOOKUP, ISEMAIL_RESULT_CODES
+from IsEmail.parse_results import ParseShortResult, ParseFullResult, ParsingError
 
 def full_ret_string(test_num, test_string, test_ret, extra_string=''):
     tmp_ret = '\n\n'
