@@ -1,5 +1,5 @@
 import unittest
-from dns_functions import dns_lookup, ISEMAIL_DNS_LOOKUP_LEVELS, DNSTimeoutError, DNSCommError
+from IsEmail.dns_functions import dns_lookup, ISEMAIL_DNS_LOOKUP_LEVELS, DNSTimeoutError, DNSCommError
 
 LL = ISEMAIL_DNS_LOOKUP_LEVELS
 
