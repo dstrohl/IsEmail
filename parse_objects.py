@@ -1,8 +1,8 @@
 
-from IsEmail.parse_results import ParseResultFootball,ParsingError
+from parse_results import ParseResultFootball,ParsingError
 # from collections import deque
 from functools import wraps
-from IsEmail.meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
 
 def make_char_str(*chars_in):
     tmp_ret = []

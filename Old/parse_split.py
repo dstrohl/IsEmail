@@ -1,3 +1,4 @@
+'''
 def split_email(email_in):
     """
     returns:
@@ -28,6 +29,7 @@ def split_email(email_in):
 
     else:
         return email_in.split('@', maxsplit=1)
+'''
 
 
 def remove_comments(email_in):

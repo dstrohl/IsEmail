@@ -1,13 +1,22 @@
 import unittest
-from IsEmail.parse_results import ParseResultFootball, ParsingError
-from IsEmail.meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES
+from parse_results import ParseResultFootball, ParsingError
+from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS
+
 
 class ParserFixture(object):
-    def __init__(self, email_in=''):
+    def __init__(self, email_in='', **kwargs):
         self.email_in = email_in
         self.verbose = 3
         self.email_len = len(email_in)
         self.email_list = list(email_in)
+
+        self.trace_str = ''
+        self.history_str = ''
+
+        for key, item in kwargs.items():
+            setattr(self, key, item)
+
+
 
     def mid(self, begin: int = 0, length: int = 0):
         if length > 0:
@@ -19,6 +28,7 @@ class ParserFixture(object):
 
 
 PF = ParserFixture()
+
 
 class TestParseFootball(unittest.TestCase):
 
@@ -64,7 +74,6 @@ class TestParseFootball(unittest.TestCase):
         self.assertEquals(f + f2, 15)
         self.assertEquals(f2 + f, 15)
 
-
     def test_init_length(self):
         f = ParseResultFootball(PF, length=10)
 
@@ -106,6 +115,11 @@ class TestParseFootball(unittest.TestCase):
         tmp_ret = 'VALID' in per
         self.assertTrue(tmp_ret)
 
+    def test_add_bad_diag(self):
+        per = ParseResultFootball(PF)
+        with self.assertRaises(AttributeError):
+            per.add('FOOBAR')
+
     def test_add_diag_tuple(self):
         per = ParseResultFootball(PF)
         per.add(('VALID',1))
@@ -113,20 +127,12 @@ class TestParseFootball(unittest.TestCase):
         tmp_ret = 'VALID' in per
         self.assertTrue(tmp_ret)
 
-
     def test_add_diag_dict(self):
         per = ParseResultFootball(PF)
         per.add({'diag': 'VALID', 'length': 1})
 
         tmp_ret = 'VALID' in per
         self.assertTrue(tmp_ret)
-
-    def test_add_segment(self):
-        per = ParseResultFootball(PF)
-        per.add('foobar')
-
-        tmp_ret = 'foobar' in per
-        self.assertFalse(tmp_ret)
 
     def test_add_length_set(self):
         per = ParseResultFootball(PF)
@@ -147,7 +153,6 @@ class TestParseFootball(unittest.TestCase):
 
         self.assertEquals(per.l, 4)
 
-
     def test_add_length_add(self):
         per = ParseResultFootball(PF)
         per += 1
@@ -156,16 +161,12 @@ class TestParseFootball(unittest.TestCase):
 
         self.assertEquals(per.l, 2)
 
-
     def test_add_ok_result(self):
         per = ParseResultFootball(PF, 'test_email_in', position=1)
 
         per.add(diag='VALID')
 
-        self.assertTrue(per.ok)
         self.assertFalse(per.error)
-        self.assertFalse(per.warning)
-
 
     def test_add_error_result(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -173,18 +174,13 @@ class TestParseFootball(unittest.TestCase):
         with self.assertRaises(ParsingError):
             per.add(diag='ERR_FWS_CRLF_X2')
 
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
-
 
     def test_add_warn_result(self):
         per = ParseResultFootball(PF, 'test_email_in')
 
         per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-        self.assertFalse(per.ok)
         self.assertFalse(per.error)
-        self.assertTrue(per.warning)
 
     def test_add_mult_result(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -195,28 +191,19 @@ class TestParseFootball(unittest.TestCase):
         per.add(diag='VALID', begin=1, length=1)
         # self.assertTrue(per)
         self.assertEquals(len(per), 1)
-        self.assertTrue(per.ok)
         self.assertFalse(per.error)
-        self.assertFalse(per.warning)
 
         per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
         # self.assertTrue(per)
         self.assertEquals(len(per), 2)
-        self.assertFalse(per.ok)
         self.assertFalse(per.error)
-        self.assertTrue(per.warning)
 
         with self.assertRaises(ParsingError):
             per.add(diag='ERR_FWS_CRLF_X2', begin=1, length=1)
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
 
         per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
-
 
     def test_error_on_warn(self):
 
@@ -224,21 +211,14 @@ class TestParseFootball(unittest.TestCase):
         per = ParseResultFootball(PF, 'test_email_in')
 
         per.add(diag='VALID', begin=1, length=1)
-        self.assertTrue(per.ok)
         self.assertFalse(per.error)
-        self.assertFalse(per.warning)
 
         with self.assertRaises(ParsingError):
             per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
 
         per.add(diag='VALID', begin=1, length=1)
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
-
 
     def test_error_on_value(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -247,9 +227,7 @@ class TestParseFootball(unittest.TestCase):
         per('DNSWARN_NO_MX_RECORD')
         with self.assertRaises(ParsingError):
             per.add('VALID')
-        self.assertFalse(per.ok)
         self.assertTrue(per.error)
-        self.assertFalse(per.warning)
 
     def test_contains(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -262,36 +240,6 @@ class TestParseFootball(unittest.TestCase):
         self.assertIn('DNSWARN_NO_MX_RECORD', per)
 
         self.assertNotIn('foobar', per)
-
-
-    def test_get_item_diag(self):
-        per = ParseResultFootball(PF, 'test_email_in')
-
-
-        per.add(diag='VALID', begin=1, length=1)
-        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-        per.add(diag='DEPREC_QTEXT', begin=1, length=1)
-        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-
-        tmp_res = per['DNSWARN_NO_MX_RECORD']
-
-        self.assertEquals(len(tmp_res), 2)
-        self.assertEquals(tmp_res[0].diag.key, 'DNSWARN_NO_MX_RECORD')
-
-    def test_get_item_cat(self):
-
-        per = ParseResultFootball(PF, 'test_email_in')
-
-        per.add(diag='VALID', begin=1, length=1)
-        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-        per.add(diag='DEPREC_QTEXT', begin=1, length=1)
-        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
-
-        tmp_res = per['ISEMAIL_VALID_CATEGORY']
-
-        self.assertEquals(len(tmp_res), 1)
-        self.assertEquals(tmp_res[0].diag.category.key, 'ISEMAIL_VALID_CATEGORY')
-
 
     def test_clear(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -310,7 +258,6 @@ class TestParseFootball(unittest.TestCase):
 
         self.assertEquals(len(per), 0)
         self.assertEquals(per.l, 0)
-
 
     def test_remove(self):
         per = ParseResultFootball(PF, 'test_email_in')
@@ -343,6 +290,276 @@ class TestParseFootball(unittest.TestCase):
         self.assertEquals(len(per), 4)
 
 
+class TestFullResults(unittest.TestCase):
+
+    TEST_EMAILS = dict(
+        complex=dict(
+            email_in='(comment1)"foobar"(comment2)@(comment2)[example.com](comment4)',
+            at_loc=28,
+            local_comments=((0, 10), (19, 10)),
+            domain_comments=((29, 10), (52, 10)),
+        ),
+        local_qs_comments=dict(
+            email_in='(comment1)"foobar"(comment2)@example.com',
+            at_loc=28,
+            local_comments=((0, 10), (19, 10)),
+        ),
+        domain_lit_comments=dict(
+            email_in='foobar@(comment2)[example.com](comment4)',
+            at_loc=6,
+            domain_comments=((7, 10), (30, 10)),
+        ),
+        local_qs=dict(
+            email_in='"foobar"@example.com',
+            at_loc=28,
+            local_comments=((0, 10), (19, 10)),
+        ),
+        domain_lit=dict(
+            email_in='foobar@[example.com]',
+            at_loc=6,
+            domain_comments=((7, 10), (30, 10)),
+        ),
+        normal=dict(
+            email_in='foobar@example.com',
+            at_loc=6,
+        ),
+    )
+
+    TEST_DIAG_SETS = dict(
+        VALID=['VALID'],
+        MULT_WARN=['RFC5322_DOMAIN', 'DEPREC_COMMENT'],
+        WARN=['RFC5322_DOMAIN', 'DEPREC_COMMENT'],
+        MULT_WARN_ERR=['RFC5322_DOMAIN', 'DEPREC_COMMENT', 'ERR_DOT_END'],
+        ERR=['ERR_DOT_END'],
+    )
+
+    def make_parser(self, **kwargs):
+        kwargs['email_in'] = kwargs.get('email_in', 'foobar@example.com')
+        kwargs['verbose'] = kwargs.get('verbose', 3)
+        kwargs['trace_filter'] = kwargs.get('trace_filter', 999)
+        kwargs['raise_on_error'] = kwargs.get('raise_on_error', False)
+        kwargs['at_loc'] = kwargs.get('at_loc', 6)
+        kwargs['dns_lookup_level'] = kwargs.get('dns_lookup_level', ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP)
+
+        tmp_ret = ParserFixture(**kwargs)
+
+        return tmp_ret
+
+    def make_football(self, *args, parser=None, diags=None, length=6, position=0, raise_on_error=False, **kwargs):
+        if parser is None:
+            parser = self.make_parser()
+        if isinstance(parser, dict):
+            parser = self.make_parser(**parser)
+        if isinstance(parser, str):
+            parser = self.make_parser(email_in=parser)
+
+        tmp_fb = ParseResultFootball(parser)
+
+        if parser.at_loc is not None:
+            tmp_fb.at_loc = parser.at_loc
+
+        tmp_fb += length
+        tmp_fb.begin = position
+
+        if 'local_comments' in kwargs:
+            tmp_fb._local_comments = kwargs.pop('local_comments')
+
+        if 'domain_comments' in kwargs:
+            tmp_fb._local_comments = kwargs.pop('domain_comments')
+
+        if kwargs or args:
+            tmp_fb(*args, raise_on_error=raise_on_error, **kwargs)
+
+        if diags is not None:
+            if isinstance(diags, str):
+                tmp_fb(diags, raise_on_error=raise_on_error)
+            else:
+                tmp_fb(*diags, raise_on_error=raise_on_error)
+
+        else:
+            tmp_fb('VALID')
+        return tmp_fb
+
+    def make_result(self, *args, parser=None, diags=None, dns_lookup_level=None, raise_on_error=False, length=6, position=0, **kwargs):
+        tmp_fb = self.make_football(*args, parser=parser, diags=diags, length=length, position=position, raise_on_error=raise_on_error, **kwargs)
+        tmp_ret = tmp_fb.finish(dns_lookup_level=dns_lookup_level, raise_on_error=raise_on_error)
+        return tmp_ret
+
+    def test_init(self):
+        tmp_resp = self.make_result()
+
+    def test_bool(self):
+        tmp_resp = self.make_result()
+        self.assertTrue(tmp_resp)
+
+        tmp_resp = self.make_result(diags='ERR_EMPTY_ADDRESS', raise_on_error=False)
+        self.assertFalse(tmp_resp)
+
+    def test_str(self):
+        tmp_resp = self.make_result()
+        self.assertEqual(str(tmp_resp), 'foobar@example.com')
+
+    def test_len(self):
+        tmp_resp = self.make_result()
+        self.assertEqual(len(tmp_resp), 18)
+
+    def test_status(self):
+        tmp_resp = self.make_result(diags=['ERR_EMPTY_ADDRESS', 'RFC5322_LOCAL_TOO_LONG'])
+        self.assertEqual(tmp_resp.status, ISEMAIL_RESULT_CODES.ERROR)
+        self.assertFalse(tmp_resp)
+
+        tmp_resp = self.make_result(diags=['RFC5322_TOO_LONG', 'RFC5322_LOCAL_TOO_LONG'])
+        self.assertEqual(tmp_resp.status, ISEMAIL_RESULT_CODES.WARNING)
+        self.assertTrue(tmp_resp)
+
+    def test_ok(self):
+        tmp_resp = self.make_result()
+        self.assertTrue(tmp_resp.ok)
+        self.assertFalse(tmp_resp.warning)
+        self.assertFalse(tmp_resp.error)
+
+    def test_error(self):
+        tmp_resp = self.make_result(diag='RFC5322_TOO_LONG')
+        self.assertTrue(tmp_resp.ok)
+        self.assertFalse(tmp_resp.warning)
+        self.assertFalse(tmp_resp.error)
+
+    def test_warning(self):
+        tmp_resp = self.make_result(diag='ERR_EMPTY_ADDRESS')
+        self.assertTrue(tmp_resp.ok)
+        self.assertFalse(tmp_resp.warning)
+        self.assertFalse(tmp_resp.error)
+
+    def test_clean_address(self):
+        tmp_resp = self.make_result()
+        self.assertEqual(tmp_resp.clean_address, 'foobar@example.com')
+
+    def test_local(self):
+        tmp_resp = self.make_result()
+        self.assertEqual(tmp_resp.local, 'foobar')
+
+    def test_domain(self):
+        tmp_resp = self.make_result()
+        self.assertEqual(tmp_resp.domain, 'example.com')
+
+    def test_full_local_normal(self):
+        tmp_resp = self.make_result(parser='"foobar"#[example.com]')
+        self.assertEqual(tmp_resp.full_local, '"foobar"')
+
+    def test_full_local_QS(self):
+        tmp_resp = self.make_result(parser='"foobar"#[example.com]')
+        self.assertEqual(tmp_resp.full_local, '"foobar"')
+
+    def test_full_local_comments(self):
+        tmp_resp = self.make_result(parser='"foobar"#[example.com]')
+        self.assertEqual(tmp_resp.full_local, '"foobar"')
+
+
+
+
+    def test_full_domain(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_full_address(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_trace(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_history(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_local_comments(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_domain_comments(self):
+        tmp_resp = self.make_result()
+        self.fail()
+    """
+    def test_get_item_diag(self):
+        tmp_resp = self.make_result()
+        per = ParseResultFootball(PF, 'test_email_in')
+
+        per.add(diag='VALID', begin=1, length=1)
+        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
+        per.add(diag='DEPREC_QTEXT', begin=1, length=1)
+        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
+
+        tmp_res = per['DNSWARN_NO_MX_RECORD']
+
+        self.assertEquals(len(tmp_res), 2)
+        self.assertEquals(tmp_res[0].diag.key, 'DNSWARN_NO_MX_RECORD')
+
+    def test_get_item_cat(self):
+        tmp_resp = self.make_result()
+
+        per = ParseResultFootball(PF, 'test_email_in')
+
+        per.add(diag='VALID', begin=1, length=1)
+        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
+        per.add(diag='DEPREC_QTEXT', begin=1, length=1)
+        per.add(diag='DNSWARN_NO_MX_RECORD', begin=1, length=1)
+
+        tmp_res = per['ISEMAIL_VALID_CATEGORY']
+
+        self.assertEquals(len(tmp_res), 1)
+        self.assertEquals(tmp_res[0].diag.category.key, 'ISEMAIL_VALID_CATEGORY')
+
+    """
+    def test_diag_all(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_one(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_cat_all(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_ret_diag_objs(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_ret_diag_sets(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_get_item_filter_for_diag(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_iter(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_diag_cat_one(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_contains(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_repr(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_desc(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+    def test_getitem(self):
+        tmp_resp = self.make_result()
+        self.fail()
+
+
 class TestHistory(unittest.TestCase):
     PF = ParserFixture('abcdefghijklmnopqrstuvwxyz')
 
@@ -355,7 +572,7 @@ class TestHistory(unittest.TestCase):
         per = ParseResultFootball(self.PF, 'test_in', position=2, length=4)
         # per += 10
 
-        self.assertEquals(str(per.history.short_desc(inc_string=True)), "test_in - 'cdef'")
+        self.assertEquals(str(per.history.short_desc(inc_string=True)), "test_in['cdef']")
 
     def test_simple_history_2(self):
         per = ParseResultFootball(self.PF, 'test_in')
@@ -368,16 +585,13 @@ class TestHistory(unittest.TestCase):
         per += 4
         self.assertEquals(str(per.history.long_desc()), "test_in   :   'abcd'")
 
-
     def test_2_level(self):
         per = ParseResultFootball(self.PF, 'lvl_1')
         per += 2
         per_2 = ParseResultFootball(self.PF, 'lvl_2')
         per_2 += 3
         per += per_2
-        self.assertEquals(per.history.short_desc(), 'lvl_1 ( lvl_2 )')
-
-
+        self.assertEquals(per.history.short_desc(), 'lvl_1(lvl_2)')
 
     def test_complex_history_w_str(self):
         per = ParseResultFootball(self.PF, 'lvl_1', position=0)
@@ -390,21 +604,18 @@ class TestHistory(unittest.TestCase):
         per_3 += 2
         per += per_3
 
-        self.assertEquals(per.history.short_desc(), 'lvl_1 ( lvl_2, lvl_3 )')
+        self.assertEquals(per.history.short_desc(), 'lvl_1(lvl_2, lvl_3)')
 
-        self.assertEquals(per.history.short_desc(inc_string=True), "lvl_1 - 'abcd' ( lvl_2 - 'ab', lvl_3 - 'cd' )")
+        self.assertEquals(per.history.short_desc(inc_string=True), "lvl_1['abcd'](lvl_2['ab'], lvl_3['cd'])")
 
         self.assertEquals(per.history.long_desc(), "lvl_1   :   'abcd'\n    lvl_2   :   'ab'\n    lvl_3   :   'cd'")
-
-
-
 
 
 class TestMetaLookup(unittest.TestCase):
 
     def test_lenths(self):
         self.assertEquals(len(META_LOOKUP.categories), 7)
-        self.assertEquals(len(META_LOOKUP.diags), 63)
+        self.assertEquals(len(META_LOOKUP.diags), 67)
 
     def test_get_by_value_cat(self):
         tmp_item = META_LOOKUP[115]
@@ -491,5 +702,48 @@ class TestMetaLookup(unittest.TestCase):
 
         print('\n\n\n')
         print(repr(list(META_LOOKUP.diags._by_key.items())))
+
+    def test_ia_error(self):
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('VALID')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('DNSWARN_COMM_ERROR')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.clear_overrides()
+
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('ISEMAIL_DNSWARN')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.clear_overrides()
+
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on_warning()
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
 
 

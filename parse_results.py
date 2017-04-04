@@ -1,6 +1,6 @@
 
-from IsEmail.meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
-from IsEmail.dns_functions import dns_lookup
+from meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from dns_functions import dns_lookup
 
 def _make_list(obj_in):
     if isinstance(obj_in, (str, int)):
@@ -431,10 +431,13 @@ class ParseResultFootball(object):
         self.is_finished = False
         self.results.append((diag, begin, length))
 
-        tmp_error = META_LOOKUP.is_error(diag)
+        try:
+            tmp_error = META_LOOKUP.is_error(diag)
+        except KeyError:
+            raise AttributeError('Invalid Diagnosis: ' + diag)
         self._set_error(tmp_error)
 
-        if self.error:
+        if tmp_error:
             self.length = 0
             if raise_on_error:
                 raise ParsingError(self)
@@ -501,10 +504,7 @@ class ParseResultFootball(object):
             elif isinstance(arg, (tuple, list)):
                 self.add_diag(*arg, raise_on_error=raise_on_error)
             elif isinstance(arg, str):
-                if arg in META_LOOKUP:
-                    self.add_diag(arg, raise_on_error=raise_on_error)
-                else:
-                    self.segment_name = arg
+                self.add_diag(arg, raise_on_error=raise_on_error)
 
         return self
     __call__ = add

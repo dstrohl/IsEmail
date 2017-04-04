@@ -1282,6 +1282,7 @@ class MetaLookup(object):
                 self.error_codes[c.key] = c
 
     def clear_overrides(self):
+        self.error_codes.clear()
         for c in self.categories:
             c._override_status = None
         for c in self.diags:
@@ -1316,7 +1317,10 @@ class MetaLookup(object):
         return self[diag].status
 
     def is_error(self, diag):
-        return diag in self.error_codes
+        if diag in self:
+            return diag in self.error_codes
+        else:
+            raise KeyError('Diag %s not in system' % diag)
 
 
 META_LOOKUP = MetaLookup()
