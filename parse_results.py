@@ -218,87 +218,27 @@ class ParseResultFootball(object):
         self.at_loc = None
         self.results = []
         self.stage = stage
-        # self.status = ISEMAIL_RESULT_CODES.OK
         self._local_comments = {}
         self._domain_comments = {}
         self.children = []
-        # self.peers = []
         self.begin = position
         self.segment_name = segment
         self.depth = 0
         self.hist_cache = None
         self.error = False
 
-        # self._as_peer = False
-
-        # **** Finished vars ****
-        # self.is_finished = False
-        # self.cleaned_email = None
-        # self._parts = dict(
-        #     clean_local_part='*** PARSER ERROR ***',
-        #     clean_domain_part='*** PARSER ERROR ***',
-        #     full_local_part='*** PARSER ERROR ***',
-        #     full_domain_part='*** PARSER ERROR ***')
-
-        # self._local_part = []
-        # self._domain_part = []
         self.domain_type = None
-        # self.cat_recs = None
-        # self.diag_recs = None
-        # self.major_diag = None
-        # self.major_diag_value = None
-        # self.trace_str = ''
 
-    """
-    def _check_finished(self):
-
-        if self.error:
-            if self.parser._raise_on_error:
-                raise ParsingError(self)
-            return False
-        if not self.is_finished:
-            if self.parser._raise_on_error:
-                raise UnfinishedParsing()
-            return False
-        return True
-
-    @property
-    def local_comments(self):
-        return list(self._local_comments.values())
-
-    @property
-    def domain_comments(self):
-        return list(self._domain_comments.values())
-    """
     def copy(self):
         tmp_ret = self.__class__(self.parser)
         tmp_ret.length = self.length
         tmp_ret.results = self.results.copy()
         tmp_ret.stage = self.stage
-        # tmp_ret.status = self.status
         tmp_ret._local_comments = self._local_comments.copy()
         tmp_ret._domain_comments = self._domain_comments.copy()
-        # tmp_ret._parts = self._parts
         tmp_ret.domain_type = self.domain_type
         tmp_ret.at_loc = self.at_loc
         tmp_ret.error = self.error
-        # **** Finished vars ****
-        #if self.is_finished:
-        #    tmp_ret.is_finished = self.is_finished
-        #    tmp_ret.cleaned_email = self.cleaned_email
-        #    if self.cat_recs is None:
-        #        tmp_ret.cat_recs = None
-        #    else:
-        #        tmp_ret.cat_recs = self.cat_recs.copy()
-
-        #   if self.cat_recs is None:
-        #        tmp_ret.diag_recs = None
-        #    else:
-        #        tmp_ret.diag_recs = self.diag_recs.copy()
-
-        #   tmp_ret.major_diag = self.major_diag
-        #    tmp_ret.major_diag_value = self.major_diag_value
-        
         return tmp_ret
     __copy__ = copy
 
@@ -453,24 +393,11 @@ class ParseResultFootball(object):
             set_length=None,
             raise_on_error=True):
         """
-
-        :param args:
+        for *args
             if string, this will be a diag str if we can look it up in diags, a segment name if not.
             if int, this will add at number to the length
             if football, this will add the football to the object
-
-        :param diag:
-        :param segment:
-        :param begin:
-        :param position:
-        :param length:
-        :param set_length:
-        :param raise_on_error:
-        :return:
         """
-
-        self.is_finished = False
-
         if begin is not None:
             self.begin = begin
 
@@ -569,26 +496,6 @@ class ParseResultFootball(object):
     def __len__(self):
         return len(self.results)
 
-    """
-    @property
-    def full_string(self):
-        self._check_finished()
-        return '%s@%s' % (self._parts['full_local_part'], self._parts['full_domain_part'])
-
-    @property
-    def verbose(self):
-        return self.parser.verbose
-
-    @property
-    def domain(self):
-        self._check_finished()
-        return self._parts['clean_domain_part']
-
-    @property
-    def local(self):
-        self._check_finished()
-        return self._parts['clean_local_part']
-    """
     @property
     def trace_str(self):
         return self.parser.trace_str
@@ -598,6 +505,8 @@ class ParseResultFootball(object):
         # 0 = return T/F
         # 1 = return short object
         # 2 = return full object
+        if dns_lookup_level is None:
+            dns_lookup_level = ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP
 
         if verbose == 0:
             if dns_lookup_level == ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP or self.domain_type != ISEMAIL_DOMAIN_TYPE.DNS:
@@ -606,6 +515,8 @@ class ParseResultFootball(object):
                 return not self.error
 
         parts = dict(
+                local_part=[],
+                domain_part=[],
                 clean_local_part=[],
                 clean_domain_part=[],
                 full_local_part=[],
@@ -617,23 +528,31 @@ class ParseResultFootball(object):
             index = 0
 
             while index < len(self.email_in):
+
                 tmp_char = self.email_in[index]
+
                 if index == self.at_loc:
                     in_local = False
                 elif index in self._local_comments:
+                    parts['full_local_part'].append('(%s)' % self._local_comments[index])
                     index += len(self._local_comments[index])+1
                 elif index in self._domain_comments:
+                    parts['full_domain_part'].append('(%s)' % self._domain_comments[index])
                     index += len(self._domain_comments[index])+1
+
                 elif tmp_char in '"[]':
                     if in_local:
+                        parts['clean_local_part'].append(tmp_char)
                         parts['full_local_part'].append(tmp_char)
                     else:
+                        parts['clean_domain_part'].append(tmp_char)
                         parts['full_domain_part'].append(tmp_char)
                     if in_literal:
                         in_literal = False
                     else:
                         if self.domain_type == ISEMAIL_DOMAIN_TYPE.IPv6 and tmp_char == '[':
-                            parts['full_domain_part'].extend('ipv6:')
+                            parts['clean_domain_part'].extend('IPv6:')
+                            parts['full_domain_part'].extend('IPv6:')
                             index += 5
                         in_literal = True
 
@@ -641,20 +560,24 @@ class ParseResultFootball(object):
                     pass
                 else:
                     if in_local:
+                        parts['local_part'].append(tmp_char)
                         parts['clean_local_part'].append(tmp_char)
                         parts['full_local_part'].append(tmp_char)
                     else:
+                        parts['domain_part'].append(tmp_char)
                         parts['clean_domain_part'].append(tmp_char)
                         parts['full_domain_part'].append(tmp_char)
                 index += 1
 
+            parts['local_part'] = ''.join(parts['local_part'])
+            parts['domain_part'] = ''.join(parts['domain_part'])
             parts['clean_local_part'] = ''.join(parts['clean_local_part'])
             parts['clean_domain_part'] = ''.join(parts['clean_domain_part'])
             parts['full_local_part'] = ''.join(parts['full_local_part'])
             parts['full_domain_part'] = ''.join(parts['full_domain_part'])
 
             if self.domain_type == ISEMAIL_DOMAIN_TYPE.GENERAL_LIT:
-                parts['clean_domain_part'] = parts['clean_domain_part'].split(':', 1)
+                parts['domain_part'] = parts['domain_part'].split(':', 1)
 
             if self.domain_type == ISEMAIL_DOMAIN_TYPE.DNS:
                 tmp_dns = dns_lookup(
@@ -704,63 +627,6 @@ class ParseResultFootball(object):
             self._domain_comments[begin] = self._mid(begin+1, length-2)
         return self
 
-    """
-    def _fix_result(self, result_rec):
-        result_rec = ParseResultItem(*result_rec)
-        self.status = max(result_rec.status, self.status)
-
-        if self.major_diag_value is None:
-            self.major_diag_value = result_rec.value
-            self.major_diag = result_rec
-        else:
-            self.major_diag_value = max(result_rec.value, self.major_diag_value)
-            self.major_diag = META_LOOKUP[self.major_diag_value]
-
-        if self.verbose:
-
-            if result_rec.diag.key in self.diag_recs:
-                self.diag_recs[result_rec.key].append(result_rec)
-            else:
-                self.diag_recs[result_rec.key] = [result_rec]
-
-            if result_rec.diag.category.key in self.cat_recs:
-                self.cat_recs[result_rec.diag.category.key].append(result_rec)
-            else:
-                self.cat_recs[result_rec.diag.category.key] = [result_rec]
-
-    @property
-    def error(self):
-        return self.status == ISEMAIL_RESULT_CODES.ERROR
-    @property
-    def ok(self):
-        return self.status == ISEMAIL_RESULT_CODES.OK
-
-    @property
-    def warning(self):
-        return self.status == ISEMAIL_RESULT_CODES.WARNING
-
-    # TODO: Finish this
-    def response_text(self):
-        pass
-
-    # TODO: Finish this
-    def response_long_text(self):
-        pass
-
-    # TODO: Finish this
-    def response_details(self):
-        pass
-    """
-    """
-    def __getitem__(self, item):
-        if not self.is_finished:
-            self.finish()
-        try:
-            return self.diag_recs[item]
-        except KeyError:
-            return self.cat_recs[item]
-
-    """
     def _mid(self, position, length):
         end = position+length
         return self.email_in[position:end]
@@ -768,7 +634,7 @@ class ParseResultFootball(object):
 
 class ParseShortResult(object):
     def __init__(self, email_in, parts, results):
-        self.email_in = email_in
+        self.full_address = email_in
         self._major_diag = None
         self.status = None
 
@@ -792,11 +658,19 @@ class ParseShortResult(object):
             self.clean_address = email_in
             self.domain = '*** PARSING ERROR ***'
             self.local = '*** PARSING ERROR ***'
+            self.full_domain = '*** PARSING ERROR ***'
+            self.full_local = '*** PARSING ERROR ***'
+            self.clean_domain = '*** PARSING ERROR ***'
+            self.clean_local = '*** PARSING ERROR ***'
 
         else:
-            self.clean_address = '%s@%s' % (parts['full_local_part'], parts['full_domain_part'])
-            self.domain = parts['clean_domain_part']
-            self.local = parts['clean_local_part']
+            self.clean_address = '%s@%s' % (parts['clean_local_part'], parts['clean_domain_part'])
+            self.domain = parts['domain_part']
+            self.local = parts['local_part']
+            self.full_domain = parts['full_domain_part']
+            self.full_local = parts['full_local_part']
+            self.clean_domain = parts['clean_domain_part']
+            self.clean_local = parts['clean_local_part']
 
         self.error = self.status == ISEMAIL_RESULT_CODES.ERROR
         self.ok = self.status == ISEMAIL_RESULT_CODES.OK
@@ -805,8 +679,8 @@ class ParseShortResult(object):
     def _xtra_parse_result(self, result):
         pass
 
-    def diag(self, show_all=False, category=False):
-        if category:
+    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_as='string'):
+        if filter:
             return self._major_diag.category.key
         else:
             return self._major_diag.key
@@ -873,7 +747,8 @@ class ParseFullResult(ParseShortResult):
     def domain_comments(self):
         return list(self._domain_comments.values())
 
-    def diag(self, show_all=False, category=False):
+    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_as='string'):
+
         if category:
             if show_all:
                 return self._cat_recs.keys()
@@ -886,7 +761,9 @@ class ParseFullResult(ParseShortResult):
                 return self._major_diag.key
 
     def __contains__(self, item):
-        return item in self._diag_recs
+        if not item in self._diag_recs:
+            return item in self._cat_recs
+        return True
 
     def __repr__(self):
         tmp_str = super().__repr__

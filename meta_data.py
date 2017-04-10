@@ -93,10 +93,9 @@ class ISEMAIL_DNS_LOOKUP_LEVELS(IntEnum):
     MX_RECORD = 3
 
 
-
-
-
 # <Categories>
+
+# <editor-fold desc="Meta Data">
 ISEMAIL_RESP_CATEGORIES = dict(
     ISEMAIL_VALID_CATEGORY=dict(
         name='Valid Address',
@@ -639,67 +638,67 @@ ISEMAIL_DIAG_RESPONSES = dict(
     VALID=dict(
         value=1000,
         description='Valid Email',
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_VALID_CATEGORY'],
+        category='ISEMAIL_VALID_CATEGORY',
         longdescription="Address is valid. Please note that this does not mean the address actually exists, nor even that the"
                     " domain actually exists. This address could be issued by the domain owner without breaking the rules"
                     " of any RFCs.",
-        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5']
     ),
     DNSWARN_COMM_ERROR=dict(
         value=1003,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        category='ISEMAIL_DNSWARN',
         description="There was an error communicating with DNS",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_INVALID_TLD=dict(
         value=1004,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        category='ISEMAIL_DNSWARN',
         description="Top Level Domain is not in the list of available TLDs",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_NO_MX_RECORD=dict(
         value=1005,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        category='ISEMAIL_DNSWARN',
         description="Couldn't find an MX record for this domain but an A-record does exist",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     DNSWARN_NO_RECORD=dict(
         value=1006,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DNSWARN'],
+        category='ISEMAIL_DNSWARN',
         description="Couldn't find an MX record or an A-record for this domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
     ),
     RFC5321_TLD=dict(
         value=1009,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
+        category='ISEMAIL_RFC5321',
         description="Address is valid but at a Top Level Domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD'],
     ),
     RFC5321_TLD_NUMERIC=dict(
         value=1010,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
+        category='ISEMAIL_RFC5321',
         description="Address is valid but the Top Level Domain begins with a number",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['TLD-format'],
     ),
     RFC5321_QUOTED_STRING=dict(
         value=1011,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
+        category='ISEMAIL_RFC5321',
         description="Address is valid but contains a quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
     RFC5321_ADDRESS_LITERAL=dict(
         value=1012,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5321'],
+        category='ISEMAIL_RFC5321',
         description="Address is valid but at a literal address not a domain",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=(ISEMAIL_META_REFERENCES['address-literal'], ISEMAIL_META_REFERENCES['address-literal-IPv4'])
     ),
     RFC5321_IPV6_DEPRECATED=dict(
         value=1013,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="Address is valid but contains a :: that only elides one zero group. All implementations must accept"
                     " and be able to handle any legitimate RFC 4291 format.",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
@@ -707,168 +706,168 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     CFWS_COMMENT=dict(
         value=1017,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_CFWS'],
+        category='ISEMAIL_CFWS',
         description="Address contains comments",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['dot-atom'],
     ),
     CFWS_FWS=dict(
         value=1018,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_CFWS'],
+        category='ISEMAIL_CFWS',
         description="Address contains FWS",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     DEPREC_LOCAL_PART=dict(
         value=1033,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="The local part is in a deprecated form",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['obs-local-part'],
     ),
     DEPREC_FWS=dict(
         value=1034,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="Address contains an obsolete form of Folding White Space",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['obs-local-part'], ISEMAIL_META_REFERENCES['obs-domain'])
     ),
     DEPREC_QTEXT=dict(
         value=1035,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="A quoted string contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-qtext'],
     ),
     DEPREC_QP=dict(
         value=1036,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="A quoted pair contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-qp'],
     ),
     DEPREC_COMMENT=dict(
         value=1037,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="Address contains a comment in a position that is deprecated",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['obs-local-part'], ISEMAIL_META_REFERENCES['obs-domain'])
     ),
     DEPREC_CTEXT=dict(
         value=1038,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="A comment contains a deprecated character",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-ctext'],
     ),
     DEPREC_CFWS_NEAR_AT=dict(
         value=1049,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_DEPREC'],
+        category='ISEMAIL_DEPREC',
         description="Address contains a comment or Folding White Space around the @ sign",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['CFWS-near-at'], ISEMAIL_META_REFERENCES['SHOULD-NOT'])
     ),
     RFC5322_DOMAIN=dict(
         value=1065,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="Address is RFC 5322 compliant but contains domain characters that are not allowed by DNS",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
     ),
     RFC5322_TOO_LONG=dict(
         value=1066,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="Address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['mailbox-maximum'],
     ),
     RFC5322_LOCAL_TOO_LONG=dict(
         value=1067,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The local part of the address is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part-maximum'],
     ),
     RFC5322_DOMAIN_TOO_LONG=dict(
         value=1068,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The domain part is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-maximum'],
     ),
     RFC5322_LABEL_TOO_LONG=dict(
         value=1069,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The domain part contains an element that is too long",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['label'],
     ),
     RFC5322_DOMAIN_LITERAL=dict(
         value=1070,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The domain literal is not a valid RFC 5321 address literal",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-literal'],
     ),
     RFC5322_DOM_LIT_OBS_DTEXT=dict(
         value=1071,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The domain literal is not a valid RFC 5321 address literal and it contains obsolete characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['obs-dtext'],
     ),
     RFC5322_IPV6_GRP_COUNT=dict(
         value=1072,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The IPv6 literal address contains the wrong number of groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_2X2X_COLON=dict(
         value=1073,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The IPv6 literal address contains too many :: sequences",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_BAD_CHAR=dict(
         value=1074,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The IPv6 address contains an illegal group of characters",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_MAX_GRPS=dict(
         value=1075,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The IPv6 address has too many groups",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_COLON_STRT=dict(
         value=1076,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="IPv6 address starts with a single colon",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_COLON_END=dict(
         value=1077,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="IPv6 address ends with a single colon",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_ADDR=dict(
         value=1078,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is an IPv6 address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_FULL_ADDR=dict(
         value=1079,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is a full IPv6 address",
 
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
@@ -876,49 +875,49 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     RFC5322_IPV6_COMP_ADDR=dict(
         value=1080,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is a compressed IPv6 address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_IPV4_ADDR=dict(
         value=1081,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is a full IPv6:IPv4 address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV6_IPV4_COMP_ADDR=dict(
         value=1082,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is a compressed IPv6:IPv4 address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
     ),
     RFC5322_IPV4_ADDR=dict(
         value=1083,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is an IPv6 address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-IPv4'],
     ),
     RFC5322_GENERAL_LITERAL=dict(
         value=1084,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address literal is a general address",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['address-literal-general'],
     ),
     RFC5322_LIMITED_DOMAIN=dict(
         value=1085,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_RFC5322'],
+        category='ISEMAIL_RFC5322',
         description="The address is valid for RFC5322, but not RFC5321",
         smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
         reference=ISEMAIL_META_REFERENCES['liberal_domain'],
     ),
     ERR_INVALID_ADDR_LITERAL=dict(
         value=1128,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="The address literal is not a valid address",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['address-literal'],
@@ -926,28 +925,28 @@ ISEMAIL_DIAG_RESPONSES = dict(
 
     ERR_EXPECTING_DTEXT=dict(
         value=1129,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="A domain literal contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['dtext'],
     ),
     ERR_NO_LOCAL_PART=dict(
         value=1130,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address has no local part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     ERR_NO_DOMAIN_PART=dict(
         value=1131,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address has no domain part",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=(ISEMAIL_META_REFERENCES['addr-spec'], ISEMAIL_META_REFERENCES['mailbox'])
     ),
     ERR_CONSECUTIVE_DOTS=dict(
         value=1132,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="The address may not contain consecutive dots",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -957,56 +956,56 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     ERR_ATEXT_AFTER_CFWS=dict(
         value=1133,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address contains text after a comment or Folding White Space",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['local-part'], ISEMAIL_META_REFERENCES['domain-RFC5322'])
     ),
     ERR_ATEXT_AFTER_QS=dict(
         value=1134,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address contains text after a quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['local-part'],
     ),
     ERR_ATEXT_AFTER_DOMLIT=dict(
         value=1135,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Extra characters were found after the end of the domain literal",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
     ),
     ERR_EXPECTING_QPAIR=dict(
         value=1136,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="The address contains a character that is not allowed in a quoted pair",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['quoted-pair'],
     ),
     ERR_EXPECTING_ATEXT=dict(
         value=1137,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['atext'],
     ),
     ERR_EXPECTING_QTEXT=dict(
         value=1138,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="A quoted string contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['qtext'],
     ),
     ERR_EXPECTING_CTEXT=dict(
         value=1139,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="A comment contains a character that is not allowed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=ISEMAIL_META_REFERENCES['qtext'],
     ),
     ERR_BACKSLASH_END=dict(
         value=1140,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="The address can't end with a backslash",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=(
@@ -1016,7 +1015,7 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     ERR_DOT_START=dict(
         value=1141,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Neither part of the address may begin with a dot",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -1026,7 +1025,7 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     ERR_DOT_END=dict(
         value=1142,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Neither part of the address may end with a dot",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
         reference=(
@@ -1036,223 +1035,856 @@ ISEMAIL_DIAG_RESPONSES = dict(
     ),
     ERR_DOMAIN_HYPHEN_START=dict(
         value=1143,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="A domain or subdomain cannot begin with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
     ERR_DOMAIN_HYPHEN_END=dict(
         value=1144,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="A domain or subdomain cannot end with a hyphen",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['sub-domain'],
     ),
     ERR_UNCLOSED_QUOTED_STR=dict(
         value=1145,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Unclosed quoted string",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['quoted-string'],
     ),
     ERR_UNCLOSED_COMMENT=dict(
         value=1146,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Unclosed comment",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_UNCLOSED_DOM_LIT=dict(
         value=1147,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Domain literal is missing its closing bracket",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
         reference=ISEMAIL_META_REFERENCES['domain-literal'],
     ),
     ERR_FWS_CRLF_X2=dict(
         value=1148,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Folding White Space contains consecutive CRLF sequences",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_FWS_CRLF_END=dict(
         value=1149,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Folding White Space ends with a CRLF sequence",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['CFWS'],
     ),
     ERR_CR_NO_LF=dict(
         value=1150,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address contains a carriage return that is not followed by a line feed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=(ISEMAIL_META_REFERENCES['CFWS'], ISEMAIL_META_REFERENCES['CRLF'])
     ),
     ERR_NO_DOMAIN_SEP=dict(
         value=1151,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address does not contain a domain seperator (@ sign)",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
     ERR_MULT_FWS_IN_COMMENT=dict(
         value=1152,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Address contains multiple FWS in a comment",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
     ERR_EMPTY_ADDRESS=dict(
         value=1255,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Empty Address Passed",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
         reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
     ),
     ERR_UNKNOWN=dict(
         value=1256,
-        category=ISEMAIL_RESP_CATEGORIES['ISEMAIL_ERR'],
+        category='ISEMAIL_ERR',
         description="Unknown Error parsing email",
         smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
     ),
 
 )
+# </editor-fold>  META DATA
 
 
-class MetaRef(object):
-    def __init__(self, ref_dict):
-        self.key = ref_dict['key']
-        self.cite_link = ref_dict['blockquote_cite']
-        self.cite = ref_dict['cite']
-        self.description = ref_dict['blockquote']
 
-    def __repr__(self):
-        return 'MetaRef(%s)' % self.key
+"""
+RETURN_OBJ_TEMPLATE = {
+    'single': {
+        'cat' : '[{status}]: {name}: ({description})',
+        'diag': '[{status}] {description}',
+    },
+    'both': {
+        'cat': '{cat_name} [{status}]\n{cat_description}\n{diag_group}',
+        'diag': '    - {diag_description}',
+    }}
 
-class MetaItem(object):
-    type_name = ''
+"""
 
-    def __init__(self, key, dict_in, parent):
+
+def _make_list(obj_in):
+    if obj_in is None:
+        return []
+    if isinstance(obj_in, str):
+        return [obj_in]
+    if isinstance(obj_in, (list, tuple)):
+        return obj_in
+    if hasattr(obj_in, '__iter__'):
+        return obj_in
+    return [obj_in]
+
+
+class MetaBase(object):
+    type_name = 'Base'
+    is_cat = False
+    is_diag = False
+
+    def __init__(self, key, dict_in, lookup):
+        self.lookup = lookup
+        self.name = dict_in.get('name', None)
         self.key = key
-        self.parent = parent
         self.value = dict_in['value']
         self.description = dict_in['description']
+        self._override_status = None
+        self._result = dict_in.get('result', None)
+        self._single_desc = None
+        self._both_desc = None
+
+        self._diags = MetaList()
 
     def __repr__(self):
-        if hasattr(self, 'status'):
-            return '%s(%s) [%s]' % (self.type_name, self.key, self.status.name)
-        else:
-            return '%s(%s)' % (self.type_name, self.key)
+        return '%s(%s) [%s]' % (self.type_name, self.key, self.status.name)
 
-
-class MetaCat(MetaItem):
-    type_name = 'Category'
-
-    def __init__(self, key, dict_in, parent):
-        super().__init__(key, dict_in, parent)
-        self.result = dict_in['result']
-        self.name = dict_in['name']
-
-        self._base_status = self.result
-        self._override_status = None
+    @property
+    def _base_status(self):
+        return self._result
 
     @property
     def status(self):
         return self._override_status or self._base_status
 
+    def set_override_status(self, new_status):
+        self._override_status = new_status
+        # self._single_desc = None
+        # self._both_desc = None
+
+    def reset_status(self):
+        self._override_status = None
+        # self._single_desc = None
+        # self._both_desc = None
+
+    def _get_other(self, other):
+        if isinstance(other, str):
+            return self.lookup[other].value
+        elif isinstance(other, int):
+            return other
+        else:
+            return other.value
+
+    def __eq__(self, other):
+        return self.value != self._get_other(other)
+
+    def __ne__(self, other):
+        return self.value != self._get_other(other)
+
+    def __lt__(self, other):
+        return self.value < self._get_other(other)
+
+    def __le__(self, other):
+        return self.value <= self._get_other(other)
+
+    def __gt__(self, other):
+        return self.value > self._get_other(other)
+
+    def __ge__(self, other):
+        return self.value >= self._get_other(other)
+
+    def _in_flt_cat(self, filter_set=None, exact=False):
+        return self.key in filter_set
+
+    def _in_flt_diag(self, filter_set=None, exact=False):
+        return self.key in filter_set
+
+    def _in_flt_status(self, filter_set=None):
+        return self.status.name in filter_set
+
+    def in_filter(self, filter, exact=False):
+        if filter is None:
+            return True
+        if isinstance(filter, dict):
+            tmp_cat = self._in_flt_cat(_make_list(filter.get('cats', None)), exact)
+            tmp_diag = self._in_flt_diag(_make_list(filter.get('diags', None)), exact)
+            tmp_status = self._in_flt_status(_make_list(filter.get('status', None)))
+            return any((tmp_cat, tmp_diag, tmp_status))
+        else:
+            return self.key in _make_list(filter)
 
 
-class MetaDiag(MetaItem):
+class MetaCat(MetaBase):
+    type_name = 'Categ'
+    is_cat = False
+    is_diag = True
+
+    def add_diag(self, key, dict_in):
+        tmp_diag = MetaDiag(key, dict_in, self, self.lookup)
+        self._diags[key] = tmp_diag
+        return tmp_diag
+
+    def format(self, format_str, **kwargs):
+        tmp_dict = dict(
+            name=self.name,
+            description=self.description,
+            key=self.key,
+            value=self.value,
+            status=self.status.name)
+        tmp_dict.update(kwargs)
+        return format_str.format(**tmp_dict)
+
+    def _in_flt_diag(self, filter_set=None, exact=False):
+        if exact:
+            return False
+        else:
+            for d in self._diags.keys():
+                if d.key in filter_set:
+                    return True
+            return False
+
+
+class MetaDiag(MetaBase):
     type_name = 'Diag'
+    is_cat = True
+    is_diag = False
 
-    def __init__(self, key, dict_in, parent):
-        super().__init__(key, dict_in, parent)
+    def __init__(self, key, dict_in, cat_rec, lookup):
+        super().__init__(key, dict_in, lookup)
 
-        self.category = parent.categories[dict_in['category']['value']]
+        self.category = cat_rec
         self.smtp = dict_in['smtp']['description']
         self.reference = []
         if 'reference' in dict_in:
-            if isinstance(dict_in['reference'], (list, tuple)):
+            tmp_refs = dict_in['reference']
+            if isinstance(tmp_refs, (list, tuple)):
                 for ref in dict_in['reference']:
-                    self.reference.append(MetaRef(ref))
+                    self.reference.append(ref)
             else:
-                self.reference.append(MetaRef(dict_in['reference']))
+                self.reference.append(tmp_refs)
 
-        self._override_status = None
+    def __repr__(self):
+        return '%s(%s) [%s] -> %s' % (self.type_name, self.key, self.status.name, self.category.key)
+
+    @property
+    def _dif_status(self):
+        if self._override_status is None:
+            return ''
+        else:
+            return '[%s] ' % self.status.name
+
+    def format(self, format_str, **kwargs):
+        tmp_dict = dict(
+            description=self.description,
+            key=self.key,
+            value=self.value,
+            status=self.status.name,
+            cat_key=self.category.key,
+            cat_name=self.category.name,
+            dif_status=self._dif_status)
+        tmp_dict.update(kwargs)
+        return format_str.format(**tmp_dict)
+
+    def _in_flt_cat(self, filter_set=None, exact=False):
+        if exact:
+            return False
+        else:
+            return self.category.key in filter_set
 
     @property
     def _base_status(self):
         return self.category.status
 
+
+"""
+class MetaCat(MetaBase):
+    type_name = 'Cat'
+    # single_template = '[{status}] - {name}: ({description})'
+    # both_template = '{name}: [{status}]\n({description})'
+
+    def __init__(self, key, dict_in, lookup):
+        super().__init__(key, dict_in, lookup)
+
+        self._result = dict_in['result']
+        self.name = dict_in['name']
+        self._diags = {}
+        self.is_cat = True
+        self.is_diag = False
+
+    def add_diag(self, key, dict_in):
+        tmp_diag = MetaDiag(key, dict_in, self, self.lookup)
+        self._diags[key] = tmp_diag
+        return tmp_diag
+
     @property
-    def status(self):
-        return self._override_status or self._base_status
+    def _desc_dict(self):
+        tmp_ret = dict(
+            status=self.status.name,
+            name=self.name,
+            description=self.description,
+        )
+        return tmp_ret
+
+    def get_ret_dict(self):
+        return {self.key: {
+            'value': self.value,
+            'name': self.name,
+            'description': self.description,
+            'type': self.status.name}}
+
+
+class MetaDiag(MetaBase):
+    type_name = 'Diag'
+
+    single_template = '[{status}] {description}'
+    both_template = '    - {description}'
+
+    def __init__(self, key, dict_in, cat_rec, lookup):
+        super().__init__(key, dict_in, lookup)
+
+        self.is_cat = False
+        self.is_diag = True
+        self.category = cat_rec
+        self.smtp = dict_in['smtp']['description']
+        self.reference = []
+        if 'reference' in dict_in:
+            tmp_refs = dict_in['reference']
+            if isinstance(tmp_refs, (list, tuple)):
+                for ref in dict_in['reference']:
+                    self.reference.append(ref)
+            else:
+                self.reference.append(tmp_refs)
+
+    @property
+    def _desc_dict(self):
+        tmp_ret = dict(
+            status=self.status.name,
+            description=self.description)
+        return tmp_ret
+
+    def get_ret_dict(self):
+        return {self.key: {
+            'value': self.value,
+            'cat': self.category.key,
+            'description': self.description,
+            'type': self.status.name}}
+
+    @property
+    def _base_status(self):
+        return self.category.status
+"""
+
 
 class MetaList(object):
-    def __init__(self, obj_type, parent, dict_in=None):
-        self._by_value = {}
-        self._by_key = {}
-        self._obj_type = obj_type
-        self._list_type = obj_type.type_name
-        self._parent = parent
-        if dict_in is not None:
-            self.extend(dict_in)
+    def __init__(self, data=None):
+        self._keys = {}
+        self._ordered = []
 
-    def add(self, obj_in):
-        if obj_in.key in self._by_key:
-            raise KeyError("MetaList(%s) already has key %s" % (self._list_type, obj_in.key))
+        if data is not None:
+            self.update(data)
+
+        self._sorted = None
+
+    def clear(self):
+        self._keys.clear()
+        self._ordered.clear()
+        self._sorted = None
+
+    def sort(self, reverse=True):
+        if self._sorted != repr(reverse):
+            self._ordered.sort(reverse=reverse)
+            self._sorted = repr(reverse)
+
+    def update(self, dict_in):
+        self._sorted = False
+        for key, item in dict_in:
+            self[key] = item
+
+    def keys(self, reverse=True, show_all=True, ordered=False, filter=None, within=None):
+        if isinstance(within, str):
+            within = [within]
+        if not show_all:
+            ordered = True
+        if ordered or filter is not None:
+            tmp_ret = []
+            for i in self.values(reverse=reverse, show_all=show_all):
+                if filter is None or i.in_filter(filter):
+                    if within is None or i.key in within:
+                        tmp_ret.append(i.key)
+            return tmp_ret
         else:
-            self._by_key[obj_in.key] = obj_in
+            return self._keys.keys()
 
-        if obj_in.key in self._parent.by_key:
-            raise KeyError("MetaLookup already has key %s" % obj_in.key)
+    def values(self, reverse=True, show_all=True, filter=None, ordered=True, within=None):
+        if isinstance(filter, str):
+            filter = [filter]
+        if isinstance(within, str):
+            within = [within]
+
+        if ordered or not show_all:
+            self.sort(reverse=reverse)
+
+        if filter is not None or within is not None:
+            tmp_ret = []
+            for i in self._ordered:
+                if i.in_filter(filter):
+                    if within is None or i.key in within:
+                        tmp_ret.append(i)
         else:
-            self._parent.by_key[obj_in.key] = obj_in
-
-        if obj_in.value in self._by_value:
-            raise KeyError("MetaList(%s) already has value %s" % (self._list_type, obj_in.value))
+            tmp_ret = self._ordered.copy()
+        if show_all or len(tmp_ret) < 2:
+            return tmp_ret
         else:
-            self._by_value[obj_in.value] = obj_in
-
-        if obj_in.value in self._parent.by_value:
-            raise KeyError("MetaLookup already has value %s" % obj_in.value)
-        else:
-            self._parent.by_value[obj_in.value] = obj_in
-
-    def extend(self, dict_in):
-        for key, item in dict_in.items():
-            tmp_item = self._obj_type(key, item, parent=self._parent)
-            self.add(tmp_item)
+            return [tmp_ret[0]]
 
     def __getitem__(self, item):
-        if isinstance(item, str):
-            return self._by_key[item]
-        else:
-            return self._by_value[item]
+        return self._keys[item]
 
-    def __contains__(self, item):
-        if isinstance(item, str):
-            return item in self._by_key
-        else:
-            return item in self._by_value
-
-    def __len__(self):
-        return len(self._by_key)
+    def __setitem__(self, key, value):
+        self._sorted = None
+        self._keys[key] = value
+        self._ordered.append(value)
 
     def __iter__(self):
-        for i in self._by_key.values():
-            yield i
+        self.sort(reverse=True)
+        for item in self._ordered:
+            yield item
+
+    def __contains__(self, item):
+        return item in self._keys
+
+    def __bool__(self):
+        return bool(self._keys)
+
+    def __len__(self):
+        return len(self._ordered)
+
+
+"""
+
+Returns:
+
+key_dict (only both)
+document_string (only both)
+
+obj_dict (either cat or diag)
+object_list (either cat or diag)
+key_list (either cat or diat)
+
+desc_list (any)
+formatted_string (any)
+
+
+
+"""
+
+
+class MetaOutoutBase(object):
+    report_name = ''
+    only_single = False
+    only_both = False
+
+    def __init__(self, parent):
+        self.parent = parent
+        self.items = MetaList()
+        self.sub_items = {}
+
+    def add_item(self, diag):
+        if self.inc_both:
+            tmp_cat = diag.category
+            if tmp_cat.key not in self.items:
+                self.items[tmp_cat.key] = tmp_cat
+                self.sub_items[tmp_cat.key] = MetaList()
+            self.sub_items[tmp_cat.key][diag.key] = diag
+        elif self.inc_cat:
+            diag = diag.category
+            if diag.key not in self.items:
+                self.items[diag.key] = diag
+        else:
+            self.items[diag.key] = diag
+
+    def _generate(self, **kwargs):
+        raise NotImplementedError('_generate must be implemented in sub classes')
+
+    def out(self, diags, **kwargs):
+        self.sub_items.clear()
+        self.items.clear()
+        if self.only_both:
+            self.inc_cat = kwargs.pop('inc_cat', True)
+            self.inc_diag = kwargs.pop('inc_diag', True)
+            if not self.inc_cat or not self.inc_diag:
+                raise AttributeError('%s report does not support inc_cat or inc_diag' % self.report_name)
+            self.inc_both = True
+
+        elif self.only_single:
+            self.inc_cat = kwargs.pop('inc_cat', False)
+            self.inc_diag = kwargs.pop('inc_diag', True)
+            if self.inc_cat and self.inc_diag:
+                raise AttributeError('%s report does not support inc_cat or inc_diag' % self.report_name)
+            self.inc_both = False
+        else:
+            self.inc_cat = kwargs.pop('inc_cat', False)
+            self.inc_diag = kwargs.pop('inc_diag', True)
+            self.inc_both = self.inc_cat and self.inc_diag
+
+        if diags is not None:
+            for item in diags:
+                self.add_item(item)
+
+        return self._generate(**kwargs)
+
+
+class MR_KeyDict(MetaOutoutBase):
+    report_name = 'key_dict'
+    only_single = False
+    only_both = True
+
+    def _generate(self, **kwargs):
+        tmp_ret = {}
+        for item in self.items:
+            tmp_sub_item = []
+            for diag in self.sub_items[item.key]:
+                tmp_sub_item.append(diag.key)
+            tmp_ret[item.key] = tmp_sub_item
+        return tmp_ret
+
+
+class MR_ObjDict(MetaOutoutBase):
+    report_name = 'obj_dict'
+    only_single = True
+    only_both = False
+
+    def _generate(self, **kwargs):
+        tmp_ret = {}
+        for item in self.items:
+            tmp_ret[item.key] = item
+        return tmp_ret
+
+
+class MR_ObjList(MetaOutoutBase):
+    report_name = 'object_list'
+    only_single = True
+    only_both = False
+    # object_list (either cat or diag)
+
+    def _generate(self, **kwargs):
+        tmp_ret = []
+        for item in self.items:
+            tmp_ret.append(item)
+        return tmp_ret
+
+
+class MR_KeyList(MetaOutoutBase):
+    report_name = 'key_list'
+    only_single = True
+    only_both = False
+    # key_list (either cat or diat)
+
+    def _generate(self, **kwargs):
+        tmp_ret = []
+        for item in self.items:
+            tmp_ret.append(item.key)
+        return tmp_ret
+
+
+class MR_FormattedList(MetaOutoutBase):
+    report_name = 'formatted_list'
+    only_single = False
+    only_both = False
+    # formatted_string (any)
+    single_cat_format = '[{status}] - {name}: ({description})'
+    single_diag_format = '[{status}] {description}'
+    both_cat_format = '{name}: [{status}]((SPLIT))({description})'
+    both_diag_format = '{indent}- {description}'
+
+    def _generate(self, **kwargs):
+        indent = kwargs.get('indent', 4)
+        indent_str = ''.rjust(indent, ' ')
+        tmp_ret = []
+        if self.inc_both:
+            for item in self.items:
+                tmp_add = item.format(self.both_cat_format)
+                tmp_ret.extend(tmp_add.split('((SPLIT))'))
+                for diag in self.sub_items[item.key]:
+                    tmp_add = diag.format(self.both_diag_format, indent=indent_str)
+                    tmp_ret.extend(tmp_add.split('((SPLIT))'))
+        else:
+            if self.inc_diag:
+                tmp_fmt = self.single_diag_format
+            else:
+                tmp_fmt = self.single_cat_format
+            for item in self.items:
+                tmp_ret.append(item.format(tmp_fmt, indent=indent_str))
+
+        return tmp_ret
+
+class MR_FormattedString(MetaOutoutBase):
+    report_name = 'formatted_string'
+    only_single = False
+    only_both = False
+
+    # formatting strings
+
+    single_wrapper_format = '{items}'
+    single_cat_format = '[{status}] - {name}: ({description})'
+    single_diag_format = '[{status}] {description}'
+    single_item_separetor = '\n'
+
+    both_wrapper_format = '{cats}'
+    both_cat_format = '{name}: [{status}]\n({description})\n{diags}'
+    both_diag_format = '{indent}{description}\n'
+    both_diag_separetor = '\n'
+    both_cat_separetor = '\n\n'
+
+    def _generate(self, **kwargs):
+        indent = kwargs.get('indent', 4)
+        indent_str = ''.ljust(indent, ' ')
+        if self.inc_both:
+            tmp_lst = []
+            for item in self.items:
+                tmp_diags_list = []
+                for diag in self.sub_items[item.key]:
+                    tmp_diags_list.append(diag.format(self.both_diag_format, indent=indent_str))
+                tmp_diags = self.both_diag_separetor.join(tmp_diags_list)
+                tmp_cat = item.format(self.both_cat_format, indent=indent_str, diags=tmp_diags)
+                tmp_lst.append(tmp_cat)
+            tmp_ret = self.both_cat_separetor.join(tmp_lst)
+            tmp_ret = self.both_wrapper_format.format(cats=tmp_ret, indent=indent_str)
+            return tmp_ret
+        else:
+            tmp_lst = []
+            if self.inc_diag:
+                tmp_fmt = self.single_diag_format
+            else:
+                tmp_fmt = self.single_cat_format
+
+            for item in self.items:
+                tmp_lst.append(item.format(tmp_fmt))
+            tmp_ret = self.single_item_separetor.join(tmp_lst)
+            tmp_ret = self.single_wrapper_format.format(items=tmp_ret, indent=indent_str)
+            return tmp_ret
+
+
+class MR_DescList(MR_FormattedList):
+    report_name = 'desc_list'
+    single_cat_format = '[{status}] - {name}: ({description})'
+    single_diag_format = '[{status}] {description}'
+    both_cat_format = '{name}: [{status}]((SPLIT))({description})'
+    both_diag_format = '{indent}- {description}'
+    return_as_list = True
+
+
+class MR_DocumentString(MR_FormattedString):
+    report_name = 'document_string'
+    only_both = True
+
+    single_cat_format = '{key} [{status}]: {name}\n{diags}'
+    single_diag_format = '{key} [{status}]: {description}'
+
+    both_cat_format = '{key} [{status}]: {name}\n{diags}'
+    both_diag_format = '{indent}{key}: {dif_status}{description}'
+
+
+_meta_formatters = [MetaOutoutBase, MR_KeyDict, MR_ObjDict, MR_ObjList,
+    MR_KeyList, MR_FormattedString, MR_DescList, MR_DocumentString]
+
+'''
+
+class MetaOutSingle(object):
+    ret_both = False
+
+    def __init__(self, parent, return_as='string', return_cat=False, return_type='diag', diags=None):
+        self.parent = parent
+        self.items = MetaList()
+        self.sub_items = {}
+        self.return_as = return_as
+        self.return_type = return_type
+        if self.ret_both:
+            self.cat = True
+            self.diag = True
+        elif return_cat:
+            self.cat = True
+            self.diag = False
+        else:
+            self.cat = False
+            self.diag = True
+        self.return_template = ''
+
+        if diags is not None:
+            for item in diags:
+                self.add_item(item)
+
+    def add_item(self, diag):
+        if self.cat and self.diag:
+            tmp_cat = diag.category
+            if tmp_cat.key not in self.items:
+                self.items[tmp_cat.key] = tmp_cat
+                self.sub_items[tmp_cat.key] = MetaList()
+            self.sub_items[tmp_cat.key][diag.key] = diag
+        elif self.cat:
+            diag = diag.category
+            if diag.key not in self.items:
+                self.items[diag.key] = diag
+        else:
+            self.items[diag.key] = diag
+
+    def get_as_list(self):
+        tmp_ret = []
+        if self.return_type == 'diag':
+            for item in self:
+                tmp_ret.append(item.key)
+        else:
+            for item in self:
+                tmp_ret.append(item.single_desc)
+        return tmp_ret
+
+    def get_as_dict(self):
+        tmp_ret = {}
+        for item in self:
+            tmp_ret.update(item.get_ret_dict())
+        return tmp_ret
+
+    def get_as_str(self):
+        if self.return_type == 'diag':
+            return ', '.join(self.get_as_list())
+        else:
+            return '\n'.join(self.get_as_list())
+
+    def __iter__(self):
+        for item in self.items:
+            yield item
+
+    def __getitem__(self, item):
+        return self.items[item]
+
+    def get_return(self):
+        if self.return_as == 'string':
+            return self.get_as_str()
+        elif self.return_as == 'dict':
+            return self.get_as_dict()
+        else:
+            return self.get_as_list()
+
+
+class MetaOutBoth(MetaOutSingle):
+    ret_both = True
+
+    def __init__(self, parent, return_as='string', return_type='diag', diags=None):
+        super().__init__(parent, return_as=return_as, return_cat=True, return_type=return_type, diags=diags)
+        # self.cats = {}
+        # self.diag_list = []
+        # self.cat_list = []
+        self.cat = True
+        self.diag = True
+
+    def get_as_list(self):
+        tmp_ret = []
+        if self.return_type == 'diag':
+            for item in self.items:
+                tmp_diag = []
+                for diag in self.sub_items[item.key]:
+                    tmp_diag.append(diag.key)
+                tmp_ret.append((item.key, tmp_diag))
+        else:
+            for item in self.items:
+                # tmp_ret.append(item.both_desc)
+                tmp_sub_list = []
+                for diag in self.sub_items[item.key]:
+                    tmp_sub_list.append(diag.single_desc)
+                tmp_ret.append([item.single_desc, tmp_sub_list])
+        return tmp_ret
+
+    def get_as_dict(self):
+        tmp_ret = {}
+        if self.return_type == 'diag':
+            for item in self.items:
+                tmp_sub_item = []
+                for diag in self.sub_items[item.key]:
+                    tmp_sub_item.append(diag.key)
+                tmp_ret[item.key] = tmp_sub_item
+
+        else:
+            for item in self.items:
+                tmp_cat_dict = item.get_ret_dict()
+                tmp_cat_dict[item.key]['diags'] = {}
+                for diag in self.sub_items[item.key]:
+                    tmp_cat_dict[item.key]['diags'].update(diag.get_ret_dict())
+                tmp_ret.update(tmp_cat_dict)
+        return tmp_ret
+
+    def get_as_str(self):
+        if self.return_type == 'diag':
+            tmp_ret = []
+            for item in self.items:
+                tmp_diag = []
+                for diag in self.sub_items[item.key]:
+                    tmp_diag.append(diag.key)
+                tmp_ret.append('%s(%s)' % (item.key, ', '.join(tmp_diag)))
+            tmp_ret = ', '.join(tmp_ret)
+            return tmp_ret
+        else:
+            tmp_ret = []
+            for item in self.items:
+                tmp_ret.append(item.both_desc)
+                for diag in self.sub_items[item.key]:
+                    tmp_ret.append(diag.both_desc)
+                tmp_ret.append('')
+            return '\n'.join(tmp_ret[:-1])
+
+'''
+
+
 
 class MetaLookup(object):
 
     def __init__(self, error_on_warning=False, *error_on_code):
-        self.by_value = {}
-        self.by_key = {}
+        # self.by_value = {}
+        # self.by_key = {}
         self.results = ISEMAIL_RESULT_CODES
-        self.categories = MetaList(MetaCat, self, ISEMAIL_RESP_CATEGORIES)
-        self.diags = MetaList(MetaDiag, self, ISEMAIL_DIAG_RESPONSES)
+        self.categories = MetaList()
+        self.diags = MetaList()
+        self.lookup = MetaList()
+        self.statuses = {
+            'WARNING': [],
+            'ERROR': [],
+            'OK': []}
+
+        # self.categories = MetaList(MetaCat, self, ISEMAIL_RESP_CATEGORIES)
+        # self.diags = MetaList(MetaDiag, self, ISEMAIL_DIAG_RESPONSES)
+
+        for key, item in ISEMAIL_RESP_CATEGORIES.items():
+            tmp_cat = MetaCat(key, item, self)
+            if key in self.lookup:
+                raise AttributeError('%s already exists!' % key)
+            self.categories[key] = tmp_cat
+            self.lookup[key] = tmp_cat
+
+        for key, item in ISEMAIL_DIAG_RESPONSES.items():
+            tmp_diag = self.lookup[item['category']].add_diag(key, item)
+            if key in self.lookup:
+                raise AttributeError('%s already exists!' % key)
+            self.diags[key] = tmp_diag
+            self.lookup[key] = tmp_diag
 
         self.error_codes = {}
 
@@ -1263,39 +1895,37 @@ class MetaLookup(object):
 
         self._load_codes()
 
+        self._formatters = {}
+        for f in _meta_formatters:
+            self._formatters[f.report_name] = f(self)
+
     def __getitem__(self, item):
-        if isinstance(item, str):
-            return self.by_key[item]
-        else:
-            return self.by_value[item]
+        return self.lookup[item]
 
     def __contains__(self, item):
-        if isinstance(item, str):
-            return item in self.by_key
-        else:
-            return item in self.by_value
+        return item in self.lookup
 
     def _load_codes(self):
         self.error_codes.clear()
-        for c in self.diags:
+        for c in self.diags.values():
             if c.status == ISEMAIL_RESULT_CODES.ERROR:
                 self.error_codes[c.key] = c
 
     def clear_overrides(self):
         self.error_codes.clear()
-        for c in self.categories:
-            c._override_status = None
-        for c in self.diags:
-            c._override_status = None
+        for c in self.categories.values(ordered=False):
+            c.reset_status()
+        for c in self.diags.values():
+            c.reset_status()
             if c.status == ISEMAIL_RESULT_CODES.ERROR:
                 self.error_codes[c.key] = c
 
     def set_error_on_warning(self, set_to=True, reload=True):
-        for c in self.categories:
+        for c in self.categories.values():
             if set_to and c._base_status == ISEMAIL_RESULT_CODES.WARNING:
-                c._override_status = ISEMAIL_RESULT_CODES.ERROR
+                c.set_override_status(ISEMAIL_RESULT_CODES.ERROR)
             else:
-                c._override_status = None
+                c.reset_status()
 
         if reload:
             self._load_codes()
@@ -1310,8 +1940,7 @@ class MetaLookup(object):
         if isinstance(obj_in, (list, tuple)):
             self.set_error_on(*obj_in)
         else:
-            tmp_obj = self[obj_in]
-            tmp_obj._override_status = ISEMAIL_RESULT_CODES.ERROR
+            self[obj_in].set_override_status(ISEMAIL_RESULT_CODES.ERROR)
 
     def status(self, diag):
         return self[diag].status
@@ -1321,6 +1950,44 @@ class MetaLookup(object):
             return diag in self.error_codes
         else:
             raise KeyError('Diag %s not in system' % diag)
+
+    def filter(self, diags=None, filter=None, show_all=True, ordered=False, return_key=False):
+
+        if filter is not None:
+            if isinstance(filter, str):
+                filter = [filter]
+
+            filter_dict = {'diags': [], 'cats': [], 'status': []}
+
+            for f in filter:
+                f = f.upper()
+                if f in self.diags:
+                    filter_dict['diags'].append(f)
+                elif f in self.categories:
+                    filter_dict['cats'].append(f)
+                elif f in ('WARNING', 'ERROR', 'OK'):
+                    filter_dict['status'].append(f)
+                else:
+                    raise AttributeError('Invalid filter string: %s' % f)
+            filter = filter_dict
+
+        if return_key:
+            return self.diags.keys(show_all=show_all, filter=filter, ordered=ordered, within=diags)
+
+        else:
+            return self.diags.values(show_all=show_all, filter=filter, ordered=ordered, within=diags)
+
+
+    def get_report(self, report_name, diags=None, show_all=True, filter=None, **kwargs):
+        try:
+            tmp_report = self._formatters[report_name]
+        except KeyError:
+            raise AttributeError('Report "%s" does not exist, valid reports = %r' % (report_name, self._formatters.keys()))
+
+        tmp_diags = self.filter(diags=diags, filter=filter, show_all=show_all, ordered=True)
+
+        return tmp_report.out(diags=tmp_diags, **kwargs)
+    __call__ = get_report
 
 
 META_LOOKUP = MetaLookup()

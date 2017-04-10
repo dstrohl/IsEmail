@@ -293,4 +293,4 @@ def dns_lookup(domain_name,
 
             return ''
 
-    raise AttributeError('Invalid Lookup Level')
+    raise AttributeError('Invalid Lookup Level: %r' % lookup_level)
