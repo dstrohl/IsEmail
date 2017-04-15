@@ -46,6 +46,7 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
 
     return tmp_ret
 
+
 class TestMakeParseString(unittest.TestCase):
 
     def test_make_string(self):

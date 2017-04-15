@@ -1,5 +1,5 @@
 
-from meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS, MetaList
 from dns_functions import dns_lookup
 
 def _make_list(obj_in):
@@ -128,6 +128,86 @@ class ParseHistory(object):
         return '%s  :  %r' % (self.full_name, self.parsed_str)
 
 
+
+
+class ParseHistoryResultItem(object):
+    def __init__(self, parser, parent, segment_type, begin, length, depth=0):
+        self.parent = parent
+        self.parser = parser
+        self.segment_type = segment_type
+        self.begin = begin
+        self.length = length
+        self.children = []
+        self.depth = depth
+
+        if parent is None:
+            self.full_name = segment_type
+        else:
+            self.full_name = '%s.%s' % (parent.full_name, segment_type)
+
+    @property
+    def is_root(self):
+        return self.parent is None
+
+    def extend(self, children):
+        for c in children:
+            self.add(c)
+
+    def add(self, child):
+        self.children.append(child)
+
+    def __str__(self):
+        return self.segment_type
+
+    @property
+    def parsed_str(self):
+        return self.parser.mid(self.begin, self.length)
+
+    def short_desc(self, depth=9999, inc_string=False):
+        if depth == 0:
+            return ''
+
+        if not self.segment_type:
+            if self.children:
+                if depth == 1:
+                    return '...'
+                tmp_ret_list = []
+                for c in self.children:
+                    tmp_child = c.short_desc(depth=depth - 1, inc_string=inc_string)
+                    if tmp_child:
+                        tmp_ret_list.append(tmp_child)
+
+                tmp_ret = ', '.join(tmp_ret_list)
+                return tmp_ret
+            else:
+                return ''
+        tmp_ret = self.segment_type
+        if inc_string:
+            tmp_ret += '[%r]' % self.parsed_str
+
+        if self.children:
+
+            if depth == 1:
+                tmp_ret += '(...)'
+            else:
+                tmp_ret_list = []
+                for c in self.children:
+                    tmp_child = c.short_desc(depth=depth - 1, inc_string=inc_string)
+                    if tmp_child:
+                        tmp_ret_list.append(tmp_child)
+
+                if tmp_ret_list:
+                    tmp_ret += '('
+                    tmp_ret += ', '.join(tmp_ret_list)
+                    tmp_ret += ')'
+
+        return tmp_ret
+
+    def __repr__(self):
+        return '%s  :  %r' % (self.full_name, self.parsed_str)
+
+
+'''
 class ParseResultItem(object):
 
     def __init__(self,
@@ -203,7 +283,7 @@ class ParseResultItem(object):
 
     def __ge__(self, other):
         return self.value >= other.value
-
+'''
 
 class ParseResultFootball(object):
 
@@ -639,17 +719,11 @@ class ParseShortResult(object):
         self.status = None
 
         if results is not None:
+            tmp_res_keys = []
             for r in results:
-                result_rec = ParseResultItem(*r)
-
-                if self._major_diag is None:
-                    self._major_diag = result_rec
-                else:
-                    self._major_diag = max(result_rec, self._major_diag)
-
-                self.status = self._major_diag.status
-
-                self._xtra_parse_result(result_rec)
+                tmp_res_keys.append(r[0])
+                self._xtra_parse_result(r)
+            self._major_diag, self.status = META_LOOKUP.max_status(*tmp_res_keys)
         else:
             self.status = None
             self._major_diag = None
@@ -718,7 +792,8 @@ class ParseShortResult(object):
 class ParseFullResult(ParseShortResult):
     def __init__(self, email_in, parts, results, history, local_comments, domain_comments, domain_type, trace):
         self._diag_recs = {}
-        self._cat_recs = {}
+        self._diag_keys = []
+        # self._cat_recs = MetaList()
 
         super().__init__(email_in, parts, results)
 
@@ -729,15 +804,17 @@ class ParseFullResult(ParseShortResult):
         self.trace = trace
 
     def _xtra_parse_result(self, result):
-        if result.diag.key in self._diag_recs:
-            self._diag_recs[result.key].append(result)
+        # tmp_result = META_LOOKUP[result[0]]
+        if result[0] in self._diag_recs:
+            self._diag_recs[result[0]].append(result[1:])
+            self._diag_keys.append(result[0])
         else:
-            self._diag_recs[result.key] = [result]
+            self._diag_recs[result[0]] = [result[1:]]
 
-        if result.diag.category.key in self._cat_recs:
-            self._cat_recs[result.diag.category.key].append(result)
-        else:
-            self._cat_recs[result.diag.category.key] = [result]
+        # if result.diag.category.key in self._cat_recs:
+        #     self._cat_recs[result.diag.category.key].append(result)
+        # else:
+        #    self._cat_recs[result.diag.category.key] = [result]
 
     @property
     def local_comments(self):
@@ -747,45 +824,44 @@ class ParseFullResult(ParseShortResult):
     def domain_comments(self):
         return list(self._domain_comments.values())
 
-    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_as='string'):
-
-        if category:
-            if show_all:
-                return self._cat_recs.keys()
-            else:
-                return self._major_diag.category.key
+    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_obj=False, return_as_list=False):
+        if return_obj and return_as_list:
+            tmp_report = 'object_list'
+        elif return_obj:
+            tmp_report = 'object_dict'
+        elif return_as_list:
+            tmp_report = 'key_list'
         else:
-            if show_all:
-                return self._diag_recs.keys()
-            else:
-                return self._major_diag.key
+            tmp_report = 'key_dict'
+
+        return META_LOOKUP(tmp_report, self._diag_recs.keys(), filter=filter, show_all=show_all, inc_cat=inc_cat, inc_diag=inc_diag)
 
     def __contains__(self, item):
-        if not item in self._diag_recs:
-            return item in self._cat_recs
-        return True
+        # if isinstance(item, str):
+        #    try:
+        #        item = META_LOOKUP[item]
+        #    except KeyError:
+        #        return False
+        return item in self._diag_recs
 
     def __repr__(self):
         tmp_str = super().__repr__
         tmp_str += '[%s]' % ','.join(self.diag(show_all=True))
         return tmp_str
 
-    def description(self, as_list=True, show_all=False):
-        if show_all:
-            tmp_ret = []
-            for r in self.diag(show_all=True):
-                tmp_ret.append(r.description)
-            if not as_list:
-                tmp_ret = '\n'.join(tmp_ret)
-            return tmp_ret
-        else:
-            return self._major_diag.description
-
+    def report(self, report_name, filter=None, **kwargs):
+        return META_LOOKUP(report_name, diags=self._diag_recs.keys(), filter=filter, **kwargs)
 
     def __getitem__(self, item):
-        try:
-            return self._diag_recs[item]
-        except KeyError:
-            return self._cat_recs[item]
+        # if isinstance(item, str):
+        #    item = META_LOOKUP[item]
+        #if item in self:
+        #    return item
+        #else:
+        #    raise KeyError('%s is not in this return object' % item.key)
+        if item in self:
+            return META_LOOKUP[item]
+        else:
+            raise KeyError('%s is not in this return object' % item.key)
 
 

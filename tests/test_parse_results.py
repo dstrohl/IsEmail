@@ -23,8 +23,6 @@ class ParserFixture(object):
         for key, item in kwargs.items():
             setattr(self, key, item)
 
-
-
     def mid(self, begin: int = 0, length: int = 0):
         if length > 0:
             tmp_end = min(begin + length, self.email_len)
@@ -48,6 +46,11 @@ RETURN_OBJ_L3 = {
     'show_one': ('one', {'show_all': False}),
     'show_one_filtered': ('one-flt', {'show_all': False, 'filter': None}),
 }
+
+RETURN_OBJ_MD_CHANGE = {
+    'document_string': ['RFC5321_QUOTED_STRING'],
+}
+
 RETURN_OBJ_TESTS = {
     'key_dict': {
         'inc_diag': {'raises': AttributeError},
@@ -91,8 +94,8 @@ RETURN_OBJ_TESTS = {
                     '    ERR_UNCLOSED_COMMENT: Unclosed comment\n'
                     '\n'
                     'ISEMAIL_RFC5321 [WARNING]: Valid Address (unusual)\n'
-                    '    RFC5321_ADDRESS_LITERAL: Address is valid but at a literal address not a domain\n'
                     '    RFC5321_QUOTED_STRING: [ERROR] Address is valid but contains a quoted string\n'
+                    '    RFC5321_ADDRESS_LITERAL: Address is valid but at a literal address not a domain\n'
                     '    RFC5321_TLD_NUMERIC: Address is valid but the Top Level Domain begins with a number\n'
                     '\n'
                     'ISEMAIL_DNSWARN [WARNING]: Valid Address (DNS Warning)\n'
@@ -103,27 +106,27 @@ RETURN_OBJ_TESTS = {
                     '    ERR_UNCLOSED_COMMENT: Unclosed comment\n'
                     '\n'
                     'ISEMAIL_RFC5321 [WARNING]: Valid Address (unusual)\n'
-                    '    RFC5321_ADDRESS_LITERAL: Address is valid but at a literal address not a domain\n'
                     '    RFC5321_QUOTED_STRING: [ERROR] Address is valid but contains a quoted string\n'
-                    '    RFC5321_TLD_NUMERIC: Address is valid but the Top Level Domain begins with a number\n',
+                    '    RFC5321_ADDRESS_LITERAL: Address is valid but at a literal address not a domain\n'
+                    '    RFC5321_TLD_NUMERIC: Address is valid but the Top Level Domain begins with a number',
 
             'show_one'         : ''
                     'ISEMAIL_ERR [ERROR]: Invalid Address\n'
-                    '    ERR_UNCLOSED_COMMENT: Unclosed comment\n',
+                    '    ERR_UNCLOSED_COMMENT: Unclosed comment',
 
             'show_one_filtered': ''
                     'ISEMAIL_ERR [ERROR]: Invalid Address\n'
-                    '    ERR_UNCLOSED_COMMENT: Unclosed comment\n',
+                    '    ERR_UNCLOSED_COMMENT: Unclosed comment',
         },
 
     },
     'obj_dict': {
-        'inc_diag': {
+        'inc_cat': {
             'filter': 'RFC5321_TLD_NUMERIC',
             'show_all': {
                     'ISEMAIL_DNSWARN': ML['ISEMAIL_DNSWARN'],
-                    'ISEMAIL_RFC5321':  ML['ISEMAIL_DNSWARN'],
-                    'ISEMAIL_ERR':  ML['ISEMAIL_DNSWARN'],
+                    'ISEMAIL_RFC5321':  ML['ISEMAIL_RFC5321'],
+                    'ISEMAIL_ERR':  ML['ISEMAIL_ERR'],
                 },
             'show_all_filtered': {
                     'ISEMAIL_RFC5321': ML['ISEMAIL_RFC5321'],
@@ -135,7 +138,7 @@ RETURN_OBJ_TESTS = {
                     'ISEMAIL_RFC5321': ML['ISEMAIL_RFC5321']
                 },
         },
-        'inc_cat': {
+        'inc_diag': {
             'filter': 'RFC5321_TLD_NUMERIC',
             'show_all': {
                 'DNSWARN_INVALID_TLD': ML['DNSWARN_INVALID_TLD'],
@@ -152,25 +155,25 @@ RETURN_OBJ_TESTS = {
 
     },
     'object_list': {
-        'inc_diag': {
+        'inc_cat': {
             'filter': 'RFC5321_TLD_NUMERIC',
             'show_all': [
-                    ML['ISEMAIL_DNSWARN'],
-                    ML['ISEMAIL_DNSWARN'],
+                    ML['ISEMAIL_ERR'],
+                    ML['ISEMAIL_RFC5321'],
                     ML['ISEMAIL_DNSWARN'],
                 ],
             'show_all_filtered': [ML['ISEMAIL_RFC5321']],
             'show_one': [ML['ISEMAIL_ERR']],
             'show_one_filtered': [ML['ISEMAIL_RFC5321']],
         },
-        'inc_cat': {
+        'inc_diag': {
             'filter': 'RFC5321_TLD_NUMERIC',
             'show_all': [
-                ML['DNSWARN_INVALID_TLD'],
+                ML['ERR_UNCLOSED_COMMENT'],
                 ML['RFC5321_ADDRESS_LITERAL'],
                 ML['RFC5321_QUOTED_STRING'],
                 ML['RFC5321_TLD_NUMERIC'],
-                ML['ERR_UNCLOSED_COMMENT'],
+                ML['DNSWARN_INVALID_TLD'],
                 ],
             'show_all_filtered': [ML['RFC5321_TLD_NUMERIC']],
             'show_one': [ML['ERR_UNCLOSED_COMMENT']],
@@ -183,15 +186,15 @@ RETURN_OBJ_TESTS = {
         'inc_diag': {
             'filter': 'RFC5321_TLD_NUMERIC',
             'show_all': [
-                'DNSWARN_INVALID_TLD',
+                'ERR_UNCLOSED_COMMENT',
                 'RFC5321_ADDRESS_LITERAL',
                 'RFC5321_QUOTED_STRING',
                 'RFC5321_TLD_NUMERIC',
-                'ERR_UNCLOSED_COMMENT',
+                'DNSWARN_INVALID_TLD',
             ],
-            'show_all_filtered': ['ISEMAIL_RFC5321'],
-            'show_one': ['ISEMAIL_ERR'],
-            'show_one_filtered': ['ISEMAIL_RFC5321'],
+            'show_all_filtered': ['RFC5321_TLD_NUMERIC'],
+            'show_one': ['ERR_UNCLOSED_COMMENT'],
+            'show_one_filtered': ['RFC5321_TLD_NUMERIC'],
         },
         'inc_cat': {
             'filter': 'RFC5321_TLD_NUMERIC',
@@ -200,9 +203,9 @@ RETURN_OBJ_TESTS = {
                 'ISEMAIL_RFC5321',
                 'ISEMAIL_DNSWARN',
                 ],
-            'show_all_filtered': ['RFC5321_TLD_NUMERIC'],
-            'show_one': ['ERR_UNCLOSED_COMMENT'],
-            'show_one_filtered': ['RFC5321_TLD_NUMERIC'],
+            'show_all_filtered': ['ISEMAIL_RFC5321'],
+            'show_one': ['ISEMAIL_ERR'],
+            'show_one_filtered': ['ISEMAIL_RFC5321'],
         },
         'inc_both': {'raises': AttributeError},
 
@@ -325,13 +328,13 @@ RETURN_OBJ_TESTS = {
                     'Invalid Address: [ERROR]\n'
                     '(Address is invalid for any purpose)\n'
                     '    - Unclosed comment\n'
-                    'n'
+                    '\n'
                     'Valid Address (unusual): [WARNING]\n'
                     '(Address is valid for SMTP but has unusual elements)\n'
                     '    - Address is valid but at a literal address not a domain\n'
                     '    - Address is valid but contains a quoted string\n'
                     '    - Address is valid but the Top Level Domain begins with a number\n'
-                    'n'
+                    '\n'
                     'Valid Address (DNS Warning): [WARNING]\n'
                     '(Address is valid but a DNS check was not successful)\n'
                     '    - Top Level Domain is not in the list of available TLDs',
@@ -340,7 +343,7 @@ RETURN_OBJ_TESTS = {
                     'Invalid Address: [ERROR]\n'
                     '(Address is invalid for any purpose)\n'
                     '    - Unclosed comment\n'
-                    'n'
+                    '\n'
                     'Valid Address (unusual): [WARNING]\n'
                     '(Address is valid for SMTP but has unusual elements)\n'
                     '    - Address is valid but at a literal address not a domain\n'
@@ -360,664 +363,6 @@ RETURN_OBJ_TESTS = {
     },
 }    
 
-'''
-OLD_RETURN_OBJ_TESTS = {
-    'diag': {
-        'return_as_string': {
-            'kwargs': {
-                'return_as': 'string'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': 'ERR_UNCLOSED_COMMENT, RFC5321_ADDRESS_LITERAL, RFC5321_QUOTED_STRING, RFC5321_TLD_NUMERIC, DNSWARN_INVALID_TLD',
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': 'RFC5321_TLD_NUMERIC',
-                'single_full_ret': 'ERR_UNCLOSED_COMMENT',
-                'single_filtered_ret': 'RFC5321_TLD_NUMERIC'
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': 'ISEMAIL_ERR(ERR_UNCLOSED_COMMENT), ISEMAIL_RFC5321(RFC5321_ADDRESS_LITERAL, RFC5321_QUOTED_STRING, RFC5321_TLD_NUMERIC), ISEMAIL_DNSWARN(DNSWARN_INVALID_TLD)',
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': 'ISEMAIL_RFC5321(RFC5321_TLD_NUMERIC)',
-                'single_full_ret': 'ISEMAIL_ERR(ERR_UNCLOSED_COMMENT)',
-                'single_filtered_ret': 'ISEMAIL_RFC5321(RFC5321_TLD_NUMERIC)'
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': 'ISEMAIL_ERR, ISEMAIL_RFC5321, ISEMAIL_DNSWARN',
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': 'ISEMAIL_RFC5321',
-                'single_full_ret': 'ISEMAIL_ERR',
-                'single_filtered_ret': 'ISEMAIL_RFC5321'
-            }
-        },
-        'return_as_list': {
-            'kwargs': {
-                'return_as': 'list'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': [
-                    'ERR_UNCLOSED_COMMENT',
-                    'RFC5321_ADDRESS_LITERAL',
-                    'RFC5321_QUOTED_STRING',
-                    'RFC5321_TLD_NUMERIC',
-                    'DNSWARN_INVALID_TLD',
-                ],
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': [
-                    'RFC5321_TLD_NUMERIC'
-                ],
-                'single_full_ret': [
-                    'ERR_UNCLOSED_COMMENT'
-                ],
-                'single_filtered_ret': [
-                    'RFC5321_TLD_NUMERIC'
-                ]
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': [
-                    ('ISEMAIL_ERR', ['ERR_UNCLOSED_COMMENT']),
-                    ('ISEMAIL_RFC5321', [
-                        'RFC5321_ADDRESS_LITERAL',
-                        'RFC5321_QUOTED_STRING',
-                        'RFC5321_TLD_NUMERIC',
-                    ]),
-                    ('ISEMAIL_DNSWARN', ['DNSWARN_INVALID_TLD']),
-                ],
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': [('ISEMAIL_RFC5321', ['RFC5321_TLD_NUMERIC'])],
-                'single_full_ret': [('ISEMAIL_ERR', ['ERR_UNCLOSED_COMMENT'])],
-                'single_filtered_ret': [('ISEMAIL_RFC5321', ['RFC5321_TLD_NUMERIC'])]
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': [
-                    'ISEMAIL_ERR',
-                    'ISEMAIL_RFC5321',
-                    'ISEMAIL_DNSWARN',
-                ],
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': ['ISEMAIL_RFC5321'],
-                'single_full_ret': ['ISEMAIL_ERR'],
-                'single_filtered_ret': ['ISEMAIL_RFC5321']
-            }
-        },
-        'return_as_dict': {
-            'kwargs': {
-                'return_as': 'dict'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': {
-                    'ISEMAIL_DNSWARN': [
-                        'DNSWARN_INVALID_TLD'
-                    ],
-                    'ISEMAIL_RFC5321': [
-                        'RFC5321_ADDRESS_LITERAL',
-                        'RFC5321_QUOTED_STRING',
-                        'RFC5321_TLD_NUMERIC',
-                    ],
-                    'ISEMAIL_ERR': [
-                        'ERR_UNCLOSED_COMMENT'
-                    ]
-                },
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': {
-                    'ISEMAIL_RFC5321': [
-                        'RFC5321_TLD_NUMERIC'
-                    ]
-                },
-                'single_full_ret': {
-                    'ISEMAIL_ERR': ['ERR_UNCLOSED_COMMENT']
-                },
-                'single_filtered_ret': {
-                    'ISEMAIL_RFC5321': ['RFC5321_TLD_NUMERIC']
-                }
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': {
-                    'ISEMAIL_DNSWARN': [
-                        'DNSWARN_INVALID_TLD'
-                    ],
-                    'ISEMAIL_RFC5321': [
-                        'RFC5321_ADDRESS_LITERAL',
-                        'RFC5321_QUOTED_STRING',
-                        'RFC5321_TLD_NUMERIC',
-                    ],
-                    'ISEMAIL_ERR': [
-                        'ERR_UNCLOSED_COMMENT'
-                    ]
-                },
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': {
-                    'ISEMAIL_RFC5321': [
-                        'RFC5321_TLD_NUMERIC'
-                    ]
-                },
-                'single_full_ret': {
-                    'ISEMAIL_ERR': ['ERR_UNCLOSED_COMMENT']
-                },
-                'single_filtered_ret': {
-                    'ISEMAIL_RFC5321': ['RFC5321_TLD_NUMERIC']
-                }
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': {
-                    'ISEMAIL_DNSWARN': ['DNSWARN_INVALID_TLD'],
-                    'ISEMAIL_RFC5321': [
-                        'RFC5321_ADDRESS_LITERAL',
-                        'RFC5321_QUOTED_STRING',
-                        'RFC5321_TLD_NUMERIC',
-                    ],
-                    'ISEMAIL_ERR': ['ERR_UNCLOSED_COMMENT']
-                },
-                'filter': 'RFC5321_TLD_NUMERIC',
-                'exp_filtered_ret': {
-                    'ISEMAIL_RFC5321': ['RFC5321_TLD_NUMERIC']
-                },
-                'single_full_ret': {
-                    'ISEMAIL_ERR': ['ERR_UNCLOSED_COMMENT']
-                },
-                'single_filtered_ret': {
-                    'ISEMAIL_RFC5321': ['RFC5321_TLD_NUMERIC']
-                }
-            }
-        },
-    },
-
-    'desc': {
-        'return_as_string': {
-            'kwargs': {
-                'return_as': 'string'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': ''\
-                '[ERROR] Unclosed comment\n'\
-                '[WARNING] Address is valid but at a literal address not a domain\n'\
-                '[WARNING] Address is valid but contains a quoted string\n'\
-                '[WARNING] Address is valid but the Top Level Domain begins with a number\n'\
-                '[WARNING] Top Level Domain is not in the list of available TLDs',
-                'filter': ('ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': ''\
-                '[ERROR] Unclosed comment\n'\
-                '[WARNING] Address is valid but at a literal address not a domain\n'\
-                '[WARNING] Address is valid but contains a quoted string\n'\
-                '[WARNING] Address is valid but the Top Level Domain begins with a number',
-                'single_full_ret': '[ERROR] Unclosed comment',
-                'single_filtered_ret': '[ERROR] Unclosed comment'
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': ''\
-                    'Invalid Address: [ERROR]\n'\
-                    '(Address is invalid for any purpose)\n'\
-                    '    - Unclosed comment\n'\
-                    '\n'\
-                    'Valid Address (unusual): [WARNING]\n'\
-                    '(Address is valid for SMTP but has unusual elements)\n'\
-                    '    - Address is valid but at a literal address not a domain\n'\
-                    '    - Address is valid but contains a quoted string\n'\
-                    '    - Address is valid but the Top Level Domain begins with a number\n'\
-                    '\n'\
-                    'Valid Address (DNS Warning): [WARNING]\n'\
-                    '(Address is valid but a DNS check was not successful)\n'\
-                    '    - Top Level Domain is not in the list of available TLDs',
-                    'filter': ('ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': ''\
-                    'Invalid Address: [ERROR]\n'\
-                    '(Address is invalid for any purpose)\n'\
-                    '    - Unclosed comment\n'\
-                    '\n'\
-                    'Valid Address (unusual): [WARNING]\n'\
-                    '(Address is valid for SMTP but has unusual elements)\n'\
-                    '    - Address is valid but at a literal address not a domain\n'\
-                    '    - Address is valid but contains a quoted string\n'\
-                    '    - Address is valid but the Top Level Domain begins with a number',
-                'single_full_ret': ''\
-                    'Invalid Address: [ERROR]\n'\
-                    '(Address is invalid for any purpose)\n'\
-                    '    - Unclosed comment',
-                'single_filtered_ret': ''\
-                    'Invalid Address: [ERROR]\n'\
-                    '(Address is invalid for any purpose)\n'\
-                    '    - Unclosed comment'
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': ''\
-                '[ERROR] - Invalid Address: (Address is invalid for any purpose)\n'\
-                '[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)\n'\
-                '[WARNING] - Valid Address (DNS Warning): (Address is valid but a DNS check was not successful)',
-                'filter': (
-                    'ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': ''\
-                '[ERROR] - Invalid Address: (Address is invalid for any purpose)\n'\
-                '[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)',
-                'single_full_ret': '[ERROR] - Invalid Address: (Address is invalid for any purpose)',
-                'single_filtered_ret': '[ERROR] - Invalid Address: (Address is invalid for any purpose)'
-            }
-        },
-        'return_as_list': {
-            'kwargs': {
-                'return_as': 'list'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': [
-                    '[ERROR] Unclosed comment',
-                    '[WARNING] Address is valid but at a literal address not a domain',
-                    '[WARNING] Address is valid but contains a quoted string',
-                    '[WARNING] Address is valid but the Top Level Domain begins with a number',
-                    '[WARNING] Top Level Domain is not in the list of available TLDs'
-                ],
-                'filter': (
-                    'ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': [
-                    '[ERROR] Unclosed comment',
-                    '[WARNING] Address is valid but at a literal address not a domain',
-                    '[WARNING] Address is valid but contains a quoted string',
-                    '[WARNING] Address is valid but the Top Level Domain begins with a number',
-                ],
-                'single_full_ret': [
-                    '[ERROR] Unclosed comment'
-                ],
-                'single_filtered_ret': [
-                    '[ERROR] Unclosed comment'
-                ]
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': [
-                    ['[ERROR] - Invalid Address: (Address is invalid for any purpose)', [
-                        '[ERROR] Unclosed comment'
-                    ]],
-                    ['[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)', [
-                        '[WARNING] Address is valid but at a literal address not a domain',
-                        '[WARNING] Address is valid but contains a quoted string',
-                        '[WARNING] Address is valid but the Top Level Domain begins with a number',
-                    ]],
-                    ['[WARNING] - Valid Address (DNS Warning): (Address is valid but a DNS check was not successful)', [
-                        '[WARNING] Top Level Domain is not in the list of available TLDs'
-                    ]]
-                ],
-                'filter': (
-                    'ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': [
-                    ['[ERROR] - Invalid Address: (Address is invalid for any purpose)', [
-                        '[ERROR] Unclosed comment'
-                    ]],
-                    ['[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)', [
-                        '[WARNING] Address is valid but at a literal address not a domain',
-                        '[WARNING] Address is valid but contains a quoted string',
-                        '[WARNING] Address is valid but the Top Level Domain begins with a number',
-                    ]],
-                ],
-                'single_full_ret': [
-                    ['[ERROR] - Invalid Address: (Address is invalid for any purpose)', [
-                        '[ERROR] Unclosed comment'
-                    ]]
-                ],
-                'single_filtered_ret': [
-                    ['[ERROR] - Invalid Address: (Address is invalid for any purpose)', [
-                        '[ERROR] Unclosed comment'
-                    ]]
-                ]
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': [
-                    '[ERROR] - Invalid Address: (Address is invalid for any purpose)',
-                    '[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)',
-                    '[WARNING] - Valid Address (DNS Warning): (Address is valid but a DNS check was not successful)'
-                ],
-                'filter': ('ISEMAIL_RFC5321', 'ERR_UNCLOSED_COMMENT'),
-                'exp_filtered_ret': [
-                    '[ERROR] - Invalid Address: (Address is invalid for any purpose)',
-                    '[WARNING] - Valid Address (unusual): (Address is valid for SMTP but has unusual elements)',
-                ],
-                'single_full_ret': ['[ERROR] - Invalid Address: (Address is invalid for any purpose)'],
-                'single_filtered_ret': ['[ERROR] - Invalid Address: (Address is invalid for any purpose)']
-            }
-        },
-        'return_as_dict': {
-            'kwargs': {
-                'return_as': 'dict'
-            },
-            'no_cat': {
-                'kwargs': {
-                    'inc_cat': False,
-                    'inc_diag': True
-                },
-                'exp_full_ret': {
-                    'RFC5321_TLD_NUMERIC': {
-                        'value': 1010,
-                        'description': "Address is valid but the Top Level Domain begins with a number",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'RFC5321_QUOTED_STRING': {
-                        'value': 1011,
-                        'description': "Address is valid but contains a quoted string",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'RFC5321_ADDRESS_LITERAL': {
-                        'value': 1012,
-                        'description': "Address is valid but at a literal address not a domain",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'DNSWARN_INVALID_TLD': {
-                        'value': 1004,
-                        'description': "Top Level Domain is not in the list of available TLDs",
-                        'cat': 'ISEMAIL_DNSWARN',
-                        'type': 'WARNING'
-                    },
-                    'ERR_UNCLOSED_COMMENT': {
-                        'value': 1146,
-                        'description': "Unclosed comment",
-                        'cat': 'ISEMAIL_ERR',
-                        'type': 'ERROR'
-                    }
-                },
-                'filter': 'WARNING',
-                'exp_filtered_ret': {
-                    'RFC5321_TLD_NUMERIC': {
-                        'value': 1010,
-                        'description': "Address is valid but the Top Level Domain begins with a number",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'RFC5321_QUOTED_STRING': {
-                        'value': 1011,
-                        'description': "Address is valid but contains a quoted string",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'RFC5321_ADDRESS_LITERAL': {
-                        'value': 1012,
-                        'description': "Address is valid but at a literal address not a domain",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    },
-                    'DNSWARN_INVALID_TLD': {
-                        'value': 1004,
-                        'description': "Top Level Domain is not in the list of available TLDs",
-                        'cat': 'ISEMAIL_DNSWARN',
-                        'type': 'WARNING'
-                    }
-                },
-                'single_full_ret': {
-                    'ERR_UNCLOSED_COMMENT': {
-                        'value': 1146,
-                        'description': "Unclosed comment",
-                        'cat': 'ISEMAIL_ERR',
-                        'type': 'ERROR'
-                    }
-                },
-                'single_filtered_ret': {
-                    'RFC5321_ADDRESS_LITERAL': {
-                        'value': 1012,
-                        'description': "Address is valid but at a literal address not a domain",
-                        'cat': 'ISEMAIL_RFC5321',
-                        'type': 'WARNING'
-                    }
-                }
-            },
-            'w_cat': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': True
-                },
-                'exp_full_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING',
-                        'diags': {
-                            'RFC5321_TLD_NUMERIC': {
-                                'value': 1010,
-                                'description': "Address is valid but the Top Level Domain begins with a number",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            },
-                            'RFC5321_QUOTED_STRING': {
-                                'value': 1011,
-                                'description': "Address is valid but contains a quoted string",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            },
-                            'RFC5321_ADDRESS_LITERAL': {
-                                'value': 1012,
-                                'description': "Address is valid but at a literal address not a domain",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            }
-                        }
-                    },
-                    'ISEMAIL_DNSWARN': {
-                        'value': 107,
-                        'name': 'Valid Address (DNS Warning)',
-                        'description': "Address is valid but a DNS check was not successful",
-                        'type': 'WARNING',
-                        'diags': {
-                            'DNSWARN_INVALID_TLD': {
-                                'value': 1004,
-                                'description': "Top Level Domain is not in the list of available TLDs",
-                                'cat': 'ISEMAIL_DNSWARN',
-                                'type': 'WARNING'
-                            }
-                        }
-                    },
-                    'ISEMAIL_ERR': {
-                        'value': 999,
-                        'name': 'Invalid Address',
-                        'description': "Address is invalid for any purpose",
-                        'type': 'ERROR',
-                        'diags': {
-                            'ERR_UNCLOSED_COMMENT': {
-                                'value': 1146,
-                                'description': "Unclosed comment",
-                                'cat': 'ISEMAIL_ERR',
-                                'type': 'ERROR'
-                            }
-                        }
-                    }
-                },
-                'filter': 'WARNING',
-                'exp_filtered_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING',
-                        'diags': {
-                            'RFC5321_TLD_NUMERIC': {
-                                'value': 1010,
-                                'description': "Address is valid but the Top Level Domain begins with a number",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            },
-                            'RFC5321_QUOTED_STRING': {
-                                'value': 1011,
-                                'description': "Address is valid but contains a quoted string",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            },
-                            'RFC5321_ADDRESS_LITERAL': {
-                                'value': 1012,
-                                'description': "Address is valid but at a literal address not a domain",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            }
-                        }
-                    },
-                    'ISEMAIL_DNSWARN': {
-                        'value': 107,
-                        'name': 'Valid Address (DNS Warning)',
-                        'description': "Address is valid but a DNS check was not successful",
-                        'type': 'WARNING',
-                        'diags': {
-                            'DNSWARN_INVALID_TLD': {
-                                'value': 1004,
-                                'description': "Top Level Domain is not in the list of available TLDs",
-                                'cat': 'ISEMAIL_DNSWARN',
-                                'type': 'WARNING'
-                            }
-                        }
-                    }
-                },
-                'single_full_ret': {
-                    'ISEMAIL_ERR': {
-                        'value': 999,
-                        'name': 'Invalid Address',
-                        'description': "Address is invalid for any purpose",
-                        'type': 'ERROR',
-                        'diags': {
-                            'ERR_UNCLOSED_COMMENT': {
-                                'value': 1146,
-                                'description': "Unclosed comment",
-                                'cat': 'ISEMAIL_ERR',
-                                'type': 'ERROR'
-                            }
-                        }
-                    }
-                },
-                'single_filtered_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING',
-                        'diags': {
-                            'RFC5321_ADDRESS_LITERAL': {
-                                'value': 1012,
-                                'description': "Address is valid but at a literal address not a domain",
-                                'cat': 'ISEMAIL_RFC5321',
-                                'type': 'WARNING'
-                            }
-                        }
-                    }
-                }
-            },
-            'cat_only': {
-                'kwargs': {
-                    'inc_cat': True,
-                    'inc_diag': False
-                },
-                'exp_full_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING'
-                    },
-                    'ISEMAIL_DNSWARN': {
-                        'value': 107,
-                        'name': 'Valid Address (DNS Warning)',
-                        'description': "Address is valid but a DNS check was not successful",
-                        'type': 'WARNING'
-                    },
-                    'ISEMAIL_ERR': {
-                        'value': 999,
-                        'name': 'Invalid Address',
-                        'description': "Address is invalid for any purpose",
-                        'type': 'ERROR'
-                    }
-                },
-                'filter': 'WARNING',
-                'exp_filtered_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING'
-                    },
-                    'ISEMAIL_DNSWARN': {
-                        'value': 107,
-                        'name': 'Valid Address (DNS Warning)',
-                        'description': "Address is valid but a DNS check was not successful",
-                        'type': 'WARNING'
-                    }
-                },
-                'single_full_ret': {
-                    'ISEMAIL_ERR': {
-                        'value': 999,
-                        'name': 'Invalid Address',
-                        'description': "Address is invalid for any purpose",
-                        'type': 'ERROR'
-                    }
-                },
-                'single_filtered_ret': {
-                    'ISEMAIL_RFC5321': {
-                        'value': 115,
-                        'name': 'Valid Address (unusual)',
-                        'description': "Address is valid for SMTP but has unusual elements",
-                        'type': 'WARNING'
-                    }
-                }
-            }
-        },
-    },
-
-}
-
-RETURN_OBJ_TESTS['desc']['return_as_dict']['no_cat'] = RETURN_OBJ_TESTS['desc']['return_as_dict']['w_cat']
-RETURN_OBJ_TESTS['desc']['return_as_dict']['cat_only'] = RETURN_OBJ_TESTS['desc']['return_as_dict']['w_cat']
-'''
-
 def _test_name(l1, l2=None, l3=None, suffix=None):
     tmp_ret = l1
     if l2 is not None:
@@ -1030,6 +375,7 @@ def _test_name(l1, l2=None, l3=None, suffix=None):
         tmp_ret += '-'
         tmp_ret += suffix
     return tmp_ret
+
 
 class TestParseFootball(unittest.TestCase):
 
@@ -1290,7 +636,7 @@ class TestParseFootball(unittest.TestCase):
         per.remove('DNSWARN_NO_MX_RECORD')
         self.assertEquals(len(per), 4)
 
-'''
+
 class TestFullResults(unittest.TestCase):
 
     COMPLEX_PARSER = dict(
@@ -1759,7 +1105,7 @@ class TestFullResults(unittest.TestCase):
 
     def test_contains(self):
         tmp_resp = self.make_result(diags=self.COMPLEX_DIAGS)
-        tmp_answ = 'ISEMAIL_RFC5321' in tmp_resp
+        tmp_answ = 'RFC5321_ADDRESS_LITERAL' in tmp_resp
         self.assertTrue(tmp_answ)
 
         tmp_answ = 'foobar' in tmp_resp
@@ -1767,42 +1113,57 @@ class TestFullResults(unittest.TestCase):
 
     def test_getitem(self):
         tmp_resp = self.make_result(diags=self.COMPLEX_DIAGS)
-        tmp_answ = tmp_resp['ISEMAIL_RFC5321']
-        self.assertEqual(tmp_answ, ML['ISEMAIL_RFC5321'])
+        tmp_answ = tmp_resp['RFC5321_ADDRESS_LITERAL']
+        self.assertEqual(tmp_answ, ML['RFC5321_ADDRESS_LITERAL'])
 
-    def run_ret_obj_test(self, l1, l2, l3, l4):
-        # pp = pprint.PrettyPrinter(indent=4, width=500)
+    def run_ret_obj_test(self, l1, l2, l3, call_diag=False):
+        tmp_res = self.make_result(diags=self.COMPLEX_DIAGS)
+
         kwargs = {}
-        kwargs.update(RETURN_OBJ_TESTS[l1][l2]['kwargs'])
-        kwargs.update(RETURN_OBJ_TESTS[l1][l2][l3]['kwargs'])
-        kwargs['diags'] = ['DNSWARN_INVALID_TLD', 'RFC5321_TLD_NUMERIC', 'RFC5321_QUOTED_STRING',
-                           'RFC5321_ADDRESS_LITERAL', 'ERR_UNCLOSED_COMMENT']
-        kwargs['return_type'] = l1
-        if l4 in ('single_filtered_ret', 'single_full_ret'):
-            kwargs['show_all'] = False
-        if l4 in ('exp_filtered_ret', 'single_filtered_ret'):
-            kwargs['filter'] = RETURN_OBJ_TESTS[l1][l2][l3]['filter']
+        kwargs.update(RETURN_OBJ_L2[l2][1])
+        kwargs.update(RETURN_OBJ_L3[l3][1])
+        if 'filter' in kwargs:
+            kwargs['filter'] = RETURN_OBJ_TESTS[l1][l2]['filter']
 
-        tmp_result = self.make_result(diags=self.COMPLEX_DIAGS)
-        tmp_ret = tmp_result(**kwargs)
-        tmp_exp = RETURN_OBJ_TESTS[l1][l2][l3][l4]
+        if call_diag:
+            if l1 == 'object_list':
+                kwargs['return_obj'] = True
+                kwargs['return_as_list'] = True
 
-        if l2 != 'return_as_string':
+            elif l1 == 'object_dict':
+                kwargs['return_obj'] = True
+                kwargs['return_as_list'] = False
+
+            elif l1 == 'key_list':
+                kwargs['return_obj'] = False
+                kwargs['return_as_list'] = True
+
+            elif l1 == 'key_dict':
+                kwargs['return_obj'] = False
+                kwargs['return_as_list'] = False
+
+            tmp_ret = tmp_res.diag(**kwargs)
+        else:
+            tmp_ret = tmp_res.report(l1, **kwargs)
+
+
+        tmp_exp = RETURN_OBJ_TESTS[l1][l2][l3]
+
+        if l1 in ['key_dict', 'key_list', 'desc_list']:
             tmp_ret_str = json.dumps(tmp_ret, indent=4)
             tmp_exp_str = json.dumps(tmp_exp, indent=4)
-
-            # tmp_ret_str = pp.pformat(tmp_ret)
-            # tmp_exp_str = pp.pformat(tmp_exp)
-        else:
+        elif l1 in ['document_string', 'formatted_string']:
             tmp_ret_str = tmp_ret
             tmp_exp_str = tmp_exp
+        else:
+            tmp_ret_str = repr(tmp_ret)
+            tmp_exp_str = repr(tmp_exp)
 
         tmp_msg = '\n\n\nItems do not compare\n\n'
         tmp_msg += 'L1: %s\n' % l1
         tmp_msg += 'L2: %s\n' % l2
         tmp_msg += 'L3: %s\n' % l3
-        tmp_msg += 'L4: %s\n\n' % l4
-        tmp_msg += 'Test Name: %s\n\n' % _test_name(l1, l2, l3, l4)
+        tmp_msg += 'Test Name: %s\n\n' % _test_name(l1, l2, l3)
 
         tmp_msg += 'kwargs:\n%s\n\n' % json.dumps(kwargs, indent=4)
         tmp_msg += 'Expected:\n************************\n' \
@@ -1811,50 +1172,49 @@ class TestFullResults(unittest.TestCase):
         tmp_msg += '\n\n\n'
         tmp_msg += 'Expected: %r\nReturned: %r\n\n' % (tmp_exp_str, tmp_ret_str)
 
-
         self.assertEqual(tmp_ret, tmp_exp, msg=tmp_msg)
-
 
     def test_return_objects(self):
         """
         {
-        L1    'diag':
-        L2        'retrn_as_<string_list_obj_dict>':
-                    kwargs: {'return_as':'string}
-        L3            no_cat: {
-                        kwargs: {inc_cat: False, inc_diag: False}
-        L4              exp_full_ret: <blah>
-                        filter: <blah>
-                        exp_filtered_rec: <blah>
-                        single_full_ret: <blah>
-                        single_filtered_ret: <blah>
-                    w_cat:
-                    cat_only:
+        L1    'report_name':
+        L2        'inc_whatever':
+                       'raises'
+                      'filter':
+        L3            'show_all':
+                        'show_all_filtered'
+                        'show_one'
+                        'show_one_filtered'
         """
-        LIMIT_TO = ['', '', '', '']
-        # LIMIT_TO = ['diag', '', '', '']
-        # LIMIT_TO = ['desc', 'dct', 'cat', 'all']
+        # META_LOOKUP.set_error_on('RFC5321_QUOTED_STRING')
+        LIMIT_TO = ['', '', '']
+        # LIMIT_TO = ['desc_list', 'both', 'all-flt']
 
-        if LIMIT_TO != ['', '', '', '']:
+        if LIMIT_TO != ['', '', '']:
             with self.subTest('NOTE: Test Limited to: %r' % LIMIT_TO):
                 self.fail()
 
-        for l1 in RETURN_OBJ_L1.keys():
-            if LIMIT_TO[0] == '' or LIMIT_TO[0] == RETURN_OBJ_L1[l1]:
-                if l1 == 'diag':
-                    l2_dict = RETURN_OBJ_DIAG_L2
-                else:
-                    l2_dict = RETURN_OBJ_DESC_L2
-                for l2 in l2_dict.keys():
-                    if LIMIT_TO[1] == '' or LIMIT_TO[1] == l2_dict[l2]:
-                        for l3 in RETURN_OBJ_L3:
-                            if LIMIT_TO[2] == '' or LIMIT_TO[2] == RETURN_OBJ_L3[l3]:
-                                for l4 in RETURN_OBJ_L4:
-                                    if LIMIT_TO[3] == '' or LIMIT_TO[3] == RETURN_OBJ_L4[l4]:
-                                        with self.subTest(_test_name(l1, l2, l3, l4)):
-                                            self.run_ret_obj_test(l1, l2, l3, l4)
+        for l1 in RETURN_OBJ_TESTS.keys():
+            if LIMIT_TO[0] == '' or LIMIT_TO[0] == l1:
+                for l2 in RETURN_OBJ_L2.keys():
+                    if LIMIT_TO[1] == '' or LIMIT_TO[1] == RETURN_OBJ_L2[l2][0]:
+                        if not 'raises' in RETURN_OBJ_TESTS[l1][l2]:
+                            for l3 in RETURN_OBJ_L3.keys():
+                                if LIMIT_TO[2] == '' or LIMIT_TO[2] == RETURN_OBJ_L3[l3][0]:
+                                    for i in RETURN_OBJ_MD_CHANGE:
+                                        META_LOOKUP.clear_overrides()
+                                        if _test_name(l1, l2, l3).startswith(i):
+                                            META_LOOKUP.set_error_on(RETURN_OBJ_MD_CHANGE[i])
+                                    with self.subTest(_test_name(l1, l2, l3)):
+                                        self.run_ret_obj_test(l1, l2, l3)
+                                    with self.subTest(_test_name(l1, l2, l3)+'-DIAG'):
+                                        if l1 in ['object_list', 'object_dict', 'key_list', 'key_dict']:
+                                            self.run_ret_obj_test(l1, l2, l3, call_diag=True)
 
-'''
+
+
+
+
 
 class TestHistory(unittest.TestCase):
     PF = ParserFixture('abcdefghijklmnopqrstuvwxyz')
@@ -1914,6 +1274,13 @@ class TestMetaLookup(unittest.TestCase):
     def setUp(self):
         META_LOOKUP.clear_overrides()
 
+    def test_hash(self):
+        tmp_dict = {}
+        tmp_obj = META_LOOKUP['DEPREC_QTEXT']
+        tmp_dict[tmp_obj] = 'foobar'
+        self.assertEqual(hash('DEPREC_QTEXT'), hash(tmp_obj))
+        self.assertEqual('foobar', tmp_dict[tmp_obj])
+
     def test_lenths(self):
         self.assertEquals(len(META_LOOKUP.categories), 7)
         self.assertEquals(len(META_LOOKUP.diags), 67)
@@ -1926,66 +1293,11 @@ class TestMetaLookup(unittest.TestCase):
 
     def test_get_by_key_diag(self):
         tmp_item = META_LOOKUP['DEPREC_QTEXT']
-        self.assertEquals(tmp_item.value, 1035)
-        self.assertEquals(tmp_item.category.value, 500)
+        self.assertEquals(tmp_item.value, 103500)
+        self.assertEquals(tmp_item.category.value, 50000)
         self.assertEquals(tmp_item.description, "A quoted string contains a deprecated character")
         self.assertEquals(tmp_item.category.status, ISEMAIL_RESULT_CODES.WARNING)
         self.assertEquals(tmp_item.smtp, "553 5.1.3 Bad destination mailbox address syntax")
-
-    def test_print_help_text(self):
-        self.fail()
-        """
-
-        [9123] FOOBAR    this is the description
-                            (CAT code/name)
-        [9123] FOOBAR    this is the description
-                            (CAT code/name)
-        [9123] FOOBAR    this is the description
-                            (CAT code/name)
-        """
-
-        tmp_longest_diag_key = 0
-        tmp_longest_cat_key = 0
-
-        for diag in META_LOOKUP.diags._by_key:
-            tmp_longest_diag_key = max(len(diag), tmp_longest_diag_key)
-
-        for cat in META_LOOKUP.categories._by_key:
-            tmp_longest_cat_key = max(len(cat), tmp_longest_cat_key)
-
-        diag_cat_indent = 11 + tmp_longest_diag_key
-
-        print('Categories')
-        print('**********')
-        tmp_ret = []
-        for key, cat in META_LOOKUP.categories._by_key.items():
-            tmp_ret.append('[%s] %s  %s' %
-                  (
-                      str(cat.value).rjust(3, ' '),
-                      cat.key.rjust(tmp_longest_cat_key, ' '),
-                      cat.description)
-                  )
-        tmp_ret.sort()
-        print('\n'.join(tmp_ret))
-
-        print('\n\nDiags')
-        print('*********')
-        tmp_ret = []
-        for key, diag in META_LOOKUP.diags._by_key.items():
-            tmp_ret.append('[%s] %s  %s (%s)' %
-                  (
-                      str(diag.value).rjust(3, ' '),
-                      diag.key.rjust(tmp_longest_diag_key, ' '),
-                      diag.description,
-                      diag.category.key
-                  )
-                  )
-        tmp_ret.sort()
-        print('\n'.join(tmp_ret))
-
-
-        print('\n\n\n')
-        print(repr(list(META_LOOKUP.diags._by_key.items())))
 
     def test_ia_error(self):
         self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
@@ -2071,6 +1383,8 @@ class TestMetaLookup(unittest.TestCase):
         kwargs = {'diags': ['DNSWARN_INVALID_TLD', 'RFC5321_TLD_NUMERIC', 'RFC5321_QUOTED_STRING',
                             'RFC5321_ADDRESS_LITERAL', 'ERR_UNCLOSED_COMMENT']}
 
+        kwargs.update(RETURN_OBJ_L2[l2][1])
+
         if 'filter' in kwargs:
             kwargs['filter'] = RETURN_OBJ_TESTS[l1][l2]['filter']
 
@@ -2096,6 +1410,7 @@ class TestMetaLookup(unittest.TestCase):
                         'show_one'
                         'show_one_filtered'
         """
+        # META_LOOKUP.set_error_on('RFC5321_QUOTED_STRING')
         LIMIT_TO = ['', '', '']
         # LIMIT_TO = ['desc_list', 'both', 'all-flt']
 
@@ -2114,4 +1429,8 @@ class TestMetaLookup(unittest.TestCase):
                             for l3 in RETURN_OBJ_L3.keys():
                                 if LIMIT_TO[2] == '' or LIMIT_TO[2] == RETURN_OBJ_L3[l3][0]:
                                     with self.subTest(_test_name(l1, l2, l3)):
+                                        for i in RETURN_OBJ_MD_CHANGE:
+                                            META_LOOKUP.clear_overrides()
+                                            if _test_name(l1, l2, l3).startswith(i):
+                                                META_LOOKUP.set_error_on(RETURN_OBJ_MD_CHANGE[i])
                                         self.run_ret_obj_test(l1, l2, l3)

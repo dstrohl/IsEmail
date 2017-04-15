@@ -1157,7 +1157,7 @@ class MetaBase(object):
         self.lookup = lookup
         self.name = dict_in.get('name', None)
         self.key = key
-        self.value = dict_in['value']
+        self._value = dict_in['value']
         self.description = dict_in['description']
         self._override_status = None
         self._result = dict_in.get('result', None)
@@ -1172,6 +1172,15 @@ class MetaBase(object):
     @property
     def _base_status(self):
         return self._result
+
+    @property
+    def value(self):
+        if self.status == ISEMAIL_RESULT_CODES.ERROR:
+            return self._value * 10000
+        elif self.status == ISEMAIL_RESULT_CODES.WARNING:
+            return self._value * 100
+        else:
+            return self._value
 
     @property
     def status(self):
@@ -1196,7 +1205,7 @@ class MetaBase(object):
             return other.value
 
     def __eq__(self, other):
-        return self.value != self._get_other(other)
+        return self.value == self._get_other(other)
 
     def __ne__(self, other):
         return self.value != self._get_other(other)
@@ -1212,6 +1221,9 @@ class MetaBase(object):
 
     def __ge__(self, other):
         return self.value >= self._get_other(other)
+
+    def __hash__(self):
+        return hash(self.key)
 
     def _in_flt_cat(self, filter_set=None, exact=False):
         return self.key in filter_set
@@ -1315,84 +1327,107 @@ class MetaDiag(MetaBase):
     def _base_status(self):
         return self.category.status
 
-
-"""
-class MetaCat(MetaBase):
-    type_name = 'Cat'
-    # single_template = '[{status}] - {name}: ({description})'
-    # both_template = '{name}: [{status}]\n({description})'
-
-    def __init__(self, key, dict_in, lookup):
-        super().__init__(key, dict_in, lookup)
-
-        self._result = dict_in['result']
-        self.name = dict_in['name']
-        self._diags = {}
-        self.is_cat = True
-        self.is_diag = False
-
-    def add_diag(self, key, dict_in):
-        tmp_diag = MetaDiag(key, dict_in, self, self.lookup)
-        self._diags[key] = tmp_diag
-        return tmp_diag
-
-    @property
-    def _desc_dict(self):
-        tmp_ret = dict(
-            status=self.status.name,
-            name=self.name,
-            description=self.description,
-        )
-        return tmp_ret
-
-    def get_ret_dict(self):
-        return {self.key: {
-            'value': self.value,
-            'name': self.name,
-            'description': self.description,
-            'type': self.status.name}}
-
-
-class MetaDiag(MetaBase):
+'''
+class MetaPositionalDiag(object):
     type_name = 'Diag'
+    is_cat = False
+    is_diag = True
 
-    single_template = '[{status}] {description}'
-    both_template = '    - {description}'
+    def __init__(self, diag, begin=0, length=0):
+        if isinstance(diag, str):
+            self.base_diag = META_LOOKUP[diag]
+        else:
+            self.base_diag = diag
 
-    def __init__(self, key, dict_in, cat_rec, lookup):
-        super().__init__(key, dict_in, lookup)
+        self.lookup = self.base_diag.lookup
+        self.key = self.base_diag.key
+        self.value = self.base_diag.value
+        self.description = self.base_diag.description
+        self.status = self.base_diag.status
 
-        self.is_cat = False
-        self.is_diag = True
-        self.category = cat_rec
-        self.smtp = dict_in['smtp']['description']
-        self.reference = []
-        if 'reference' in dict_in:
-            tmp_refs = dict_in['reference']
-            if isinstance(tmp_refs, (list, tuple)):
-                for ref in dict_in['reference']:
-                    self.reference.append(ref)
-            else:
-                self.reference.append(tmp_refs)
+        self.category = self.base_diag.category
+        self.smtp = self.base_diag.smtp
+        self.reference = self.base_diag.references
+
+        if not begin and not length:
+            self.positions = []
+        else:
+            self.positions = [(begin, length)]
+
+    def add(self, begin, length):
+        self.positions.append((begin, length))
+
+    def _in_flt_cat(self, filter_set=None, exact=False):
+        if exact:
+            return False
+        else:
+            return self.category.key in filter_set
+
+    def _in_flt_diag(self, filter_set=None, exact=False):
+        return self.key in filter_set
+
+    def _in_flt_status(self, filter_set=None):
+        return self.status.name in filter_set
+
+    def in_filter(self, filter, exact=False):
+        if filter is None:
+            return True
+        if isinstance(filter, dict):
+            tmp_cat = self._in_flt_cat(_make_list(filter.get('cats', None)), exact)
+            tmp_diag = self._in_flt_diag(_make_list(filter.get('diags', None)), exact)
+            tmp_status = self._in_flt_status(_make_list(filter.get('status', None)))
+            return any((tmp_cat, tmp_diag, tmp_status))
+        else:
+            return self.key in _make_list(filter)
+
+    def __repr__(self):
+        return '%s(%s) [%s] -> %s' % (self.type_name, self.key, self.status.name, self.category.key)
 
     @property
-    def _desc_dict(self):
-        tmp_ret = dict(
+    def _dif_status(self):
+        if self.base_diag._override_status is None:
+            return ''
+        else:
+            return '[%s] ' % self.status.name
+
+    def format(self, format_str, **kwargs):
+        tmp_dict = dict(
+            description=self.description,
+            key=self.key,
+            value=self.value,
             status=self.status.name,
-            description=self.description)
-        return tmp_ret
+            cat_key=self.category.key,
+            cat_name=self.category.name,
+            dif_status=self._dif_status)
+        tmp_dict.update(kwargs)
+        return format_str.format(**tmp_dict)
 
-    def get_ret_dict(self):
-        return {self.key: {
-            'value': self.value,
-            'cat': self.category.key,
-            'description': self.description,
-            'type': self.status.name}}
 
-    @property
-    def _base_status(self):
-        return self.category.status
-"""
+    def __str__(self):
+        return self.key
+
+    def __gt__(self, other):
+        return self.value > other.value
+
+    def __lt__(self, other):
+        return self.value < other.value
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return self.value != other.value
+
+    def __le__(self, other):
+        return self.value <= other.value
+
+    def __ge__(self, other):
+        return self.value >= other.value
+
+    def __iter__(self):
+        for p in self.positions:
+            yield p
+'''
 
 
 class MetaList(object):
@@ -1638,6 +1673,7 @@ class MR_FormattedList(MetaOutoutBase):
 
         return tmp_ret
 
+
 class MR_FormattedString(MetaOutoutBase):
     report_name = 'formatted_string'
     only_single = False
@@ -1652,7 +1688,7 @@ class MR_FormattedString(MetaOutoutBase):
 
     both_wrapper_format = '{cats}'
     both_cat_format = '{name}: [{status}]\n({description})\n{diags}'
-    both_diag_format = '{indent}{description}\n'
+    both_diag_format = '{indent}- {description}'
     both_diag_separetor = '\n'
     both_cat_separetor = '\n\n'
 
@@ -1707,152 +1743,6 @@ class MR_DocumentString(MR_FormattedString):
 
 _meta_formatters = [MetaOutoutBase, MR_KeyDict, MR_ObjDict, MR_ObjList,
     MR_KeyList, MR_FormattedString, MR_DescList, MR_DocumentString]
-
-'''
-
-class MetaOutSingle(object):
-    ret_both = False
-
-    def __init__(self, parent, return_as='string', return_cat=False, return_type='diag', diags=None):
-        self.parent = parent
-        self.items = MetaList()
-        self.sub_items = {}
-        self.return_as = return_as
-        self.return_type = return_type
-        if self.ret_both:
-            self.cat = True
-            self.diag = True
-        elif return_cat:
-            self.cat = True
-            self.diag = False
-        else:
-            self.cat = False
-            self.diag = True
-        self.return_template = ''
-
-        if diags is not None:
-            for item in diags:
-                self.add_item(item)
-
-    def add_item(self, diag):
-        if self.cat and self.diag:
-            tmp_cat = diag.category
-            if tmp_cat.key not in self.items:
-                self.items[tmp_cat.key] = tmp_cat
-                self.sub_items[tmp_cat.key] = MetaList()
-            self.sub_items[tmp_cat.key][diag.key] = diag
-        elif self.cat:
-            diag = diag.category
-            if diag.key not in self.items:
-                self.items[diag.key] = diag
-        else:
-            self.items[diag.key] = diag
-
-    def get_as_list(self):
-        tmp_ret = []
-        if self.return_type == 'diag':
-            for item in self:
-                tmp_ret.append(item.key)
-        else:
-            for item in self:
-                tmp_ret.append(item.single_desc)
-        return tmp_ret
-
-    def get_as_dict(self):
-        tmp_ret = {}
-        for item in self:
-            tmp_ret.update(item.get_ret_dict())
-        return tmp_ret
-
-    def get_as_str(self):
-        if self.return_type == 'diag':
-            return ', '.join(self.get_as_list())
-        else:
-            return '\n'.join(self.get_as_list())
-
-    def __iter__(self):
-        for item in self.items:
-            yield item
-
-    def __getitem__(self, item):
-        return self.items[item]
-
-    def get_return(self):
-        if self.return_as == 'string':
-            return self.get_as_str()
-        elif self.return_as == 'dict':
-            return self.get_as_dict()
-        else:
-            return self.get_as_list()
-
-
-class MetaOutBoth(MetaOutSingle):
-    ret_both = True
-
-    def __init__(self, parent, return_as='string', return_type='diag', diags=None):
-        super().__init__(parent, return_as=return_as, return_cat=True, return_type=return_type, diags=diags)
-        # self.cats = {}
-        # self.diag_list = []
-        # self.cat_list = []
-        self.cat = True
-        self.diag = True
-
-    def get_as_list(self):
-        tmp_ret = []
-        if self.return_type == 'diag':
-            for item in self.items:
-                tmp_diag = []
-                for diag in self.sub_items[item.key]:
-                    tmp_diag.append(diag.key)
-                tmp_ret.append((item.key, tmp_diag))
-        else:
-            for item in self.items:
-                # tmp_ret.append(item.both_desc)
-                tmp_sub_list = []
-                for diag in self.sub_items[item.key]:
-                    tmp_sub_list.append(diag.single_desc)
-                tmp_ret.append([item.single_desc, tmp_sub_list])
-        return tmp_ret
-
-    def get_as_dict(self):
-        tmp_ret = {}
-        if self.return_type == 'diag':
-            for item in self.items:
-                tmp_sub_item = []
-                for diag in self.sub_items[item.key]:
-                    tmp_sub_item.append(diag.key)
-                tmp_ret[item.key] = tmp_sub_item
-
-        else:
-            for item in self.items:
-                tmp_cat_dict = item.get_ret_dict()
-                tmp_cat_dict[item.key]['diags'] = {}
-                for diag in self.sub_items[item.key]:
-                    tmp_cat_dict[item.key]['diags'].update(diag.get_ret_dict())
-                tmp_ret.update(tmp_cat_dict)
-        return tmp_ret
-
-    def get_as_str(self):
-        if self.return_type == 'diag':
-            tmp_ret = []
-            for item in self.items:
-                tmp_diag = []
-                for diag in self.sub_items[item.key]:
-                    tmp_diag.append(diag.key)
-                tmp_ret.append('%s(%s)' % (item.key, ', '.join(tmp_diag)))
-            tmp_ret = ', '.join(tmp_ret)
-            return tmp_ret
-        else:
-            tmp_ret = []
-            for item in self.items:
-                tmp_ret.append(item.both_desc)
-                for diag in self.sub_items[item.key]:
-                    tmp_ret.append(diag.both_desc)
-                tmp_ret.append('')
-            return '\n'.join(tmp_ret[:-1])
-
-'''
-
 
 
 class MetaLookup(object):
@@ -1977,7 +1867,6 @@ class MetaLookup(object):
         else:
             return self.diags.values(show_all=show_all, filter=filter, ordered=ordered, within=diags)
 
-
     def get_report(self, report_name, diags=None, show_all=True, filter=None, **kwargs):
         try:
             tmp_report = self._formatters[report_name]
@@ -1988,6 +1877,19 @@ class MetaLookup(object):
 
         return tmp_report.out(diags=tmp_diags, **kwargs)
     __call__ = get_report
+
+    def max(self, *args):
+        tmp_list = []
+        for a in args:
+            tmp_list.append(self[a])
+        return max(tmp_list).key
+
+    def max_status(self, *args):
+        tmp_list = []
+        for a in args:
+            tmp_list.append(self[a])
+        tmp_max = max(tmp_list)
+        return tmp_max.key, tmp_max.status
 
 
 META_LOOKUP = MetaLookup()
