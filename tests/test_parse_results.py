@@ -1,6 +1,6 @@
 import unittest
 import json
-from parse_results import ParseResultFootball, ParsingError
+from parse_results import ParseResultFootball, ParsingError, ParseHistoryData
 from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
 
 
@@ -695,9 +695,27 @@ class TestFullResults(unittest.TestCase):
     MULT_WARN = ['RFC5322_DOMAIN', 'DEPREC_COMMENT']
     WARN = ['RFC5322_DOMAIN', 'DEPREC_COMMENT']
     MULT_WARN_ERR = ['RFC5322_DOMAIN', 'DEPREC_COMMENT', 'ERR_DOT_END']
+    MULT_WARN_ERR_POS = [('RFC5322_DOMAIN', 8, 6), ('DEPREC_COMMENT', 0, 3), ('ERR_DOT_END', 10, 0)]
     ERR = ['ERR_DOT_END']
     COMPLEX_DIAGS = ['DNSWARN_INVALID_TLD', 'RFC5321_TLD_NUMERIC', 'RFC5321_QUOTED_STRING',
                      'RFC5321_ADDRESS_LITERAL', 'ERR_UNCLOSED_COMMENT']
+
+    # 'foobar@example.com'
+    _dot_atom = ParseHistoryData('dot_atom', begin=0, length=6)
+    _local_part = ParseHistoryData('local_part', begin=0, length=6)
+    _local_part.append(_dot_atom)
+
+    _cfws1 = ParseHistoryData('cfws1', begin=7, length=2)
+    _domain_lit = ParseHistoryData('domain_lit', begin=9, length=7)
+    _cfws2 = ParseHistoryData('cfws2', begin=16, length=2)
+
+    _domain_part = ParseHistoryData('domain_part', begin=7, length=11)
+    _domain_part.extend((_cfws1, _domain_lit, _cfws2))
+
+    TEST_HISTORY = ParseHistoryData('address_spec', begin=0, length=18)
+    TEST_HISTORY.extend((_local_part, _domain_part))
+
+    _address_spec = TEST_HISTORY
 
     def make_parser(self, **kwargs):
         kwargs['email_in'] = kwargs.get('email_in', 'foobar@example.com')
@@ -716,6 +734,7 @@ class TestFullResults(unittest.TestCase):
         domain_type = None
         local_comments = None
         domain_comments = None
+        history = None
 
         if parser is None:
             parser = self.make_parser()
@@ -724,6 +743,7 @@ class TestFullResults(unittest.TestCase):
             domain_type = parser.pop('domain_type', None)
             local_comments = parser.pop('local_comments', None)
             domain_comments = parser.pop('domain_comments', None)
+            history = parser.pop('_history', None)
             parser = self.make_parser(**parser)
 
         if isinstance(parser, str):
@@ -742,6 +762,9 @@ class TestFullResults(unittest.TestCase):
             tmp_fb._local_comments = local_comments
         if domain_comments is not None:
             tmp_fb._domain_comments = domain_comments
+        if history is not None:
+            tmp_fb._history = history
+
 
         if kwargs or args:
             tmp_fb(*args, raise_on_error=raise_on_error, **kwargs)
@@ -750,7 +773,11 @@ class TestFullResults(unittest.TestCase):
             if isinstance(diags, str):
                 tmp_fb(diags, raise_on_error=raise_on_error)
             else:
-                tmp_fb(*diags, raise_on_error=raise_on_error)
+                if isinstance(diags[0], str):
+                    tmp_fb(*diags, raise_on_error=raise_on_error)
+                else:
+                    for d in diags:
+                        tmp_fb.add_diag(diag=d[0], begin=d[1], length=d[2], raise_on_error=raise_on_error)
 
         else:
             tmp_fb('VALID')
@@ -1092,16 +1119,120 @@ class TestFullResults(unittest.TestCase):
         with self.subTest('domain_comments'):
             self.assertEqual(tmp_resp.domain_comments, [])
 
-    def test_trace(self):
-        tmp_resp = self.make_result()
-        self.assertEqual(tmp_resp.trace, 'This is a trace string')
+    # def test_trace(self):
+    #     tmp_resp = self.make_result()
+    #     self.assertEqual(tmp_resp.trace, 'This is a trace string')
 
     def test_history(self):
-        tmp_resp = self.make_result()
+        tmp_resp = self.make_result(parser={'_history': self.TEST_HISTORY})
 
-        self.assertEqual(tmp_resp.history(level=1), 'address_spec(...)')
-        self.assertEqual(tmp_resp.history(level=2), 'address_spec(local_part(...), domain_part(...))')
-        self.assertEqual(tmp_resp.history(), 'address_spec(local_part(dot_atom()), domain_part(blah))')
+        self.assertEqual(tmp_resp.history(depth=1), 'address_spec(...)')
+        self.assertEqual(tmp_resp.history(depth=2), 'address_spec(local_part(...), domain_part(...))')
+        self.assertEqual(tmp_resp.history(), 'address_spec(local_part(dot_atom), domain_part(cfws1, domain_lit, cfws2))')
+
+    def test_at(self):
+
+        """
+        MULT_WARN_ERR_POS = [
+            ('RFC5322_DOMAIN', 8, 6),
+            ('DEPREC_COMMENT', 0, 3),
+            ('ERR_DOT_END', 10, 0)]
+
+        'foobar@example.com'
+
+        _dot_atom = ParseHistoryData('dot_atom', begin=0, length=6)
+        _local_part = ParseHistoryData('local_part', begin=0, length=6)
+        _local_part.append(_dot_atom)
+
+        _cfws1 = ParseHistoryData('cfws', begin=7, length=2)
+        _domain_lit = ParseHistoryData('domain_lit', begin=9, length=7)
+        _cfws2 = ParseHistoryData('cfws', begin=16, length=2)
+
+        _domain_part = ParseHistoryData('domain_part', begin=0, length=11)
+        _domain_part.extend((_cfws1, _domain_lit, _cfws2))
+
+        TEST_HISTORY = ParseHistoryData('address_spec', begin=0, length=18)
+        TEST_HISTORY.extend((_local_part, _domain_part))
+
+        """
+
+        TESTS = [
+            # (index, letter, diag_codes, hist_codes),
+            (0, 'f', ['DEPREC_COMMENT'], ['address_spec', 'local_part', 'dot_atom']),
+            (1, 'o', ['DEPREC_COMMENT'], ['address_spec', 'local_part', 'dot_atom']),
+            (2, 'o', ['DEPREC_COMMENT'], ['address_spec', 'local_part', 'dot_atom']),
+            (3, 'b', [], ['address_spec', 'local_part', 'dot_atom']),
+            (4, 'a', [], ['address_spec', 'local_part', 'dot_atom']),
+            (5, 'r', [], ['address_spec', 'local_part', 'dot_atom']),
+            (6, '@', [], ['address_spec', ]),
+            (7, 'e', [], ['address_spec', 'domain_part', 'cfws1']),
+            (8, 'x', ['RFC5322_DOMAIN'], ['address_spec', 'domain_part', 'cfws1']),
+            (9, 'a', ['RFC5322_DOMAIN'], ['address_spec', 'domain_part', 'domain_lit']),
+            (10, 'm', ['RFC5322_DOMAIN', 'ERR_DOT_END'], ['address_spec', 'domain_part', 'domain_lit']),
+            (11, 'p', ['RFC5322_DOMAIN'], ['address_spec', 'domain_part', 'domain_lit']),
+            (12, 'l', ['RFC5322_DOMAIN'], ['address_spec', 'domain_part', 'domain_lit']),
+            (13, 'e', ['RFC5322_DOMAIN'], ['address_spec', 'domain_part', 'domain_lit']),
+            (14, '.', [], ['address_spec', 'domain_part', 'domain_lit']),
+            (15, 'c', [], ['address_spec', 'domain_part', 'domain_lit']),
+            (16, 'o', [], ['address_spec', 'domain_part', 'cfws2']),
+            (17, 'm', [], ['address_spec', 'domain_part', 'cfws2']),
+        ]
+
+        LIMIT_TO = -1
+
+        tmp_resp = self.make_result(
+            diags=self.MULT_WARN_ERR_POS,
+            parser={'_history': self.TEST_HISTORY})
+
+        if LIMIT_TO != -1:
+            with self.subTest('LIMITED TEST'):
+                self.fail()
+
+        for test in TESTS:
+            if LIMIT_TO == -1 or LIMIT_TO == test[0]:
+                with self.subTest('#' + str(test[0])):
+                    hist_ret = test[3]
+                    hist_obj_ret = []
+                    for h in hist_ret:
+                        hist_obj_ret.append(getattr(self, '_' + h))
+
+                    diag_ret = test[2]
+                    diag_obj_ret = []
+                    for d in diag_ret:
+                        diag_obj_ret.append(META_LOOKUP[d])
+
+                    both_ret = hist_ret + diag_ret
+                    both_obj_ret = hist_obj_ret + diag_obj_ret
+
+                    with self.subTest('#' + str(test[0]) + '-hist'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=True, ret_diags=False, ret_obj=False, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (hist_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, hist_ret, msg=tmp_msg)
+
+                    with self.subTest('#' + str(test[0]) + '-hist_obj'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=True, ret_diags=False, ret_obj=True, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (hist_obj_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, hist_obj_ret, msg=tmp_msg)
+
+                    with self.subTest('#' + str(test[0]) + '-diag'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=False, ret_diags=True, ret_obj=False, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (diag_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, diag_ret, msg=tmp_msg)
+
+                    with self.subTest('#' + str(test[0]) + '-diag_obj'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=False, ret_diags=True, ret_obj=True, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (diag_obj_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, diag_obj_ret, msg=tmp_msg)
+
+                    with self.subTest('#' + str(test[0]) + '-both'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=True, ret_diags=True, ret_obj=False, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (both_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, both_ret, msg=tmp_msg)
+
+                    with self.subTest('#' + str(test[0]) + '-both_obj'):
+                        tmp_ret = tmp_resp.at(test[0], ret_history=True, ret_diags=True, ret_obj=True, template='{key}')
+                        tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (both_obj_ret, tmp_ret)
+                        self.assertCountEqual(tmp_ret, both_obj_ret, msg=tmp_msg)
 
     def test_contains(self):
         tmp_resp = self.make_result(diags=self.COMPLEX_DIAGS)
@@ -1215,7 +1346,7 @@ class TestFullResults(unittest.TestCase):
 
 
 
-
+'''
 class TestHistory(unittest.TestCase):
     PF = ParserFixture('abcdefghijklmnopqrstuvwxyz')
 
@@ -1265,6 +1396,195 @@ class TestHistory(unittest.TestCase):
         self.assertEquals(per.history.short_desc(inc_string=True), "lvl_1['abcd'](lvl_2['ab'], lvl_3['cd'])")
 
         self.assertEquals(per.history.long_desc(), "lvl_1   :   'abcd'\n    lvl_2   :   'ab'\n    lvl_3   :   'cd'")
+'''
+
+class TestHistory(unittest.TestCase):
+
+    FS = 'abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    
+    def get_simple_history(self):
+        hd = ParseHistoryData('test_in', begin=0, length=1, from_string=self.FS)
+        return hd
+
+    def get_long_history(self, with_top=True):
+        """
+        test_1 = abcdefghijklmnopqrstuvwxyz
+            test_1_1 = abcdefghijkl
+                <mt> = abcdefghi
+                    test_1_1_1_1 = abc 
+                    test_1_1_1_2 = def
+                    test_1_1_1_3 = ghi
+                test_1_1_2 = jkl
+                    <mt> = j
+                    test_1_1_2_2 = k 
+                    test_1_1_2_3 = l
+            test_1_2 = mnop
+            test_1_3 = qrstuvwxyz
+                test_1_3_1 = qrstuv 
+                    test_1_3_1_1 = qr 
+                    test_1_3_1_2 = st
+                    test_1_3_1_3 = uv           
+                <mt> = wxyz     
+        """
+
+        if with_top:
+            top_str = 'test_1'
+        else:
+            top_str = ''
+
+        test_1_1_1_1 = ParseHistoryData('test_1_1_1_1', begin=0, length=3)        
+        test_1_1_1_2 = ParseHistoryData('test_1_1_1_2', begin=3, length=3)        
+        test_1_1_1_3 = ParseHistoryData('test_1_1_1_3', begin=6, length=3)
+
+        test_1_1_1 = ParseHistoryData('', begin=0, length=9)
+        test_1_1_1.extend((test_1_1_1_1, test_1_1_1_2, test_1_1_1_3))
+
+        test_1_1_2_1 = ParseHistoryData('', begin=9, length=1)
+
+        test_1_1_2_2_1_1_1 = ParseHistoryData('test_1_1_2_2', begin=10, length=1)
+
+        test_1_1_2_2_1_1 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2_1_1.append(test_1_1_2_2_1_1_1)
+
+        test_1_1_2_2_1 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2_1.append(test_1_1_2_2_1_1)
+
+        test_1_1_2_2 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2.append(test_1_1_2_2_1)
+
+        test_1_1_2_3 = ParseHistoryData('test_1_1_2_3', begin=11, length=1)
+
+        test_1_1_2 = ParseHistoryData('test_1_1_2', begin=9, length=3)
+        test_1_1_2.extend((test_1_1_2_1, test_1_1_2_2, test_1_1_2_3))
+
+        test_1_1 = ParseHistoryData('test_1_1', begin=0, length=12)
+        test_1_1.append(test_1_1_1)
+        test_1_1.append(test_1_1_2)
+
+        test_1_2 = ParseHistoryData('test_1_2', begin=12, length=4)
+        
+        test_1_3_1_1 = ParseHistoryData('test_1_3_1_1', begin=16, length=2)
+        test_1_3_1_2 = ParseHistoryData('test_1_3_1_2', begin=18, length=2)
+        test_1_3_1_3 = ParseHistoryData('test_1_3_1_3', begin=20, length=2)
+
+        test_1_3_1 = ParseHistoryData('test_1_3_1', begin=16, length=6)
+        test_1_3_1.extend((test_1_3_1_1, test_1_3_1_2, test_1_3_1_3))
+                
+        test_1_3_2 = ParseHistoryData('', begin=21, length=4)
+
+        test_1_3 = ParseHistoryData('test_1_3', begin=16, length=10)
+        test_1_3.extend((test_1_3_1, test_1_3_2))
+
+        test_1 = ParseHistoryData(top_str, begin=0, length=26, from_string=self.FS)        
+        test_1.extend((test_1_1, test_1_2, test_1_3))
+
+        return test_1
+
+    def test_long_history_string(self):
+
+        TESTS = [
+            # (index, depth, inc_str, inc_top, res),
+
+            (101, 1, False, True, "test_1(...)"),
+            (102, 1, True, True, "test_1['abcdefghijklmnopqrstuvwxyz'](...)"),
+    
+            (151, 1, False, False, "test_1_1(...), test_1_2, test_1_3(...)"),
+            (152, 1, True, False, "test_1_1['abcdefghijkl'](...), test_1_2['mnop'], test_1_3['qrstuvwxyz'](...)"),
+    
+            (201, 2, False, True, "test_1(test_1_1(...), test_1_2, test_1_3(...))"),
+            (202, 2, True, True, "test_1['abcdefghijklmnopqrstuvwxyz'](test_1_1['abcdefghijkl'](...), test_1_2['mnop'], test_1_3['qrstuvwxyz'](...))"),
+
+            (251, 2, False, False, 'test_1_1(test_1_1_1_1, test_1_1_1_2, test_1_1_1_3, test_1_1_2(...)), test_1_2, test_1_3(test_1_3_1(...))'),
+            (252, 2, True, False, "test_1_1['abcdefghijkl'](test_1_1_1_1['abc'], test_1_1_1_2['def'], test_1_1_1_3['ghi'], test_1_1_2['jkl'](...)), test_1_2['mnop'], test_1_3['qrstuvwxyz'](test_1_3_1['qrstuv'](...))"),
+    
+            (301, 3, False, True, 'test_1(test_1_1(test_1_1_1_1, test_1_1_1_2, test_1_1_1_3, test_1_1_2(...)), test_1_2, test_1_3(test_1_3_1(...)))'),
+            (302, 3, True, True, "test_1['abcdefghijklmnopqrstuvwxyz'](test_1_1['abcdefghijkl'](test_1_1_1_1['abc'], test_1_1_1_2['def'], test_1_1_1_3['ghi'], test_1_1_2['jkl'](...)), test_1_2['mnop'], test_1_3['qrstuvwxyz'](test_1_3_1['qrstuv'](...)))"),
+    
+            (351, 3, False, False, 'test_1_1(test_1_1_1_1, test_1_1_1_2, test_1_1_1_3, test_1_1_2(test_1_1_2_2, test_1_1_2_3)), test_1_2, test_1_3(test_1_3_1(test_1_3_1_1, test_1_3_1_2, test_1_3_1_3))'),
+            (352, 3, True, False, "test_1_1['abcdefghijkl'](test_1_1_1_1['abc'], test_1_1_1_2['def'], test_1_1_1_3['ghi'], test_1_1_2['jkl'](test_1_1_2_2['k'], test_1_1_2_3['l'])), test_1_2['mnop'], test_1_3['qrstuvwxyz'](test_1_3_1['qrstuv'](test_1_3_1_1['qr'], test_1_3_1_2['st'], test_1_3_1_3['uv']))"),
+
+            (901, 9999, False, True,
+             "test_1(test_1_1(test_1_1_1_1, test_1_1_1_2, test_1_1_1_3, test_1_1_2(test_1_1_2_2, test_1_1_2_3)), test_1_2, test_1_3(test_1_3_1(test_1_3_1_1, test_1_3_1_2, test_1_3_1_3)))"),
+            (902, 9999, True, True,
+             "test_1['abcdefghijklmnopqrstuvwxyz'](test_1_1['abcdefghijkl'](test_1_1_1_1['abc'], test_1_1_1_2['def'], test_1_1_1_3['ghi'], test_1_1_2['jkl'](test_1_1_2_2['k'], test_1_1_2_3['l'])), test_1_2['mnop'], test_1_3['qrstuvwxyz'](test_1_3_1['qrstuv'](test_1_3_1_1['qr'], test_1_3_1_2['st'], test_1_3_1_3['uv'])))"),
+
+            (951, 9999, False, False,
+             "test_1_1(test_1_1_1_1, test_1_1_1_2, test_1_1_1_3, test_1_1_2(test_1_1_2_2, test_1_1_2_3)), test_1_2, test_1_3(test_1_3_1(test_1_3_1_1, test_1_3_1_2, test_1_3_1_3))"),
+            (952, 9999, True, False,
+             "test_1_1['abcdefghijkl'](test_1_1_1_1['abc'], test_1_1_1_2['def'], test_1_1_1_3['ghi'], test_1_1_2['jkl'](test_1_1_2_2['k'], test_1_1_2_3['l'])), test_1_2['mnop'], test_1_3['qrstuvwxyz'](test_1_3_1['qrstuv'](test_1_3_1_1['qr'], test_1_3_1_2['st'], test_1_3_1_3['uv']))"),
+
+        ]
+        LIMIT = 0
+        if LIMIT != 0:
+            with self.subTest('LIMITED TEST'):
+                self.fail('LIMITED TEST')
+        for test in TESTS:
+            if LIMIT == 0 or LIMIT == test[0]:
+                with self.subTest('#'+str(test[0])):
+                    hd = self.get_long_history(test[3])
+                    tmp_exp = test[4]
+                    tmp_ret = hd(depth=test[1], with_string=test[2])
+
+                    tmp_msg = '\n\nExpected: %r\nReturned: %r\n' % (tmp_exp, tmp_ret)
+
+                    self.assertEqual(tmp_ret, tmp_exp, msg=tmp_msg)
+
+    def test_sinple_history(self):
+        hd = ParseHistoryData('test_in')        
+        self.assertEquals(str(hd), 'test_in')
+
+    def test_simple_history_w_str(self):
+        hd = ParseHistoryData('test_in', 0, 3, from_string='abcdef')        
+        self.assertEquals(hd.as_string(from_string='abcdef', with_string=True), "test_in['abc']")
+        
+    def test_clear(self):
+        hd = self.get_long_history()
+        self.assertEqual("test_1(...)", hd(depth=1))
+        hd.clear()
+        tmp_exp = ''
+        tmp_ret = hd()
+        self.assertEqual(tmp_ret, tmp_exp)
+
+    def test_iter_all(self):
+        
+        TESTS = [
+            # (index, is_leaf, name, begin, len)
+            (0, False, 'test_1', 0, 26),
+            (1, False, 'test_1_1', 0, 12),
+            (2, True, 'test_1_1_1_1', 0, 3),
+            (3, True, 'test_1_1_1_2', 3, 3) ,
+            (4, True, 'test_1_1_1_3', 6, 3),
+            (5, False, 'test_1_1_2', 9, 3),
+            (6, True, 'test_1_1_2_2', 10, 1),
+            (7, True, 'test_1_1_2_3', 11, 1),
+            (8, True, 'test_1_2', 12, 4),
+            (9, False, 'test_1_3', 16, 10),
+            (10, False, 'test_1_3_1', 16, 6),
+            (11, True, 'test_1_3_1_1', 16, 2),
+            (12, True, 'test_1_3_1_2', 18, 2),
+            (13, True, 'test_1_3_1_3', 20, 2),
+        ]
+
+        hd = self.get_long_history()
+        tmp_count = 0
+        for c in hd:
+            test = TESTS[tmp_count]
+            with self.subTest('#'+str(test[0])+'-leaf'):
+                self.assertEqual(test[1], c.is_leaf, msg='\n\nName: %s\n\n' % c.name)
+            with self.subTest('#' + str(test[0]) + '-name'):
+                self.assertEqual(test[2], c.name, msg='\n\nName: %s\n\n' % c.name)
+            with self.subTest('#' + str(test[0]) + '-begin'):
+                self.assertEqual(test[3], c.begin, msg='\n\nName: %s\n\n' % c.name)
+            with self.subTest('#' + str(test[0]) + '-length'):
+                self.assertEqual(test[4], c.length, msg='\n\nName: %s\n\n' % c.name)
+            tmp_count += 1
+        self.assertEqual(tmp_count, 14)
+        
+    def test_len(self):
+        hd = self.get_long_history()
+        self.assertEqual(14, len(hd))
+
+
 
 
 class TestMetaLookup(unittest.TestCase):

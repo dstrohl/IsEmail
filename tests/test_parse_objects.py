@@ -5,17 +5,18 @@ from dns_functions import DNSTimeoutError
 
 ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS.append('http')
 
-tmp_list = list(META_LOOKUP.diags._by_key.keys())
+tmp_list = list(META_LOOKUP.filter(return_key=True))
 DIAGS = tmp_list.copy()
 
 
 NOT_IN_DIAGS = ['RFC5321_IPV6_DEPRECATED', 'RFC5322_IPV6_2X2X_COLON', 'RFC5322_IPV6_BAD_CHAR',
                 'RFC5322_IPV6_COLON_END', 'RFC5322_IPV6_COLON_STRT', 'RFC5322_IPV6_GRP_COUNT', 'RFC5322_IPV6_MAX_GRPS',
-                'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN', 'DNSWARN_COMM_ERROR']
+                'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN', 'DNSWARN_COMM_ERROR',
+                'ERR_INVALID_ADDR_LITERAL']
 for diag in NOT_IN_DIAGS:
     DIAGS.remove(diag)
 
-print('\n\nDiags Count = %s\n\n' % len(DIAGS))
+# print('\n\nDiags Count = %s\n\n' % len(DIAGS))
 
 
 def full_ret_string(test_num, test_string, test_ret, extra_string=''):
@@ -31,12 +32,12 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
     tmp_ret += 'Local_comments: %r\n' % test_ret.local_comments
     tmp_ret += 'Domain_comments: %r\n' % test_ret.domain_comments
 
-    ret_codes = list(test_ret.diag(show_all=True))
+    ret_codes = list(test_ret.diag(show_all=True, return_as_list=True))
     ret_codes.sort()
 
     tmp_ret += 'Codes: %r\n' % ret_codes
 
-    tmp_hist = test_ret.history.short_desc()
+    tmp_hist = test_ret.history()
 
     tmp_ret += 'History: %s\n' % tmp_hist
 
@@ -153,7 +154,8 @@ class MyTestData(object):
 
         tmp_ret += 'Codes: %r\n' % ret_codes
 
-        tmp_hist = test_ret.history.short_desc()
+        test_ret._history.clean()
+        tmp_hist = test_ret._history()
 
         tmp_ret += 'History: %s\n' % tmp_hist
         tmp_ret += 'Trace:\n%s\n\n' % test_ret.trace_str
@@ -223,10 +225,11 @@ class MyTestData(object):
             tmp_ret_long_list.append('        EXPECTED , codes=%r  ' % exp_codes)
             tmp_ret_long_list.append('        RETURNED , codes=%r  ' % ret_codes)
 
-        if test_ret.history is None:
-            tmp_hist = ''
-        else:
-            tmp_hist = test_ret.history.short_desc(self.defs.history_level)
+        # if test_ret._history is None:
+        #    tmp_hist = ''
+        # else:
+        test_ret._history.clean(self.string_in)
+        tmp_hist = test_ret._history(depth=self.defs.history_level)
 
         if tmp_hist != self.history_str:
             test_failed = True
@@ -235,9 +238,9 @@ class MyTestData(object):
             tmp_ret_long_list.append('        EXPECTED , history_str=%r  ' % self.history_str)
             tmp_ret_long_list.append('        RETURNED , history_str=%r  ' % tmp_hist)
 
-        tmp_ret_long_list.append('\n\nHistory Details:')
-        tmp_ret_long_list.append(test_ret.history.long_desc())
-        tmp_ret_long_list.append('\n\n')
+        # tmp_ret_long_list.append('\n\nHistory Details:')
+        # tmp_ret_long_list.append(test_ret.history.long_desc())
+        # tmp_ret_long_list.append('\n\n')
 
 
         if test_failed:
@@ -252,14 +255,14 @@ class MyTestData(object):
             tmp_ret['short_fail_msg'] = tmp_short
             tmp_ret['long_fail_msg'] = tmp_long
         else:
-            print(self._full_ret_string(test_ret))
-
+            # print(self._full_ret_string(test_ret))
+            pass
         return tmp_ret
 
 
 class TestEmailParser(unittest.TestCase):
     TRACE_LEVEL = 9999    
-    TEP = EmailParser(verbose=3, trace_filter=TRACE_LEVEL)
+    TEP = EmailParser(verbose=2, trace_filter=TRACE_LEVEL)
 
     def run_test_data(self, test_defs):
         if test_defs.limit_to != -1:
@@ -518,7 +521,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str=''
                            ),
                 # ERR_EXPECTING_QTEXT
-                MyTestData(701, '" "@test.com', 0, error=True, history_str='',
+                MyTestData(701, '"' + chr(0) + '"@test.com', 0, error=True, history_str='',
                            codes=['ERR_EXPECTING_QTEXT'],
                            ),
 
@@ -636,6 +639,7 @@ class TestEmailParser(unittest.TestCase):
     def test_domain(self):
         td = MyTestDefs(
             limit_to=-1,
+            # trace_filter=999,
             method_name='domain',
             history_level=3,
             tests=[
@@ -644,24 +648,25 @@ class TestEmailParser(unittest.TestCase):
                 # DOMAIN ADDR
                 # *********************
                 MyTestData(1001, 'ABCdef123.abcder', 16,
-                           history_str='domain(domain_addr(tld_domain(...), ...))'),
+                           history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...)))'),
                 MyTestData(1002, 'abcdef-123.acac', 15,
-                           history_str='domain(domain_addr(tld_domain(...), ...))'),
-                MyTestData(1003, 'abcdef-.12345', 13, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='domain(dot_atom(dot_atom_text(...)))'),
+                           history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...)))'),
+                MyTestData(1003, 'abcdef-.12345', 13, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
+                           history_str='domain(dot_atom(dot_atom_text(...)))'),
                 MyTestData(1004, '-abcdef.abcdef-', 0, codes='ERR_DOMAIN_HYPHEN_START', error=True),
-                MyTestData(1005, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain(domain_addr(tld_domain(...)))'),
-                MyTestData(1006, '1abcdef.abcdef', 14, codes='RFC5321_TLD_NUMERIC',
-                           history_str='domain(domain_addr(let_dig, ...))'),
+                MyTestData(1005, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain(domain_addr(sub_domain(...)))'),
+                MyTestData(1006, 'abcdef.1abcdef', 14, codes='RFC5321_TLD_NUMERIC',
+                           history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...)))'),
 
                 # *********************
                 # DOT ATOM
                 # *********************
-                MyTestData(2001, 'abc.def', 7, history_str='domain(domain_addr(tld_domain(...), ...))'),
-                MyTestData(2002, 'abc', 3, codes=['RFC5321_TLD'], history_str='domain(domain_addr(tld_domain(...)))'),
-                MyTestData(2003, '123.456', 7, codes=['RFC5321_TLD_NUMERIC'], history_str='domain(domain_addr(let_dig, ...))'),
+                MyTestData(2001, 'abc.def', 7, history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...)))'),
+                MyTestData(2002, 'abc', 3, codes=['RFC5321_TLD'], history_str='domain(domain_addr(sub_domain(...)))'),
+                MyTestData(2003, '123.456', 7, codes=['RFC5321_TLD_NUMERIC'], history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...)))'),
                 MyTestData(2004, '#$%.#$%', 7, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='domain(dot_atom(dot_atom_text(...)))'),
-                MyTestData(2005, 'abc.123.456', 11,
-                           history_str='domain(domain_addr(tld_domain(...), ...))'),
+                MyTestData(2005, '456.123.abc', 11,
+                           history_str='domain(domain_addr(sub_domain(...), single_dot, sub_domain(...), single_dot, sub_domain(...)))'),
                 MyTestData(2006, '(coment) abc.def', 16, codes=['CFWS_COMMENT', 'RFC5322_DOMAIN', 'CFWS_FWS', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(dot_atom(cfws(...), dot_atom_text(...)))'),
 
@@ -685,63 +690,63 @@ class TestEmailParser(unittest.TestCase):
                 # domain literal
                 # *********************
                 MyTestData(3001, '[test]', 6, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
                 MyTestData(3002, '[\\rtest]', 8, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext(...), close_sq_bracket))'),
                 MyTestData(3004, '[\r\nfoo][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(3005, '"\r\nfoo[bar', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
 
                 # no closing
                 MyTestData(3101, '[test', 0, codes='ERR_UNCLOSED_DOM_LIT', error=True, history_str=''),
-                MyTestData(3102, '[foo[bar]', 0, codes='ERR_UNCLOSED_DOM_LIT', error=True, history_str=''),
+                MyTestData(3102, '[foo[bar]', 0, codes='ERR_EXPECTING_DTEXT', error=True, history_str=''),
 
                 # fws before
                 MyTestData(3103, '[\t\\rtest]', 9,
                            codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, fws(...), dtext(...), close_sq_bracket))'),
                 MyTestData(3104, '[ foo-bar]', 10, codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, fws(...), dtext, close_sq_bracket))'),
                 MyTestData(3105, '[\t\t\r\nfoo][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws after
                 MyTestData(3106, '[\\rtest ]', 9,
                            codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT',
                                  'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext(...), fws(...), close_sq_bracket))'),
                 MyTestData(3107, '[foobar  ]', 10,
                            codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, fws(...), close_sq_bracket))'),
                 MyTestData(3108, '[\r\nfoo\t][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws both
                 MyTestData(3109, '[ \\rtest ]', 10,
                            codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT',
                                   'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, fws(...), dtext(...), fws(...), close_sq_bracket))'),
                 MyTestData(3110, '[\tfoobar ]', 10, codes=['CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, fws(...), dtext, fws(...), close_sq_bracket))'),
 
                 # cfws before
                 MyTestData(3200, '(This is a comment)[\\rtest]', 27,
                            codes=['CFWS_COMMENT', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL',
                                   'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket))'),
-                MyTestData(3201, '\t\t[foo[bar]', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True,
+                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, dtext(...), close_sq_bracket))'),
+                MyTestData(3201, '\t\t[foo[bar]', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True,
                            history_str=''),
                 MyTestData(3202, ' \r\n [\r\nfoo][bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws after
                 MyTestData(3203, '[\\rtest](this is a post comment)\r\n', 0, codes=['ERR_FWS_CRLF_END'], error=True,
                            history_str=''),
-                MyTestData(3204, '[foo[bar] \r\n ', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
+                MyTestData(3204, '[foo[bar] \r\n ', 0, codes=['ERR_EXPECTING_DTEXT'], error=True, history_str=''),
                 MyTestData(3205, '[\r\nfoo] \t\t [bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws both
                 MyTestData(3206, '(comment beore) [\\rtest] (and after)', 36,
                            codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL',
                                   'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket, cfws(...)))'),
-                MyTestData(3207, ' [foo[bar] \t\t', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True,
+                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, dtext(...), close_sq_bracket, cfws(...)))'),
+                MyTestData(3207, ' [foo[bar] \t\t', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True,
                            history_str=''),
                 MyTestData(3208, '\t[\r\nfoo] [bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
@@ -749,8 +754,8 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(3302, '(comment before)[ \\rtest]', 25,
                            codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL',
                                   'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, ..., close_sq_bracket))'),
-                MyTestData(3303, '(comment before)[foo[bar ] ', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_COMMENT'],
+                           history_str='domain(domain_literal(cfws(...), open_sq_bracket, fws(...), dtext(...), close_sq_bracket))'),
+                MyTestData(3303, '(comment before)[foo[bar ] ', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_COMMENT'],
                            error=True, history_str=''),
                 MyTestData(3304, '\t\t[ \r\nfoo](and after)\t[bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
@@ -773,12 +778,12 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket))'),
 
                 # ipv6 full  - FAIL
-                MyTestData(4004, '[IPv6:0:0:0:0:0:0:hhy:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
-                MyTestData(4005, '[IPv6::1111:1111:1111:1111:1111:1111:1111:1111]', 0, codes=['ERR_INVALID_ADDR_LITERAL'],
-                           error=True, history_str=''),
-                MyTestData(4006, '[IPv6:12aba:1abcd:fedc:1212:0:00:000:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'],
-                           error=True, history_str=''),
+                MyTestData(4004, '[IPv6:0:0:0:0:0:0:hhy:0]', 24, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
+                MyTestData(4005, '[IPv6::1111:1111:1111:1111:1111:1111:1111:1111]', 47, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
+                           error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
+                MyTestData(4006, '[IPv6:12aba:1abcd:fedc:1212:0:00:000:0]', 39, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
+                           error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
 
                 MyTestData(4101, '[IPv6:0::0:0:0:0:0]', 19,
                            codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_COMP_ADDR', 'RFC5322_IPV6_ADDR'],
@@ -831,20 +836,20 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket))'),
 
                 # ipv6 comp - FAIL
-                MyTestData(4116, '[IPv6:0::0:0:0:0:0:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
-                MyTestData(4117, '[IPv6:0:0:0:0::0:0:0:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
+                MyTestData(4116, '[IPv6:0::0:0:0:0:0:0]', 21, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'  ),
+                MyTestData(4117, '[IPv6:0:0:0:0::0:0:0:0]', 23, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'  ),
 
                 # ipv6-4 - PASS
                 MyTestData(4201, '[IPv6:0:0:0:0:0:0:1.1.1.1]', 26,
                            codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_IPV4_ADDR', 'RFC5322_IPV6_ADDR'],
                            history_str='domain(address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket))'),
                 # ipv6-4 - FAIL
-                MyTestData(4203, '[IPv6:0:0:0:0:0:1.1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
-                MyTestData(4205, '[IPv6:0:0:0:0:0:0:1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
+                MyTestData(4203, '[IPv6:0:0:0:0:0:1.1.1.1]', 24, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'  ),
+                MyTestData(4205, '[IPv6:0:0:0:0:0:0:1.1.1]', 24, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'  ),
 
                 # ipv6-4 comp - PASS
 
@@ -870,8 +875,8 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket))'),
 
                 # ipv6-4 comp - FAIL
-                MyTestData(4307, '[IPv6:0:0:0::0:0:0:1.1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True,
-                           history_str=''),
+                MyTestData(4307, '[IPv6:0:0:0::0:0:0:1.1.1.1]', 27, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
 
                 # ipv4 PASS / FAIL
                 MyTestData(4401, '[1.1.1.1]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'],
@@ -885,16 +890,16 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(4405, '[0.0.0.0.]', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
                 MyTestData(4406, '[0.0.0.0]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'],
                            history_str='domain(address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket))'),
-                MyTestData(4407, '[.0.0.0.0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(4408, '[1.2.3]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(4409, '[300.2.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(4407, '[.0.0.0.0]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
+                MyTestData(4408, '[1.2.3]', 7, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'] , error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
+                MyTestData(4409, '[300.2.1.1]', 11, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'] , error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
                 MyTestData(4410, '[blah]', 6, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
 
                 # general addr PASS/FAIL
                 MyTestData(4501, '[abcd:abcdeg]', 13,
                            codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(domain_literal(open_sq_bracket, ..., close_sq_bracket))'),
+                           history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
                 MyTestData(4502, '[http:foobar]', 13,
                            codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_DOMAIN', 'RFC5322_GENERAL_LITERAL',
                                   'RFC5322_LIMITED_DOMAIN'],
@@ -909,6 +914,13 @@ class TestEmailParser(unittest.TestCase):
                 # data past enclosure
                 MyTestData(4603, '[1.1.1.1]foobar', 0, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR', 'ERR_ATEXT_AFTER_DOMLIT'], error=True),
 
+                # obs_lit literal
+                MyTestData(4701, '[1.1.' + chr(1) + '1.1]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(domain_literal(open_sq_bracket, dtext(...), close_sq_bracket))'),
+
+                # invalid literal
+                MyTestData(4702, '[1.1.' + chr(0) + '1.1]', 0, codes=['ERR_EXPECTING_DTEXT'], error=True, history_str=''),
+
                 # *********************
                 # OBS DOMAIN
                 # *********************
@@ -917,7 +929,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(dot_atom(dot_atom_text(...)))'),
                 MyTestData(5002, '(this is a comment) atom (this is a comment).this_is_atom', 57,
                            codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
-                           history_str='domain(obs_domain(atom(...), ...))'),
+                           history_str='domain(obs_domain(atom(...), single_dot, atom(...)))'),
                 MyTestData(5003, 'blah_blah_blah.(this is a comment) atom (this is a comment', 0,
                            codes=['ERR_UNCLOSED_COMMENT'], error=True, history_str=''),
                 MyTestData(5004, 'blah_blah_blah.(this is a comment) atom (this is a comment' + make_char_str(0), 0,
@@ -1060,12 +1072,12 @@ class TestEmailParser(unittest.TestCase):
             limit_to=-1,
             method_name='domain_addr',
             tests=[
-                MyTestData(1, 'ABCdef123.abcder', 16, history_str='domain_addr(tld_domain(alpha, ldh_str), single_dot, sub_domain(let_dig))'),
-                MyTestData(2, 'abcdef-123.acac', 15, history_str='domain_addr(tld_domain(alpha, ldh_str), single_dot, sub_domain(let_dig))'),
-                MyTestData(3, 'abcdef-.12345', 6, codes='RFC5321_TLD', history_str='domain_addr(tld_domain(alpha))'),
+                MyTestData(1, 'ABCdef123.abcder', 16, history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
+                MyTestData(2, 'abcdef-123.acac', 15, history_str='domain_addr(sub_domain(let_dig, ldh_str), single_dot, sub_domain(let_dig))'),
+                MyTestData(3, 'abcdef-.12345', 6, codes='RFC5321_TLD', history_str='domain_addr(sub_domain(let_dig))'),
                 MyTestData(4, '-abcdef.abcdef-', 0, history_str=''),
-                MyTestData(5, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain_addr(tld_domain(alpha))'),
-                MyTestData(6, '1abcdef.abcdef', 14, codes='RFC5321_TLD_NUMERIC', history_str='domain_addr(let_dig, single_dot, sub_domain(let_dig))'),
+                MyTestData(5, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain_addr(sub_domain(let_dig))'),
+                MyTestData(6, '1abcdef.1abcdef', 15, codes='RFC5321_TLD_NUMERIC', history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
             ]
         )
         self.run_test_data(td)
@@ -1083,6 +1095,7 @@ class TestEmailParser(unittest.TestCase):
         )
         self.run_test_data(td)
 
+    """
     def test_let_str(self):
         td = MyTestDefs(
             limit_to=-1,
@@ -1100,7 +1113,7 @@ class TestEmailParser(unittest.TestCase):
             ]
         )
         self.run_test_data(td)
-
+    """
     def test_domain_literal(self):
         td = MyTestDefs(
             limit_to=-1,
@@ -1113,7 +1126,7 @@ class TestEmailParser(unittest.TestCase):
 
                 # no closing
                 MyTestData(101, '[test', 0, codes='ERR_UNCLOSED_DOM_LIT', error=True, history_str=''),
-                MyTestData(102, '[foo[bar]', 0, codes='ERR_UNCLOSED_DOM_LIT', error=True, history_str=''),
+                MyTestData(102, '[foo[bar]', 0, codes='ERR_EXPECTING_DTEXT', error=True, history_str=''),
 
                 # fws before
                 MyTestData(103, '[\t\\rtest]', 9, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
@@ -1131,22 +1144,22 @@ class TestEmailParser(unittest.TestCase):
 
                 # cfws before
                 MyTestData(200, '(This is a comment)[\\rtest]', 27, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT','CFWS_COMMENT'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
-                MyTestData(201, '\t\t[foo[bar]', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True, history_str=''),
+                MyTestData(201, '\t\t[foo[bar]', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True, history_str=''),
                 MyTestData(202, ' \r\n [\r\nfoo][bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws after
                 MyTestData(203, '[\\rtest](this is a post comment)\r\n', 0, codes=['ERR_FWS_CRLF_END'], error=True, history_str=''),
-                MyTestData(204, '[foo[bar] \r\n ', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
+                MyTestData(204, '[foo[bar] \r\n ', 0, codes=['ERR_EXPECTING_DTEXT'], error=True, history_str=''),
                 MyTestData(205, '[\r\nfoo] \t\t [bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws both
                 MyTestData(206, '(comment beore) [\\rtest] (and after)', 36, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
-                MyTestData(207, ' [foo[bar] \t\t', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_FWS'], error=True, history_str=''),
+                MyTestData(207, ' [foo[bar] \t\t', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True, history_str=''),
                 MyTestData(208, '\t[\r\nfoo] [bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # mixed
                 MyTestData(302, '(comment before)[ \\rtest]', 25, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
-                MyTestData(303, '(comment before)[foo[bar ] ', 0, codes=['ERR_UNCLOSED_DOM_LIT', 'CFWS_COMMENT'], error=True, history_str=''),
+                MyTestData(303, '(comment before)[foo[bar ] ', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_COMMENT'], error=True, history_str=''),
                 MyTestData(304, '\t\t[ \r\nfoo](and after)\t[bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 MyTestData(401, '(comment before)[ \\rtest] blah', 0,
@@ -1217,9 +1230,9 @@ class TestEmailParser(unittest.TestCase):
                            codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_FULL_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
 
                 # ipv6 full  - FAIL
-                MyTestData(4, '[IPv6:0:0:0:0:0:0:hhy:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(5, '[IPv6::1111:1111:1111:1111:1111:1111:1111:1111]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(6, '[IPv6:12aba:1abcd:fedc:1212:0:00:000:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(4, '[IPv6:0:0:0:0:0:0:hhy:0]', 0, codes=[], error=False, history_str=''),
+                MyTestData(5, '[IPv6::1111:1111:1111:1111:1111:1111:1111:1111]', 0, codes=[], error=False, history_str=''),
+                MyTestData(6, '[IPv6:12aba:1abcd:fedc:1212:0:00:000:0]', 0, codes=[], error=False, history_str=''),
 
                 MyTestData(101, '[IPv6:0::0:0:0:0:0]', 19, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_COMP_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
                 MyTestData(102, '[IPv6:0::0:0:0:0]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_COMP_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
@@ -1242,15 +1255,15 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(115, '[IPv6:0:0:0:0:0::0]', 19, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_COMP_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
 
                 # ipv6 comp - FAIL
-                MyTestData(116, '[IPv6:0::0:0:0:0:0:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(117, '[IPv6:0:0:0:0::0:0:0:0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(116, '[IPv6:0::0:0:0:0:0:0]', 0, codes=[], error=False, history_str=''),
+                MyTestData(117, '[IPv6:0:0:0:0::0:0:0:0]', 0, codes=[], error=False, history_str=''),
 
                 # ipv6-4 - PASS
                 MyTestData(201, '[IPv6:0:0:0:0:0:0:1.1.1.1]', 26, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_IPV4_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
 
                 # ipv6-4 - FAIL
-                MyTestData(203, '[IPv6:0:0:0:0:0:1.1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(205, '[IPv6:0:0:0:0:0:0:1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(203, '[IPv6:0:0:0:0:0:1.1.1.1]', 0, codes=[], error=False, history_str=''),
+                MyTestData(205, '[IPv6:0:0:0:0:0:0:1.1.1]', 0, codes=[], error=False, history_str=''),
 
                 # ipv6-4 comp - PASS
 
@@ -1267,23 +1280,23 @@ class TestEmailParser(unittest.TestCase):
                            codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV6_IPV4_COMP_ADDR', 'RFC5322_IPV6_ADDR'], history_str='address_literal(open_sq_bracket, ipv6_address_literal(...), close_sq_bracket)'),
 
                 # ipv6-4 comp - FAIL
-                MyTestData(307, '[IPv6:0:0:0::0:0:0:1.1.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(307, '[IPv6:0:0:0::0:0:0:1.1.1.1]', 0, codes=[], error=False, history_str=''),
 
                 # ipv4 PASS / FAIL
                 MyTestData(401, '[1.1.1.1]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(402, '[123.123.123.123]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(403, '[13.13.255.0]', 13, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(404, '[255.255.255.255]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
-                MyTestData(405, '[0.0.0.0.]', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
+                MyTestData(405, '[0.0.0.0.]', 0, codes=[], error=False, history_str=''),
                 MyTestData(406, '[0.0.0.0]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
-                MyTestData(407, '[.0.0.0.0]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(408, '[1.2.3]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
-                MyTestData(409, '[300.2.1.1]', 0, codes=['ERR_INVALID_ADDR_LITERAL'], error=True, history_str=''),
+                MyTestData(407, '[.0.0.0.0]', 0, codes=[], error=False, history_str=''),
+                MyTestData(408, '[1.2.3]', 0, codes=[], error=False, history_str=''),
+                MyTestData(409, '[300.2.1.1]', 0, codes=[], error=False, history_str=''),
                 MyTestData(410, '[blah]', 0, history_str=''),
                 
                 # general addr PASS/FAIL
                 MyTestData(501, '[abcd:abcdeg]', 0, history_str=''),
-                MyTestData(502, '[http:foobar]', 13, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_GENERAL_LITERAL'], history_str='address_literal(open_sq_bracket, general_address_literal(...), close_sq_bracket)'),
+                MyTestData(502, '[http:foobar]', 13, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_DOMAIN', 'RFC5322_GENERAL_LITERAL', 'RFC5322_LIMITED_DOMAIN'], history_str='address_literal(open_sq_bracket, general_address_literal(...), close_sq_bracket)'),
                 MyTestData(503, '[foobar]', 0, history_str=''),
                 MyTestData(504, '[blah:]', 0, history_str=''),
                 MyTestData(505, '[:snafu]', 0, history_str=''),
@@ -1329,6 +1342,16 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(5, 'abcdef-4', 8, history_str='ldh_str'),
                 MyTestData(6, 'abc.def.', 3, history_str='ldh_str'),
                 MyTestData(7, 'abc.def.ghi(blah.blah)', 4, position=12, history_str='ldh_str'),
+                
+                MyTestData(1, 'ABCdef123', 9, history_str='ldh_str'),
+                MyTestData(2, 'abcdef-123', 10, history_str='ldh_str'),
+                MyTestData(3, 'abcdef-', 6, history_str='ldh_str'),
+                MyTestData(4, '-abcdef', 7, history_str='ldh_str'),
+                MyTestData(5, '-abcdef-', 7, history_str='ldh_str'),
+                MyTestData(6, '-abcdef--', 7, history_str='ldh_str'),
+                MyTestData(7, '-abcdef---', 7, history_str='ldh_str'),
+                MyTestData(7, '----', 0, history_str=''),
+
             ]
         )
         self.run_test_data(td)
@@ -1781,6 +1804,12 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(16, '"test"of a test', 6, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, qcontent(qtext), double_quote)'),
 
+                MyTestData(17, '"this \\" is \\"a test"', 21, codes='RFC5321_QUOTED_STRING',
+                           history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), fws(wsp), qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
+
+                MyTestData(18, '"\\\\"', 4, codes='RFC5321_QUOTED_STRING',
+                           history_str='quoted_string(double_quote, qcontent(quoted_pair(back_slash, vchar_wsp)), double_quote)'),
+
             ]
         )
         self.run_test_data(td)
@@ -1884,7 +1913,7 @@ class TestParseNames(unittest.TestCase):
             (305, 'dan@(comment1)[test:example of a dot com](comment2)', 'dan', 'test:example of a dot com', 'dan@[test:example of a dot com]', [], ['comment1', 'comment2'], ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT),
             (306, 'dan@[http:example_of_a_dot_com]', 'dan', ['http', 'example_of_a_dot_com'], 'dan@[http:example_of_a_dot_com]', [], [], ISEMAIL_DOMAIN_TYPE.GENERAL_LIT),
             (307, 'dan@[1.1.1.1]', 'dan', '1.1.1.1', 'dan@[1.1.1.1]', [], [], ISEMAIL_DOMAIN_TYPE.IPv4),
-            (308, 'dan@[ipv6:1:1:1:1:1:1:1:1]', 'dan', '1:1:1:1:1:1:1:1', 'dan@[ipv6:1:1:1:1:1:1:1:1]', [], [], ISEMAIL_DOMAIN_TYPE.IPv6),
+            (308, 'dan@[ipv6:1:1:1:1:1:1:1:1]', 'dan', '1:1:1:1:1:1:1:1', 'dan@[IPv6:1:1:1:1:1:1:1:1]', [], [], ISEMAIL_DOMAIN_TYPE.IPv6),
 
             (400, 'dan@(comment1)example(comment2). (comment3)com', 'dan', 'example.com', 'dan@example.com', [], ['comment1', 'comment2', 'comment3'], ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS),
             ]
@@ -1930,11 +1959,11 @@ class TestDomainLookup(unittest.TestCase):
 
             (201, 'dan@example.com', LL.ANY_RECORD, ''),
             (202, 'dan@example.foobar', LL.ANY_RECORD, 'DNSWARN_INVALID_TLD'),
-            (203, 'dan@no_domain.example.com', LL.ANY_RECORD, 'DNSWARN_NO_RECORD'),
+            (203, 'dan@no-domain.example.com', LL.ANY_RECORD, 'DNSWARN_NO_RECORD'),
 
             (301, 'dan@iana.org', LL.MX_RECORD, ''),
             (302, 'dan@example.foobar', LL.MX_RECORD, 'DNSWARN_INVALID_TLD'),
-            (303, 'dan@no_domain.example.com', LL.MX_RECORD, 'DNSWARN_NO_RECORD'),
+            (303, 'dan@no-domain.example.com', LL.MX_RECORD, 'DNSWARN_NO_RECORD'),
             (304, 'dan@example.com', LL.MX_RECORD, 'DNSWARN_NO_MX_RECORD'),
 
             # comm error

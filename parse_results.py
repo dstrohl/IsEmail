@@ -16,15 +16,141 @@ class ParsingError(Exception):
         super().__init__(*args, **kwargs)
 
     def __str__(self):
-        return 'ERROR: Parsing Error: %s' % self.results.major_diag
+        return 'ERROR: Parsing Error: %r' % self.results
 
+    def __repr__(self):
+        return str(self)
 
 class UnfinishedParsing(Exception):
     def __str__(self):
         return 'ERROR: Not finished parsing yet, data is not available'
 
 
-class ParseHistory(object):
+class ParseHistoryData(object):
+    def __init__(self, name, begin=0, length=0, from_string=''):
+        self.name = name
+        self.children = []
+        self.begin = begin
+        self.length = length
+        self._base_str = from_string
+        self.cleaned = False
+
+    @property
+    def is_leaf(self):
+        self.clean()
+        if self.children:
+            return False
+        return True
+
+    def append(self, child):
+        self.cleaned = False
+        self.children.append(child)
+
+    def extend(self, children):
+        self.cleaned = False
+        self.children.extend(children)
+
+    def __repr__(self):
+        if self.name:
+            return 'History(%s)[%s, %s]' % (self.name, self.begin, self.length)
+        else:
+            return 'History(<unk>)[%s, %s]' % (self.begin, self.length)
+
+    def __iter__(self):
+        self.clean()
+        yield self
+        for i in self.children:
+            for y in i:
+                yield y
+
+    def __getitem__(self, item):
+        return self.children[item]
+
+    def clear(self):
+        self.children.clear()
+        self.name = ''
+        self.cleaned = False
+
+    def clean(self, from_string=None):
+        if not self.cleaned:
+            self._clean(from_string=from_string)
+        return self
+
+    def _clean(self, from_string=None):
+        tmp_kids = []
+        for c in self.children:
+            tmp_kid = c._clean(from_string=from_string)
+            if tmp_kid is not None:
+                if isinstance(tmp_kid, list):
+                    tmp_kids.extend(tmp_kid)
+                else:
+                    tmp_kids.append(tmp_kid)
+        self.children = tmp_kids
+
+        if from_string is not None:
+            self._base_str = from_string
+
+        if self.name == '':
+            if self.children:
+                return self.children
+            else:
+                return None
+        else:
+            return self
+
+    def __len__(self):
+        self.clean()
+        tmp_ret = 1
+        for c in self.children:
+            tmp_ret += len(c)
+        return tmp_ret
+
+    def set_str(self, from_string):
+        self._base_str = from_string
+
+    def as_string(self, depth=9999, from_string=None, with_string=False):
+        self.clean()
+
+        from_string = from_string or self._base_str
+
+        if depth == 0:
+            return ''
+
+        if self.name:
+            depth -= 1
+
+        if self.children:
+            if depth == 0:
+                kids = '(...)'
+            else:
+                tmp_ret_list = []
+                for c in self.children:
+                    tmp_child = c.as_string(depth=depth, from_string=from_string, with_string=with_string)
+                    if tmp_child:
+                        tmp_ret_list.append(tmp_child)
+
+                kids = '(%s)' % ', '.join(tmp_ret_list)
+        else:
+            kids = ''
+
+        if with_string and self.name:
+            tmp_str = '[%r]' % from_string[self.begin:self.begin + self.length]
+        else:
+            tmp_str = ''
+
+        tmp_ret = '%s%s%s' % (self.name, tmp_str, kids)
+
+        tmp_ret = tmp_ret.strip()
+        if tmp_ret and tmp_ret[0] == '(':
+            tmp_ret = tmp_ret[1:-1]
+        return tmp_ret
+    __call__ = as_string
+
+    def __str__(self):
+        return self.as_string()
+
+"""
+class OldParseHistory(object):
     def __init__(self, parser, parent, segment_type, begin, length, depth=0):
         self.parent = parent
         self.parser = parser
@@ -127,9 +253,9 @@ class ParseHistory(object):
     def __repr__(self):
         return '%s  :  %r' % (self.full_name, self.parsed_str)
 
+"""
 
-
-
+"""
 class ParseHistoryResultItem(object):
     def __init__(self, parser, parent, segment_type, begin, length, depth=0):
         self.parent = parent
@@ -206,7 +332,7 @@ class ParseHistoryResultItem(object):
     def __repr__(self):
         return '%s  :  %r' % (self.full_name, self.parsed_str)
 
-
+"""
 '''
 class ParseResultItem(object):
 
@@ -300,7 +426,8 @@ class ParseResultFootball(object):
         self.stage = stage
         self._local_comments = {}
         self._domain_comments = {}
-        self.children = []
+        self._history = ParseHistoryData(segment)
+        # self.children = []
         self.begin = position
         self.segment_name = segment
         self.depth = 0
@@ -319,6 +446,7 @@ class ParseResultFootball(object):
         tmp_ret.domain_type = self.domain_type
         tmp_ret.at_loc = self.at_loc
         tmp_ret.error = self.error
+        tmp_ret._history = self._history.clean(self.parser.email_in)
         return tmp_ret
     __copy__ = copy
 
@@ -333,6 +461,7 @@ class ParseResultFootball(object):
                 tmp_ret.append(r[0])
         return tmp_ret
 
+    """
     def _make_history(self, depth=0, parent=None):
 
         tmp_children = []
@@ -356,6 +485,7 @@ class ParseResultFootball(object):
         if self.hist_cache is None:
             self.hist_cache = self._make_history()
         return self.hist_cache
+    """
 
     def clear(self, keep_results=False):
         self.length = 0
@@ -433,7 +563,7 @@ class ParseResultFootball(object):
             self.results.extend(other.results)
             self._set_error(other.error)
             # if other.segment_name is not None and other.segment_name != '':
-            self.children.append(other)
+            self._history.append(other._history)
 
             self._local_comments.update(other._local_comments)
             self._domain_comments.update(other._domain_comments)
@@ -585,6 +715,12 @@ class ParseResultFootball(object):
         # 0 = return T/F
         # 1 = return short object
         # 2 = return full object
+
+        if verbose == 2:
+            tmp_trace = self.trace_str
+        else:
+            tmp_trace = ''
+
         if dns_lookup_level is None:
             dns_lookup_level = ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP
 
@@ -659,19 +795,21 @@ class ParseResultFootball(object):
             if self.domain_type == ISEMAIL_DOMAIN_TYPE.GENERAL_LIT:
                 parts['domain_part'] = parts['domain_part'].split(':', 1)
 
-            if self.domain_type == ISEMAIL_DOMAIN_TYPE.DNS:
-                tmp_dns = dns_lookup(
-                    parts['clean_domain_part'],
-                    dns_lookup_level,
-                    servers=self.parser._dns_servers,
-                    timeout=self.parser._dns_timeout,
-                    raise_on_comm_error=self.parser._raise_on_error,
-                    tld_list=self.parser._tld_list,
-                )
+            elif self.domain_type == ISEMAIL_DOMAIN_TYPE.DNS:
+                if 'VALID' in self:
+                    tmp_dns = dns_lookup(
+                        parts['clean_domain_part'],
+                        dns_lookup_level,
+                        servers=self.parser._dns_servers,
+                        timeout=self.parser._dns_timeout,
+                        raise_on_comm_error=self.parser._raise_on_error,
+                        tld_list=self.parser._tld_list,
+                    )
 
-                if tmp_dns:
-                    self(tmp_dns, raise_on_error=False)
-                    # self._fix_result(self.results[-1])
+                    if tmp_dns:
+                        self(tmp_dns, raise_on_error=False)
+                        self.remove(diag='VALID')
+                        # self._fix_result(self.results[-1])
 
         else:
             parts = None
@@ -691,11 +829,11 @@ class ParseResultFootball(object):
                 email_in=self.email_in,
                 parts=parts,
                 results=self.results,
-                history=self.history,
+                history=self._history,
                 local_comments=self._local_comments,
                 domain_comments=self._domain_comments,
                 domain_type=self.domain_type,
-                trace=self.trace_str)
+                trace=tmp_trace)
 
     def add_comment(self, begin=None, length=None):
         begin = begin or self.begin
@@ -715,6 +853,7 @@ class ParseResultFootball(object):
 class ParseShortResult(object):
     def __init__(self, email_in, parts, results):
         self.full_address = email_in
+        self._full_addr_len = len(email_in)
         self._major_diag = None
         self.status = None
 
@@ -753,11 +892,13 @@ class ParseShortResult(object):
     def _xtra_parse_result(self, result):
         pass
 
-    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_as='string'):
-        if filter:
-            return self._major_diag.category.key
+    def diag(self, filter=None, show_all=False, inc_cat=False, inc_diag=True, return_obj=False, return_as_list=False):
+        if inc_cat:
+            return META_LOOKUP[self._major_diag].category.key
+        elif inc_diag:
+            return self._major_diag
         else:
-            return self._major_diag.key
+            return ''
 
     def __contains__(self, item):
         return item in self._major_diag.key
@@ -780,7 +921,7 @@ class ParseShortResult(object):
         return len(self.clean_address)
 
     def description(self, as_list=True, show_all=False):
-        return self._major_diag.description
+        return str(META_LOOKUP[self._major_diag])
 
     def __getitem__(self, item):
         if item in self:
@@ -797,11 +938,12 @@ class ParseFullResult(ParseShortResult):
 
         super().__init__(email_in, parts, results)
 
-        self.history = history
+        self._history = history
         self._local_comments = local_comments
         self._domain_comments = domain_comments
         self.domain_type = domain_type
         self.trace = trace
+        self._at_index = []
 
     def _xtra_parse_result(self, result):
         # tmp_result = META_LOOKUP[result[0]]
@@ -815,6 +957,65 @@ class ParseFullResult(ParseShortResult):
         #     self._cat_recs[result.diag.category.key].append(result)
         # else:
         #    self._cat_recs[result.diag.category.key] = [result]
+
+    def _load_item_positions(self, obj):
+
+        if isinstance(obj, ParseHistoryData):
+            begin = obj.begin
+            length = obj.length
+            save_obj = {'obj': obj, 'key': obj.name, 'rec_type': 'Element'}
+        else:
+            begin = obj[1]
+            length = obj[2]
+            save_obj = {'obj': META_LOOKUP[obj[0]], 'key': obj[0], 'rec_type': 'Diagnostic'}
+
+        if length == 0:
+            length = 1
+
+        end = begin + length
+        if end > self._full_addr_len:
+            end = self._full_addr_len
+
+        for p in range(begin, end):
+            self._at_index[p].append(save_obj)
+
+    def _load_positional_data(self):
+        self._at_index.clear()
+
+        for i in range(self._full_addr_len):
+            self._at_index.append([])
+
+        for h in self._history:
+            self._load_item_positions(h)
+
+        for d, pos in self._diag_recs.items():
+            for p in pos:
+                self._load_item_positions((d, p[0], p[1]))
+
+    def at(self, pos, ret_history=True, ret_diags=True, ret_obj=False, template=None):
+        template = template or '{rec_type}: {key}'
+        tmp_ret = []
+
+        if not self._at_index:
+            self._load_positional_data()
+
+        if not self._at_index[pos]:
+            return tmp_ret
+
+        for i in self._at_index[pos]:
+            if not ret_history and i['rec_type'] == 'Element':
+                continue
+            if not ret_diags and i['rec_type'] == 'Diagnostic':
+                continue
+
+            if ret_obj:
+                tmp_ret.append(i['obj'])
+            else:
+                tmp_ret.append(template.format(**i))
+        return tmp_ret
+
+    def history(self, depth=999, inc_email=False):
+        return self._history(depth=depth, with_string=inc_email)
 
     @property
     def local_comments(self):
@@ -849,7 +1050,7 @@ class ParseFullResult(ParseShortResult):
         tmp_str += '[%s]' % ','.join(self.diag(show_all=True))
         return tmp_str
 
-    def report(self, report_name, filter=None, **kwargs):
+    def report(self, report_name='formatted_string', filter=None, **kwargs):
         return META_LOOKUP(report_name, diags=self._diag_recs.keys(), filter=filter, **kwargs)
 
     def __getitem__(self, item):
@@ -863,5 +1064,12 @@ class ParseFullResult(ParseShortResult):
             return META_LOOKUP[item]
         else:
             raise KeyError('%s is not in this return object' % item.key)
+
+    def description(self, as_list=True, show_all=True):
+        if as_list:
+            tmp_rep = 'desc_list'
+        else:
+            tmp_rep = 'formatted_string'
+        return self.report(tmp_rep, show_all=show_all, inc_diag=True, inc_cat=False)
 
 

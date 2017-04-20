@@ -53,10 +53,13 @@ def as_football(segment=True, comment=False, skip=False):
             else:
                 tmp_ret = self._empty
 
-            if tmp_ret and is_segment:
-                tmp_ret.add(stage_name, position=position)
+            if tmp_ret and is_segment and not tmp_ret.error:
+                tmp_ret.add(segment=stage_name, position=position)
+                tmp_ret._history.name = stage_name
+                tmp_ret._history.begin = position
+                tmp_ret._history.length = tmp_ret.l
             else:
-                tmp_ret.children.clear()
+                tmp_ret._history.clear()
                 tmp_ret.segment_name = ''
 
             if not tmp_ret or tmp_ret.error:
@@ -190,7 +193,7 @@ class EmailParser(object):
     LET_DIG = make_char_str(ALPHA, DIGIT)
     LDH_STR = make_char_str(LET_DIG, '-')
     VCHAR = make_char_str((31, 126))
-    ATEXT = make_char_str(ALPHA, DIGIT, "!#$%&'+-/=?^_`{|}~")
+    ATEXT = make_char_str(ALPHA, DIGIT, "!#$%&'+-/=?^_`{|}~*")
     DCONTENT = make_char_str((33, 90), (94, 126))
 
     OBS_NO_WS_CTL = make_char_str((1, 8), (11, 12), (14, 31), 127)
@@ -357,7 +360,7 @@ class EmailParser(object):
     def _add_trace(self, position, is_note=False, note_str=None, results=None, is_begin=False, raise_error=False):
         if results is not None:
             results = results.copy()
-        if self.verbose == 3:
+        if self.verbose == 2:
             if self.trace_filter == -1 or self.trace_filter >= self.trace_level:
                 self.trace.append(TraceObj(
                     parser=self,
@@ -433,15 +436,22 @@ class EmailParser(object):
             return True
         return False
 
-    def find(self, position, search_for, stop_at=None):
+    def find(self, position, search_for, stop_at='', skip_quoted_str=False, skip_chars=''):
         position = self.pos(position)
         tmp_ret = 0
+        in_qs = False
         for c in self.remaining(position):
             tmp_ret += 1
-            if c in search_for:
-                return tmp_ret
-            if stop_at is not None and c in stop_at:
-                return -1
+            if skip_quoted_str and c == self.BACKSLASH and not in_qs:
+                in_qs = True
+            elif c not in skip_chars:
+                if not in_qs:
+                    if c in search_for:
+                        return tmp_ret
+                    if c in stop_at:
+                        return -1
+                else:
+                    in_qs = False
         return -1
 
     def count(self, position, search_for, stop_for=None, length=None):
@@ -642,52 +652,133 @@ class EmailParser(object):
         else:
             return 0, ParseResultFootball(self)
 
-    def football_max(self, res_a, res_b):
-        self.add_note_trace('    Comparing:')
-        self.add_note_trace('        A:  %r' % res_a )
-        self.add_note_trace('        B:  %r' % res_b )
-        if res_a.error != res_b.error:
-            if res_a.error:
-                if res_b:
-                    self.add_note_trace('     return B')
-                    return 'B', res_b
-                self.add_note_trace('     return A')
-                return 'A', res_a
-            elif res_b.error:
-                if res_a:
-                    self.add_note_trace('     return A')
-                    return 'A', res_a
-                self.add_note_trace('     return B')
-                return 'B', res_b
-        else:
-            if res_b > res_a:
-                self.add_note_trace('     return B')
-                return 'B', res_b
+    def football_max(self, *footballs):
+        # self.add_note_trace('    Comparing:  %s' % footballs)
+
+        tmp_ret = self._empty
+        tmp_index = -1
+
+        for index, fb in enumerate(footballs):
+            if tmp_ret.error != fb.error:
+                if tmp_ret.error:
+                    if fb:
+                        tmp_ret = fb
+                        tmp_index = index
+                elif fb.error:
+                    if not tmp_ret:
+                        tmp_ret = fb
+                        tmp_index = index
             else:
-                self.add_note_trace('     return A')
-                return 'A', res_a
+                if fb > tmp_ret:
+                    tmp_ret = fb
+                    tmp_index = index
+            if tmp_index == index:
+                self.add_note_trace('    Compare (%s): %r > %r' % (tmp_index, tmp_ret, fb))
+            else:
+                self.add_note_trace('    Compare (%s): %r > %r' % (tmp_index, fb, tmp_ret))
 
-    # TODO: Finish this
-    def check_domain(self, domain):
-        """
-        send back:
-            DNSWARN_NO_MX_RECORD
-            DNSWARN_NO_RECORD
+        self.add_note_trace('    Returning (%s): %r' % (tmp_index, tmp_ret))
+        return tmp_index, tmp_ret
 
-            DNSWARN_INVALID_TLD
+    # def check_domain(self):
+    #     """
+    #     send back:
+    #         DNSWARN_NO_MX_RECORD
+    #         DNSWARN_NO_RECORD
+    #
+    #         DNSWARN_INVALID_TLD
+    #
+    #     :param domain:
+    #     :return:
+    #     """
+    #     tmp_ret = []
+    #     if self.lookup_domain:
+    #         if self.tlds:
+    #             # check tld v. tlss list
+    #             pass
+    #
+    #         # check for MX record
+    #         # check for any record
+    #     return tmp_ret
 
-        :param domain:
-        :return:
-        """
-        tmp_ret = []
-        if self.lookup_domain:
-            if self.tlds:
-                # check tld v. tlss list
-                pass
+    def at_end_of_domain(self, position, football):
+        add_to = []
+        self.add_note_trace('Domain Validation: Start')
 
-            # check for MX record
-            # check for any record
-        return tmp_ret
+        if not football or football.error:
+            self.add_note_trace('    Domain Validation: Error or not found')
+            return False, []
+
+        added_char = 0
+        if self.at_end(position + football - 1) or self.at_end(position + football):
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+
+            if not self.at_end(position + football + added_char):
+                add_to.append('ERR_EXPECTING_ATEXT')
+
+            if football > 255:
+                add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+            self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+            return True, add_to
+
+        else:
+
+            self.add_note_trace('    Domain Validation: Not at end')
+            return False, []
+
+    def validate_domain(self, position, football):
+        at_end, tmp_adds = self.at_end_of_domain(position, football)
+
+        if not self.at_end(position + football):
+            tmp_adds.append('ERR_EXPECTING_ATEXT')
+
+        return football(*tmp_adds)
+
+
+    """
+    def validate_domain(self, position, football, update_fb=None):
+        update_fb = update_fb or football
+        add_to = []
+        if football.error:
+            return False
+        added_char = 0
+        if self.at_end(position + football - 1) or self.at_end(position + football):
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+                update_fb('ERR_DOT_END', raise_on_error=False)
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+                update_fb('ERR_BACKSLASH_END', raise_on_error=False)
+        else:
+            return False
+
+        if football > 255:
+            add_to.append('RFC5322_DOMAIN_TOO_LONG')
+            update_fb('RFC5322_DOMAIN_TOO_LONG', raise_on_error=False)
+
+        if not self.at_end(position + football + added_char):
+            add_to.append('ERR_EXPECTING_ATEXT')
+            update_fb('ERR_EXPECTING_ATEXT', raise_on_error=False)
+    """
+
 
     # **********************************************************************************
     # ******** START PARSERS
@@ -896,7 +987,7 @@ class EmailParser(object):
                 tmp_ret_3 = err.results
 
             tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
-            if tmp_ch == 'B':
+            if tmp_ch == 0:
                 is_qs = True
 
             skip_next = self.local_part_skip(position, tmp_ret_3)
@@ -912,7 +1003,7 @@ class EmailParser(object):
                 tmp_ret_3 = err.results
 
             tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
-            if tmp_ch == 'B':
+            if tmp_ch == 0:
                 is_qs = False
         else:
             self.add_note_trace('skipping obs-local-part')
@@ -965,17 +1056,38 @@ class EmailParser(object):
             if tmp_ret_cfws and \
                     not self.at_end(position + tmp_ret + tmp_ret_cfws) and \
                     self.this_char(position + tmp_ret + tmp_ret_cfws + 1) != self.AT:
-                tmp_ret('ERR_ATEXT_AFTER_CFWS')
+                tmp_ret('ERR_ATEXT_AFTER_CFWS', raise_on_error=False)
+                tmp_ret += tmp_ret_cfws
+            else:
+                if self.in_domain_part:
+                    tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
 
-            tmp_ret += tmp_ret_cfws
+                    add_to = []
 
-            # if tmp_ret.error and self.in_domain_part:
-            #    self.near_at_flag = True
-            if self.in_domain_part:
-                tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
-            return tmp_ret
-        # if self.in_domain_part:
-        #    self.near_at_flag = True
+                    if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+                        added_char = 0
+                        tmp_char = self.this_char(-1)
+                        self.add_note_trace('Final domain char = ' + tmp_char)
+                        if tmp_char == self.HYPHEN:
+                            added_char = 1
+                            add_to.append('ERR_DOMAIN_HYPHEN_END')
+                        elif tmp_char == self.DOT:
+                            added_char = 1
+                            add_to.append('ERR_DOT_END')
+                        elif tmp_char == self.BACKSLASH:
+                            added_char = 1
+                            add_to.append('ERR_BACKSLASH_END')
+
+                        if not self.at_end(position + tmp_ret + added_char):
+                            add_to.append('ERR_EXPECTING_ATEXT')
+
+                        if tmp_ret > 255:
+                            add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+                        self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+                    tmp_ret(*add_to, raise_on_error=False)
+            return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
         return self._empty
 
     @as_football()
@@ -1198,12 +1310,156 @@ class EmailParser(object):
         """
         tmp_ret = self._empty
 
-        tmp_char = self.this_char(position)
-        if tmp_char == self.HYPHEN:
-            return tmp_ret('ERR_DOMAIN_HYPHEN_START')
-        elif tmp_char == self.DOT:
-            return tmp_ret('ERR_DOT_START')
+        only_domain_lit = False
+        is_literal = False
 
+        lit_init = self._empty
+        lit_init += self.open_sq_bracket(position)
+
+        if lit_init:
+            is_literal = True
+        else:
+            lit_cfws = self.cfws(position, non_segment=True)
+            if lit_cfws:
+                lit_init += self.open_sq_bracket(position + tmp_ret, non_segment=True)
+                if lit_init:
+                    is_literal = True
+                    only_domain_lit = True
+                    lit_init += lit_cfws
+
+        if is_literal:
+
+            tmp_close_loc = self.find(position + lit_init, self.CLOSESQBRACKET)
+            if tmp_close_loc == -1:
+                return tmp_ret('ERR_UNCLOSED_DOM_LIT')
+
+            if not only_domain_lit:
+                tmp_addr_lit = self.address_literal(position, lit_init)
+                if tmp_addr_lit and not tmp_addr_lit.error:
+                    return tmp_ret(tmp_addr_lit)
+            else:
+                tmp_addr_lit = self._empty
+
+            tmp_dom_lit = self.domain_literal(position, lit_init)
+            if tmp_dom_lit and not tmp_dom_lit.error:
+                return tmp_ret(tmp_dom_lit)
+
+            tmp_index, tmp_ret_2 = self.football_max(tmp_addr_lit, tmp_dom_lit)
+
+            if tmp_ret_2:
+                if tmp_ret_2.error:
+                    raise ParsingError(tmp_ret_2)
+                tmp_ret += tmp_ret_2
+                return tmp_ret
+
+
+
+            self.add_note_trace('Should be non-ip-address domain literal')
+            tmp_ret_3 = self.domain_literal(position)
+            if tmp_ret_3:
+                tmp_ret_3('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+                tmp_ret += tmp_ret_3
+                if not self.at_end(position + tmp_ret_3):
+                    tmp_ret += tmp_ret_3
+                    return tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
+
+            tmp_index, tmp_ret_4 = self.football_max(tmp_ret_2, tmp_ret_3)
+            tmp_ret += tmp_ret_4
+            if tmp_ret.error:
+                raise ParsingError(tmp_ret_2)
+
+            if not self.at_end(position + tmp_ret):
+                return tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
+
+            add_to = []
+
+            if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+                added_char = 0
+                tmp_char = self.this_char(-1)
+                self.add_note_trace('Final domain char = ' + tmp_char)
+                if tmp_char == self.HYPHEN:
+                    added_char = 1
+                    add_to.append('ERR_DOMAIN_HYPHEN_END')
+                elif tmp_char == self.DOT:
+                    added_char = 1
+                    add_to.append('ERR_DOT_END')
+                elif tmp_char == self.BACKSLASH:
+                    added_char = 1
+                    add_to.append('ERR_BACKSLASH_END')
+
+                if not self.at_end(position + tmp_ret + added_char):
+                    add_to.append('ERR_EXPECTING_ATEXT')
+
+                if tmp_ret > 255:
+                    add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+                self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+                tmp_ret(*add_to, raise_on_error=False)
+
+            return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+
+            return tmp_ret
+
+
+
+
+
+
+
+        else:
+
+            tmp_char = self.this_char(position)
+            if tmp_char == self.HYPHEN:
+                return tmp_ret('ERR_DOMAIN_HYPHEN_START')
+            elif tmp_char == self.DOT:
+                return tmp_ret('ERR_DOT_START')
+
+            tmp_domain_addr = self.domain_addr(position)
+            if tmp_domain_addr and not tmp_domain_addr.error:
+                return tmp_ret(tmp_domain_addr)
+
+            tmp_dot_atom = self.dot_atom(position)
+            if tmp_dot_atom and not tmp_dot_atom.error:
+                return tmp_ret(tmp_dot_atom)
+
+            tmp_obs_domain = self.obs_domain(position)
+            if tmp_obs_domain and not tmp_obs_domain.error:
+                return tmp_ret(tmp_obs_domain)
+
+            tmp_index, tmp_ret_2 = self.football_max(tmp_domain_addr, tmp_dot_atom, tmp_obs_domain)
+
+            if tmp_ret_2:
+                if tmp_ret_2.error:
+                    raise ParsingError(tmp_ret_2)
+                tmp_ret += tmp_ret_2
+                return tmp_ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        tmp_ret_2 = self.literals(position)
+        if tmp_ret_2 and self.at_end(position + tmp_ret_2):
+            tmp_ret += tmp_ret_2
+            return self.validate_domain(position, tmp_ret)
+
+        return self.validate_domain(position, tmp_ret)
+
+
+        """
         is_literal = False
         if self.this_char(position) == self.OPENSQBRACKET:
             is_literal = True
@@ -1244,29 +1500,36 @@ class EmailParser(object):
                         raise parse_error
 
         else:
-            if self.simple_char(position+1, self.ADDR_LIT_IPV4, parse_until=self.CLOSESQBRACKET):
-                self.add_note_trace('Should be ipv4 address domain literal')
-                tmp_ret_2 = self.address_literal(position)
-            elif self.simple_str(position + 1, self.IPV6TAG, caps_sensitive=False):
-                self.add_note_trace('Should be ipv6 address domain literal')
-                tmp_ret_2 = self.address_literal(position)
-            else:
-                self.add_note_trace('trying address literal')
-                tmp_ret_2 = self.address_literal(position)
+            tmp_ret_2 = self._empty
+            # if self.simple_char(position+1, self.ADDR_LIT_IPV4, parse_until=self.CLOSESQBRACKET):
+            #     self.add_note_trace('Should be ipv4 address domain literal')
+            #     tmp_ret_2 = self.address_literal(position)
+
+            # if not tmp_ret_2:
+            #     if self.simple_str(position + 1, self.IPV6TAG, caps_sensitive=False):
+            #         self.add_note_trace('Should be ipv6 address domain literal')
+            #        tmp_ret_2 = self.address_literal(position)
+
+            # if not tmp_ret_2:
+            #    self.add_note_trace('trying address literal')
+            tmp_ret_2 = self.address_literal(position)
+            #  if tmp_ret_2:
+            #        tmp_ret_2('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+            #    # return tmp_ret(tmp_ret_2)
+
+            if not tmp_ret_2:
+                self.add_note_trace('Should be non-ip-address domain literal')
+                tmp_ret_2 = self.domain_literal(position)
                 if tmp_ret_2:
                     tmp_ret_2('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
-                # return tmp_ret(tmp_ret_2)
-                else:
-                    self.add_note_trace('Should be non-ip-address domain literal')
-                    tmp_ret_2 = self.domain_literal(position)
-                    if tmp_ret_2:
-                        tmp_ret_2('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+
             if tmp_ret_2:
                 if not self.at_end(position + tmp_ret_2):
                     tmp_ret_2('ERR_ATEXT_AFTER_DOMLIT')
             else:
                 self.add_note_trace('No valid domain lits found!')
-                return self._empty
+                tmp_ret('ERR_INVALID_ADDR_LITERAL')
+                return tmp_ret
 
         tmp_ret(tmp_ret_2)
         if tmp_ret > 255:
@@ -1288,6 +1551,88 @@ class EmailParser(object):
 
         # tmp_ret._set_domain_type()
         return tmp_ret
+        """
+
+    @as_football(segment=False)
+    def literals(self, position):
+        only_domain_lit = False
+        tmp_ret = self._empty
+        tmp_ret_2 = self.open_sq_bracket(position)
+
+        if not self.open_sq_bracket(position, non_segment=True):
+            tmp_ret_2 += self.cfws(position, non_segment=True)
+            if tmp_ret:
+                tmp_ret_2 += self.open_sq_bracket(position + tmp_ret, non_segment=True)
+                only_domain_lit = True
+            else:
+                return tmp_ret
+
+        tmp_close_loc = self.find(position + tmp_ret_2, self.CLOSESQBRACKET)
+        if tmp_close_loc == -1:
+            return tmp_ret('ERR_UNCLOSED_DOM_LIT')
+
+        tmp_ret_2 = self._empty
+        if not only_domain_lit:
+            try:
+                tmp_ret_2 = self.address_literal(position)
+            except ParsingError as err:
+                tmp_ret_2 = err.results
+
+        if tmp_ret_2:
+            if self.at_end(position + tmp_ret_2):
+                return tmp_ret(tmp_ret_2)
+            else:
+                if not tmp_ret_2.error:
+                    tmp_ret += tmp_ret_2
+                    return tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
+
+        self.add_note_trace('Should be non-ip-address domain literal')
+        tmp_ret_3 = self.domain_literal(position)
+        if tmp_ret_3:
+            tmp_ret_3('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+            tmp_ret += tmp_ret_3
+            if not self.at_end(position + tmp_ret_3):
+                tmp_ret += tmp_ret_3
+                return tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
+
+        tmp_index, tmp_ret_4 = self.football_max(tmp_ret_2, tmp_ret_3)
+        tmp_ret += tmp_ret_4
+        if tmp_ret.error:
+            raise ParsingError(tmp_ret_2)
+
+        if not self.at_end(position + tmp_ret):
+            return tmp_ret('ERR_ATEXT_AFTER_DOMLIT')
+
+        add_to = []
+
+        if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+            added_char = 0
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+
+            if not self.at_end(position + tmp_ret + added_char):
+                add_to.append('ERR_EXPECTING_ATEXT')
+
+            if tmp_ret > 255:
+                add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+            self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+            tmp_ret(*add_to, raise_on_error=False)
+
+        return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+
+        return tmp_ret
+
 
     @as_football()
     def domain_addr(self, position):
@@ -1297,58 +1642,93 @@ class EmailParser(object):
         [1010]       RFC5321_TLD_NUMERIC  Address is valid but the Top Level Domain begins with a number (ISEMAIL_RFC5321)
 
         """
-
+        last_dom_pos = position
+        is_tld = True
         tmp_ret = self._empty
-        tmp_ret += self.tld_domain(position)
-        if not tmp_ret:
-            tmp_ret = self.sub_domain(position)
-            if tmp_ret:
-                tmp_ret('RFC5321_TLD_NUMERIC')
+        tmp_ret += self.sub_domain(position)
+        # if not tmp_ret:
+        #     tmp_ret = self.sub_domain(position)
+        #     if tmp_ret:
+        #         tmp_ret('RFC5321_TLD_NUMERIC')
 
         if not tmp_ret:
             return self._empty
 
-        tmp_ret_2 = self.try_and(position + tmp_ret,
-                                self.single_dot,
-                                self.sub_domain,
-                                min_loop=0, max_loop=256)
-
-        if tmp_ret_2:
+        while True:
+            tmp_ret_2 = self.single_dot(position + tmp_ret)
+            if not tmp_ret_2:
+                break
+            tmp_ret_3 = self.sub_domain(position + tmp_ret + tmp_ret_2)
+            if not tmp_ret_3:
+                break
+            last_dom_pos = position + tmp_ret + tmp_ret_2
             tmp_ret += tmp_ret_2
-        else:
+            tmp_ret += tmp_ret_3
+            is_tld = False
+
+        if is_tld:
             tmp_ret('RFC5321_TLD')
 
-        tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
-        return tmp_ret
-
-    @as_football()
-    def tld_domain(self, position):
-        """"
-            sub-domain     = Let-dig [Ldh-str]
-
-            // Nowhere in RFC 5321 does it say explicitly that the
-            // domain part of a Mailbox must be a valid domain according
-            // to the DNS standards set out in RFC 1035, but this *is*
-            // implied in several places. For instance, wherever the idea
-            // of host routing is discussed the RFC says that the domain
-            // must be looked up in the DNS. This would be nonsense unless
-            // the domain was designed to be a valid DNS domain. Hence we
-            // must conclude that the RFC 1035 restriction on label length
-            // also applies to RFC 5321 domains.
-            //
-            // http://tools.ietf.org/html/rfc1035#section-2.3.4
-            // labels          63 octets or less
-
-        """
-        tmp_ret = self._empty
-        tmp_ret += self.alpha(position)
-        if tmp_ret:
-            tmp_ret += self.ldh_str(position + tmp_ret)
-            if tmp_ret.l > 63:
-                tmp_ret('RFC5322_LABEL_TOO_LONG')
-            return tmp_ret
+        if self.this_char(last_dom_pos) in self.DIGIT:
+            tmp_ret('RFC5321_TLD_NUMERIC')
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS
         else:
-            return self._empty
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
+
+        add_to = []
+
+        if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+            added_char = 0
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+
+            if not self.at_end(position + tmp_ret + added_char):
+                add_to.append('ERR_EXPECTING_DTEXT')
+
+            if tmp_ret > 255:
+                add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+            self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+        return tmp_ret(*add_to, raise_on_error=False)
+
+    # @as_football()
+    # def tld_domain(self, position):
+    #     """"
+    #         sub-domain     = Let-dig [Ldh-str]
+    #
+    #         // Nowhere in RFC 5321 does it say explicitly that the
+    #         // domain part of a Mailbox must be a valid domain according
+    #         // to the DNS standards set out in RFC 1035, but this *is*
+    #         // implied in several places. For instance, wherever the idea
+    #         // of host routing is discussed the RFC says that the domain
+    #         // must be looked up in the DNS. This would be nonsense unless
+    #         // the domain was designed to be a valid DNS domain. Hence we
+    #         // must conclude that the RFC 1035 restriction on label length
+    #         // also applies to RFC 5321 domains.
+    #         //
+    #         // http://tools.ietf.org/html/rfc1035#section-2.3.4
+    #         // labels          63 octets or less
+    #
+    #     """
+    #     tmp_ret = self._empty
+    #     tmp_ret += self.alpha(position)
+    #     if tmp_ret:
+    #         tmp_ret += self.ldh_str(position + tmp_ret)
+    #         if tmp_ret.l > 63:
+    #             tmp_ret('RFC5322_LABEL_TOO_LONG')
+    #         return tmp_ret
+    #     else:
+    #         return self._empty
 
     @as_football()
     def sub_domain(self, position):
@@ -1381,21 +1761,21 @@ class EmailParser(object):
         else:
             return self._empty
 
-    @as_football()
-    def let_str(self, position):
-        """
-                Ldh-str        = *( ALPHA / DIGIT / "-" ) Let-dig
-        """
-        tmp_ret = self._empty
-        tmp_ret += self.ldh_str(position)
-
-        while tmp_ret and self.this_char(position + tmp_ret.l-1) not in self.LET_DIG:
-            tmp_ret -= 1
-
-        if tmp_ret:
-            return tmp_ret
-
-        return self._empty
+    # @as_football()
+    # def let_str(self, position):
+    #     """
+    #             Ldh-str        = *( ALPHA / DIGIT / "-" ) Let-dig
+    #     """
+    #     tmp_ret = self._empty
+    #     tmp_ret += self.ldh_str(position)
+    #
+    #     while tmp_ret and self.this_char(position + tmp_ret.l-1) not in self.LET_DIG:
+    #         tmp_ret -= 1
+    #
+    #     if tmp_ret:
+    #         return tmp_ret
+    #
+    #     return self._empty
 
     @as_football()
     def domain_literal(self, position):
@@ -1418,6 +1798,10 @@ class EmailParser(object):
         if not tmp_ret_2:
             # self.near_at_flag = tmp_near_at_flag
             return self._empty
+
+        tmp_loc_close = self.find(position + tmp_ret, self.CLOSESQBRACKET)
+        if tmp_loc_close == -1:
+            return tmp_ret('ERR_UNCLOSED_DOM_LIT')
 
         tmp_ret += tmp_ret_2
 
@@ -1457,7 +1841,7 @@ class EmailParser(object):
 
         else:
             # self.near_at_flag = tmp_near_at_flag
-            return tmp_ret('ERR_UNCLOSED_DOM_LIT')
+            return tmp_ret('ERR_EXPECTING_DTEXT')
 
         tmp_ret += self.cfws(position + tmp_ret)
 
@@ -1467,6 +1851,7 @@ class EmailParser(object):
         # if tmp_ret.error or not tmp_ret:
         #     self.near_at_flag = tmp_near_at_flag
         tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DOMAIN_LIT
+
         return tmp_ret('RFC5322_DOMAIN_LITERAL')
 
     @as_football()
@@ -1501,20 +1886,30 @@ class EmailParser(object):
                                obs-dtext          ;  "[", "]", or "\"
         """
         tmp_ret = self._empty
-        tmp_act, tmp_ret_2 = self.try_or(position,
-                                       self.dtext_sub,
-                                       self.obs_dtext)
-        return tmp_ret(tmp_ret_2)
 
-    @as_football(segment=False)
-    def dtext_sub(self, position):
+        while True:
+            tmp_ret_2 = self.simple_char(position + tmp_ret, self.DTEXT)
+            tmp_ret_2 += self.obs_dtext(position + tmp_ret + tmp_ret_2)
+            if tmp_ret_2:
+                tmp_ret += tmp_ret_2
+            else:
+                break
 
-        """
-            dtext           =   %d33-90 /          ; Printable US-ASCII
-                               %d94-126 /         ;  characters not including
-                               obs-dtext          ;  "[", "]", or "\"
-        """
-        return self.simple_char(position, self.DTEXT)
+        # tmp_act, tmp_ret_2 = self.try_or(position,
+        #                                self.dtext_sub,
+        #                               self.obs_dtext)
+
+        return tmp_ret
+
+    # @as_football(segment=False)
+    # def dtext_sub(self, position):
+    #
+    #     """
+    #         dtext           =   %d33-90 /          ; Printable US-ASCII
+    #                            %d94-126 /         ;  characters not including
+    #                            obs-dtext          ;  "[", "]", or "\"
+    #     """
+    #     return self.simple_char(position, self.DTEXT)
 
     @as_football()
     def obs_dtext(self, position):
@@ -1560,10 +1955,37 @@ class EmailParser(object):
 
         tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS
 
-        return tmp_ret
+        add_to = []
+
+        if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+            added_char = 0
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+
+            if not self.at_end(position + tmp_ret + added_char):
+                add_to.append('ERR_EXPECTING_ATEXT')
+
+            if tmp_ret > 255:
+                add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+            self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+            tmp_ret(*add_to, raise_on_error=False)
+
+        return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+
 
     @as_football()
-    def address_literal(self, position):
+    def address_literal(self, position, lit_init):
         """
         address-literal  = "[" ( IPv4-address-literal /
                         IPv6-address-literal /
@@ -1575,41 +1997,86 @@ class EmailParser(object):
         ERR_INVALID_ADDR_LITERAL
         """
         tmp_ret = self._empty
-        tmp_ret += self.open_sq_bracket(position)
+
+        tmp_ipv4 = self.ipv4_address_literal(position + tmp_ret + lit_init)
+        if tmp_ipv4 and not tmp_ipv4.error:
+            tmp_pos = position + tmp_ret + lit_init + tmp_ipv4 + 1
+            if not self.at_end(tmp_pos) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
+                tmp_ret += lit_init
+                tmp_ret += tmp_ipv4
+
+        tmp_ipv6 = self._empty
+        if not tmp_ret:
+            tmp_ipv6 = self.ipv6_address_literal(position + tmp_ret + lit_init)
+            if tmp_ipv6 and not tmp_ipv6.error:
+                tmp_pos = position + tmp_ret + lit_init + tmp_ipv6 + 1
+                if not self.at_end(tmp_pos) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
+                    tmp_ret += lit_init
+                    tmp_ret += tmp_ipv6
+
+        tmp_gen_lit = self._empty
+        if not tmp_ret:
+            tmp_gen_lit = self.general_address_literal(position + tmp_ret + lit_init)
+            if tmp_gen_lit and not tmp_gen_lit.error:
+                tmp_pos = position + tmp_ret + lit_init + tmp_gen_lit + 1
+                if not self.at_end(tmp_pos) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
+                    tmp_ret += lit_init
+                    tmp_ret += tmp_gen_lit
+                    tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
 
         if not tmp_ret:
-            return self._empty
+            tmp_index, tmp_ret_2 = self.football_max(tmp_ipv4, tmp_ipv6, tmp_gen_lit)
+            tmp_ret += tmp_ret_2
 
-        tmp_find_csb = self.find(position + tmp_ret, self.CLOSESQBRACKET)
-        if tmp_find_csb == -1:
-            return tmp_ret('ERR_UNCLOSED_DOM_LIT')
+        if not tmp_ret:
+            return tmp_ret
 
-        if self.simple_char(position + tmp_ret.l, self.ADDR_LIT_IPV4, parse_until=self.CLOSESQBRACKET):
-            tmp_ret_2 = self.ipv4_address_literal(position + tmp_ret)
-            if not tmp_ret_2:
-                return tmp_ret(('ERR_INVALID_ADDR_LITERAL', position, tmp_ret + tmp_ret_2 + 1))
 
-        elif self.simple_str(position + tmp_ret, 'IPv6:', caps_sensitive=False):
-            tmp_ret_2 = self.ipv6_address_literal(position + tmp_ret)
-            if not tmp_ret_2:
-                return tmp_ret(('ERR_INVALID_ADDR_LITERAL', position, tmp_ret + tmp_ret_2 + 1))
-
+        tmp_ret('ERR_INVALID_ADDR_LITERAL', raise_on_error=False)
         else:
-            tmp_ret_2 = self.general_address_literal(position + tmp_ret.l)
+
+
 
         if not tmp_ret_2:
             return self._empty
 
         tmp_ret += tmp_ret_2
-
         tmp_ret_2 = self.close_sq_bracket(position + tmp_ret)
 
         if tmp_ret_2:
             tmp_ret += tmp_ret_2
-            return tmp_ret('RFC5321_ADDRESS_LITERAL')
-        else:
-            tmp_ret_3 = ParseResultFootball(self)
-            return tmp_ret_3(('ERR_UNCLOSED_DOM_LIT', position, tmp_ret + tmp_ret_2))
+            tmp_ret('RFC5321_ADDRESS_LITERAL')
+
+
+        add_to = []
+
+        if self.at_end(position + tmp_ret - 1) or self.at_end(position + tmp_ret):
+            added_char = 0
+            tmp_char = self.this_char(-1)
+            self.add_note_trace('Final domain char = ' + tmp_char)
+            if tmp_char == self.HYPHEN:
+                added_char = 1
+                add_to.append('ERR_DOMAIN_HYPHEN_END')
+            elif tmp_char == self.DOT:
+                added_char = 1
+                add_to.append('ERR_DOT_END')
+            elif tmp_char == self.BACKSLASH:
+                added_char = 1
+                add_to.append('ERR_BACKSLASH_END')
+
+            if not self.at_end(position + tmp_ret + added_char):
+                add_to.append('ERR_EXPECTING_ATEXT')
+
+            if tmp_ret > 255:
+                add_to.append('RFC5322_DOMAIN_TOO_LONG')
+
+            self.add_note_trace('    Domain Validation: At end, diags to add: %s' % add_to)
+
+            tmp_ret(*add_to, raise_on_error=False)
+
+        return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+
+
 
     @as_football()
     def general_address_literal(self, position):
@@ -2229,6 +2696,11 @@ class EmailParser(object):
         else:
             return self._empty
 
+        tmp_closing_dquote = self.find(position + tmp_ret, self.DQUOTE, skip_quoted_str=True)
+
+        if tmp_closing_dquote == -1:
+            return tmp_ret('ERR_UNCLOSED_QUOTED_STR')
+
         last_was_fws = False
         has_qtext = False
         while True:
@@ -2253,8 +2725,8 @@ class EmailParser(object):
             else:
                 break
 
-        if not has_qtext:
-            return tmp_ret('ERR_EXPECTING_QTEXT')
+        # if not has_qtext:
+        #     return tmp_ret('ERR_EXPECTING_QTEXT')
 
         tmp_last_quote = self.double_quote(position + tmp_ret)
 
@@ -2271,7 +2743,7 @@ class EmailParser(object):
 
             return tmp_ret
         else:
-            return tmp_ret('ERR_UNCLOSED_QUOTED_STR')
+            return tmp_ret('ERR_EXPECTING_QTEXT')
 
     @as_football()
     def qcontent(self, position):

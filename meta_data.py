@@ -1166,8 +1166,18 @@ class MetaBase(object):
 
         self._diags = MetaList()
 
+    def format(self, format_str=None, **kwargs):
+        format_str = format_str or self.lookup.default_format
+        return format_str.format(**self._fmt_dict(kwargs))
+
+    def _fmt_dict(self, kwargs):
+        raise NotImplementedError()
+
     def __repr__(self):
         return '%s(%s) [%s]' % (self.type_name, self.key, self.status.name)
+
+    def __str__(self):
+        return self.format()
 
     @property
     def _base_status(self):
@@ -1256,7 +1266,7 @@ class MetaCat(MetaBase):
         self._diags[key] = tmp_diag
         return tmp_diag
 
-    def format(self, format_str, **kwargs):
+    def _fmt_dict(self, kwargs):
         tmp_dict = dict(
             name=self.name,
             description=self.description,
@@ -1264,7 +1274,7 @@ class MetaCat(MetaBase):
             value=self.value,
             status=self.status.name)
         tmp_dict.update(kwargs)
-        return format_str.format(**tmp_dict)
+        return tmp_dict
 
     def _in_flt_diag(self, filter_set=None, exact=False):
         if exact:
@@ -1278,8 +1288,8 @@ class MetaCat(MetaBase):
 
 class MetaDiag(MetaBase):
     type_name = 'Diag'
-    is_cat = True
-    is_diag = False
+    is_cat = False
+    is_diag = True
 
     def __init__(self, key, dict_in, cat_rec, lookup):
         super().__init__(key, dict_in, lookup)
@@ -1305,7 +1315,7 @@ class MetaDiag(MetaBase):
         else:
             return '[%s] ' % self.status.name
 
-    def format(self, format_str, **kwargs):
+    def _fmt_dict(self, kwargs):
         tmp_dict = dict(
             description=self.description,
             key=self.key,
@@ -1315,7 +1325,7 @@ class MetaDiag(MetaBase):
             cat_name=self.category.name,
             dif_status=self._dif_status)
         tmp_dict.update(kwargs)
-        return format_str.format(**tmp_dict)
+        return tmp_dict
 
     def _in_flt_cat(self, filter_set=None, exact=False):
         if exact:
@@ -1746,6 +1756,8 @@ _meta_formatters = [MetaOutoutBase, MR_KeyDict, MR_ObjDict, MR_ObjList,
 
 
 class MetaLookup(object):
+    default_key_format = '[{status}] {key}'
+    default_desc_format = '[{status}] {description}'
 
     def __init__(self, error_on_warning=False, *error_on_code):
         # self.by_value = {}
@@ -1758,6 +1770,8 @@ class MetaLookup(object):
             'WARNING': [],
             'ERROR': [],
             'OK': []}
+
+        self.default_format = self.default_desc_format
 
         # self.categories = MetaList(MetaCat, self, ISEMAIL_RESP_CATEGORIES)
         # self.diags = MetaList(MetaDiag, self, ISEMAIL_DIAG_RESPONSES)
@@ -1788,6 +1802,14 @@ class MetaLookup(object):
         self._formatters = {}
         for f in _meta_formatters:
             self._formatters[f.report_name] = f(self)
+
+    def set_default_format(self, format_str=None, to_desc=False, to_key=False):
+        if format_str is not None:
+            self.default_format = format_str
+        elif to_desc:
+            self.default_format = self.default_desc_format
+        elif to_key:
+            self.default_format = self.default_key_format
 
     def __getitem__(self, item):
         return self.lookup[item]
