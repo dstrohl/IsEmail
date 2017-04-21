@@ -68,13 +68,14 @@ class TestMakeParseString(unittest.TestCase):
 
 
 class MyTestDefs(object):
-    def __init__(self, method_name, ret_football=True, tests=None, limit_to=-1, history_level=999, **kwargs):
+    def __init__(self, method_name, ret_football=True, tests=None, limit_to=-1, history_level=999, test_kwargs=None, **kwargs):
         self.method_name = method_name
         self.ret_football = ret_football
         self.kwargs = kwargs
         self.limit_to = limit_to
         self.history_level = history_level
-        if tests is None:            
+        self.test_kwargs = test_kwargs or {}
+        if tests is None:
             self.tests = []
         else:
             self.tests = tests
@@ -104,6 +105,7 @@ class MyTestData(object):
         self.result_length = result_length
         self.position = position
         self.kwargs = kwargs
+        # self.kwargs.update(self.defs.test_kwargs)
         self.error = error
 
         if history_str is None:
@@ -536,99 +538,99 @@ class TestEmailParser(unittest.TestCase):
             # history_level=3,
             tests=[
                 # dot-atom
-                MyTestData(1001, 'abc.def', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
-                MyTestData(1002, 'abc', 3, history_str='local_part(dot_atom(dot_atom_text(atext)))'),
-                MyTestData(1003, '123.456', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
-                MyTestData(1004, '#$%.#$%', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
-                MyTestData(1005, 'abc.123.456', 11,
+                MyTestData(1001, 'abc.def@', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
+                MyTestData(1002, 'abc@', 3, history_str='local_part(dot_atom(dot_atom_text(atext)))'),
+                MyTestData(1003, '123.456@', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
+                MyTestData(1004, '#$%.#$%@', 7, history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext)))'),
+                MyTestData(1005, 'abc.123.456@', 11,
                            history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext, single_dot, atext)))'),
-                MyTestData(1006, '(coment) abc.def', 16, codes=['CFWS_COMMENT', 'CFWS_FWS'],
+                MyTestData(1006, '(coment) abc.def@', 16, codes=['CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='local_part(dot_atom(cfws(comment(open_parenthesis, ccontent(ctext), close_parenthesis), fws(wsp)), dot_atom_text(atext, single_dot, atext)))'),
-                MyTestData(1007, 'abc (comment)', 13, codes=['CFWS_COMMENT', 'CFWS_FWS'],
+                MyTestData(1007, 'abc (comment)@', 13, codes=['CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='local_part(dot_atom(dot_atom_text(atext), cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), close_parenthesis))))'),
-                MyTestData(1008, '\r\n123.456 ', 0, history_str='', codes=[]),
-                MyTestData(1009, '\r\n#$%.#$% (comment)', 0, history_str=''),
-                MyTestData(1010, '\t\r\nabc.123.456 \t', 0, history_str=''),
+                MyTestData(1008, '\r\n123.456 @', 0, history_str='', codes=[]),
+                MyTestData(1009, '\r\n#$%.#$% (comment)@', 0, history_str=''),
+                MyTestData(1010, '\t\r\nabc.123.456 \t@', 0, history_str=''),
 
-                MyTestData(1011, '.abc.def', 0, history_str='', error=True, codes=['ERR_DOT_START']),
-                MyTestData(1012, 'abc.', 0, error=True, codes=['ERR_DOT_END']),
-                MyTestData(1013, '123..456', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
-                MyTestData(1014, '#$%.#$%..', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
-                MyTestData(1015, ',abc.123.456', 0, history_str=''),
-                MyTestData(1016, '   .abc.def', 0, history_str=''),
+                MyTestData(1011, '.abc.def@', 0, history_str='', error=True, codes=['ERR_DOT_START']),
+                MyTestData(1012, 'abc.@', 0, error=True, codes=['ERR_DOT_END']),
+                MyTestData(1013, '123..456@', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
+                MyTestData(1014, '#$%.#$%..@', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
+                MyTestData(1015, ',abc.123.456@', 0, history_str=''),
+                MyTestData(1016, '   .abc.def@', 0, history_str=''),
 
-                MyTestData(1017, 'abc.def (comment) more@', 0, codes=['ERR_ATEXT_AFTER_CFWS'], error=True),
+                MyTestData(1017, 'abc.def (comment) more@', 0, codes=['CFWS_COMMENT', 'CFWS_FWS', 'ERR_ATEXT_AFTER_CFWS'], error=True),
 
                 # quoted_string
 
                 # normal qs
-                MyTestData(2001, '"test"', 6, codes='RFC5321_QUOTED_STRING',
+                MyTestData(2001, '"test"@', 6, codes='RFC5321_QUOTED_STRING',
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), double_quote))'),
 
                 # qs with more words
-                MyTestData(2002, '"this is a test"', 16, codes=['RFC5321_QUOTED_STRING'],
+                MyTestData(2002, '"this is a test"@', 16, codes=['RFC5321_QUOTED_STRING'],
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
 
                 # qs with enclosed comment
-                MyTestData(2003, '"this (is a) test"', 18, codes=['RFC5321_QUOTED_STRING'],
+                MyTestData(2003, '"this (is a) test"@', 18, codes=['RFC5321_QUOTED_STRING'],
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
 
                 # qs with fail initially
-                MyTestData(2004, ' "this is a test"', 17, codes=('RFC5321_QUOTED_STRING', 'CFWS_FWS'),
+                MyTestData(2004, ' "this is a test"@', 17, codes=('RFC5321_QUOTED_STRING', 'CFWS_FWS'),
                            history_str='local_part(quoted_string(cfws(fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
-                MyTestData(2005, ' (this is a comment) "this is a test"', 37,
+                MyTestData(2005, ' (this is a comment) "this is a test"@', 37,
                            codes=('RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'),
                            history_str='local_part(quoted_string(cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
-                MyTestData(2006, 'blah"this is a test"', 0, history_str='', error=True, codes=['ERR_EXPECTING_ATEXT']),
+                MyTestData(2006, 'blah"this is a test"@', 0, history_str='', error=True, codes=['ERR_EXPECTING_ATEXT']),
 
                 # Qs with cfws after
-                MyTestData(2008, '"this is a test" (this is a comment)', 36,
+                MyTestData(2008, '"this is a test" (this is a comment)@', 36,
                            codes=['RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))))'),
 
                 # qs with cfws both
-                MyTestData(2009, ' (this is a pre comment) "this is a test" (this is a post comment)', 66,
+                MyTestData(2009, ' (this is a pre comment) "this is a test" (this is a post comment)@', 66,
                            codes=('RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'),
                            history_str='local_part(quoted_string(cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))))'),
 
                 # unclosed qs
-                MyTestData(2010, '"this is a test', 0,
+                MyTestData(2010, '"this is a test@', 0,
                            codes=['ERR_UNCLOSED_QUOTED_STR'], error=True, history_str=''),
 
                 # fws in qs
-                MyTestData(2012, '" this\tis a test"', 17, codes='RFC5321_QUOTED_STRING',
+                MyTestData(2012, '" this\tis a test"@', 17, codes='RFC5321_QUOTED_STRING',
                            history_str='local_part(quoted_string(double_quote, fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
 
                 # mult fws in qs
-                MyTestData(2013, '(  this is a test)', 0, history_str=''),
-                MyTestData(2014, '(this is a  test)', 0, history_str=''),
+                MyTestData(2013, '(  this is a test)@', 0, history_str=''),
+                MyTestData(2014, '(this is a  test)@', 0, history_str=''),
 
                 # quoted pair in qs
-                MyTestData(2015, '"this \\r\\nis a test"', 20, codes='RFC5321_QUOTED_STRING',
+                MyTestData(2015, '"this \\r\\nis a test"@', 20, codes='RFC5321_QUOTED_STRING',
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
-                MyTestData(2016, '"test"of a test', 0, history_str='', codes=['ERR_ATEXT_AFTER_QS', 'RFC5321_QUOTED_STRING'], error=True),
+                MyTestData(2016, '"test"of a test@', 0, history_str='', codes=['ERR_ATEXT_AFTER_QS', 'RFC5321_QUOTED_STRING'], error=True),
 
                 # obs-local-part
 
 
-                MyTestData(3002, 'word.and.another.word', 21, codes=[],
+                MyTestData(3002, 'word.and.another.word@', 21, codes=[],
                            history_str='local_part(dot_atom(dot_atom_text(atext, single_dot, atext, single_dot, atext, single_dot, atext)))'),
-                MyTestData(3003, '"this is a word"', 16, codes=['RFC5321_QUOTED_STRING'],
+                MyTestData(3003, '"this is a word"@', 16, codes=['RFC5321_QUOTED_STRING'],
                            history_str='local_part(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
 
-                MyTestData(3004, '"this is (a comment) . inside a quote".test', 43,
+                MyTestData(3004, '"this is (a comment) . inside a quote".test@', 43,
                            codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'],
                            history_str='local_part(obs_local_part(word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)), single_dot, word(atom(atext))))'),
-                MyTestData(3005, 'test."this is (a comment inside a quote"', 40,
+                MyTestData(3005, 'test."this is (a comment inside a quote"@', 40,
                            codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'],
                            history_str='local_part(obs_local_part(word(atom(atext)), single_dot, word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))))'),
-                MyTestData(3006, 'test."this is (a comment) inside a quote.test.test', 0,
+                MyTestData(3006, 'test."this is (a comment) inside a quote.test.test@', 0,
                            codes=['ERR_DOT_END'], error=True, history_str=''),
 
-                MyTestData(3007, '.word', 0, history_str='', codes=['ERR_DOT_START'], error=True),
-                MyTestData(3008, '..word and another word', 0, history_str='', codes=['ERR_DOT_START'], error=True),
-                MyTestData(3009, '"this is a word"..', 0, codes=['ERR_DOT_END', 'RFC5321_QUOTED_STRING'], error=True),
-                MyTestData(3010, '"this is (a comment) inside a quote".', 0, error=True,
+                MyTestData(3007, '.word@', 0, history_str='', codes=['ERR_DOT_START'], error=True),
+                MyTestData(3008, '..word and another word@', 0, history_str='', codes=['ERR_DOT_START'], error=True),
+                MyTestData(3009, '"this is a word"..@', 0, codes=['ERR_DOT_END', 'RFC5321_QUOTED_STRING'], error=True),
+                MyTestData(3010, '"this is (a comment) inside a quote".@', 0, error=True,
                            codes=['ERR_DOT_END', 'RFC5321_QUOTED_STRING'],
                            history_str=''),
 
@@ -673,7 +675,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(2007, 'abc (comment)', 13, codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(dot_atom(dot_atom_text(...), cfws(...)))'),
 
-                MyTestData(2008, '\r\n123.456 ', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
+                MyTestData(2008, '\r\n123.456 ', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(2009, ' #$%.#$% (comment)', 18, codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='domain(dot_atom(cfws(...), dot_atom_text(...), cfws(...)))'),
                 MyTestData(2010, '\t\r\nabc.123.456 \t', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
 
@@ -681,7 +683,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(2012, 'abc.', 0, codes=['ERR_DOT_END', 'RFC5321_TLD'], error=True),
                 MyTestData(2013, '123..456', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
                 MyTestData(2014, '#$%.#$%..', 0, codes=['ERR_CONSECUTIVE_DOTS'], error=True),
-                MyTestData(2015, ',abc.123.456', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
+                MyTestData(2015, ',abc.123.456', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(2016, '   .abc.def', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
 
                 MyTestData(2017, 'abc.def (comment) more@', 0, codes=['ERR_ATEXT_AFTER_CFWS'], error=True),
@@ -694,7 +696,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(3002, '[\\rtest]', 8, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
                            history_str='domain(domain_literal(open_sq_bracket, dtext(...), close_sq_bracket))'),
                 MyTestData(3004, '[\r\nfoo][bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
-                MyTestData(3005, '"\r\nfoo[bar', 0, codes=['ERR_EXPECTING_ATEXT'], error=True),
+                MyTestData(3005, '"\r\nfoo[bar', 0, codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # no closing
                 MyTestData(3101, '[test', 0, codes='ERR_UNCLOSED_DOM_LIT', error=True, history_str=''),
@@ -760,8 +762,11 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(3304, '\t\t[ \r\nfoo](and after)\t[bar', 0, codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 MyTestData(3401, '(comment before)[ \\rtest] blah', 0,
-                           codes=['RFC5322_DOM_LIT_OBS_DTEXT', 'ERR_ATEXT_AFTER_DOMLIT', 'CFWS_COMMENT', 'CFWS_FWS'],
+                           codes=['CFWS_COMMENT', 'CFWS_FWS', 'ERR_ATEXT_AFTER_DOMLIT', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'],
                            error=True),
+
+
+
 
                 # *********************
                 # address literal
@@ -887,7 +892,7 @@ class TestEmailParser(unittest.TestCase):
                            history_str='domain(address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket))'),
                 MyTestData(4404, '[255.255.255.255]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'],
                            history_str='domain(address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket))'),
-                MyTestData(4405, '[0.0.0.0.]', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
+                MyTestData(4405, '[0.0.0.0.]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
                 MyTestData(4406, '[0.0.0.0]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'],
                            history_str='domain(address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket))'),
                 MyTestData(4407, '[.0.0.0.0]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'], error=False, history_str='domain(domain_literal(open_sq_bracket, dtext, close_sq_bracket))'),
@@ -912,7 +917,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(4602, '1.1.1.1]', 0, history_str='', codes=['ERR_EXPECTING_ATEXT', 'RFC5321_TLD_NUMERIC'], error=True),
 
                 # data past enclosure
-                MyTestData(4603, '[1.1.1.1]foobar', 0, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR', 'ERR_ATEXT_AFTER_DOMLIT'], error=True),
+                MyTestData(4603, '[1.1.1.1]foobar', 0, codes=['ERR_INVALID_ADDR_LITERAL', 'RFC5322_IPV4_ADDR', 'ERR_ATEXT_AFTER_DOMLIT'], error=True),
 
                 # obs_lit literal
                 MyTestData(4701, '[1.1.' + chr(1) + '1.1]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'RFC5322_LIMITED_DOMAIN'], error=False,
@@ -934,9 +939,9 @@ class TestEmailParser(unittest.TestCase):
                            codes=['ERR_UNCLOSED_COMMENT'], error=True, history_str=''),
                 MyTestData(5004, 'blah_blah_blah.(this is a comment) atom (this is a comment' + make_char_str(0), 0,
                            codes=['ERR_EXPECTING_CTEXT'], error=True, history_str=''),
-                MyTestData(5005, '(this is a comment) atom (this is a comment).this_is_atom."This_is_a_quote"', 0,
-                           codes=['CFWS_COMMENT', 'CFWS_FWS', 'ERR_EXPECTING_ATEXT', 'RFC5322_DOMAIN',
-                                  'RFC5322_LIMITED_DOMAIN'], error=True, history_str=''),
+                MyTestData(5005, '(this is a comment) atom (this is a comment).this_is_atom."This_is_a_quote"', 57,
+                           codes=['CFWS_COMMENT', 'CFWS_FWS', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], error=False,
+                           history_str='domain(obs_domain(atom(...), single_dot, atom(...)))'),
 
                 # *********************
                 # Misc Errors
@@ -976,7 +981,7 @@ class TestEmailParser(unittest.TestCase):
 
                 MyTestData(6, '(coment) abc.def', 16, codes=['CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='dot_atom(cfws(comment(open_parenthesis, ccontent(ctext), close_parenthesis), fws(wsp)), dot_atom_text(atext, single_dot, atext))'),
-                MyTestData(7, 'abc (comment)', 13, codes=['CFWS_COMMENT', 'CFWS_FWS'],
+                MyTestData(7, 'abc (comment)@', 13, codes=['CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='dot_atom(dot_atom_text(atext), cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), close_parenthesis)))'),
                 MyTestData(8, '\r\n123.456 ', 0, history_str=''),
                 MyTestData(9, '\r\n#$%.#$% (comment)', 0, history_str=''),
@@ -989,7 +994,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(15, ',abc.123.456', 0, history_str=''),
                 MyTestData(16, '   .abc.def', 0, history_str=''),
 
-                MyTestData(17, 'abc.def (comment) more@', 0, codes=['ERR_ATEXT_AFTER_CFWS'], error=True),
+                MyTestData(17, 'abc.def (comment) more@', 0, codes=['CFWS_COMMENT', 'CFWS_FWS', 'ERR_ATEXT_AFTER_CFWS'], error=True),
 
             ]
         )
@@ -1023,9 +1028,9 @@ class TestEmailParser(unittest.TestCase):
             tests=[
                 MyTestData(1, 'word', 4, codes=['DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)))'),
                 MyTestData(2, 'word.and.another.word', 21, codes=['DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)), single_dot, word(atom(atext)), single_dot, word(atom(atext)), single_dot, word(atom(atext)))'),
-                MyTestData(3, '"this is a word"', 16, codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'], history_str='obs_local_part(word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)))'),
+                MyTestData(3, '"this is a word".', 16, codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'], history_str='obs_local_part(word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)))'),
                 MyTestData(4, '"this is (a comment) . inside a quote".test', 43, codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'], history_str='obs_local_part(word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)), single_dot, word(atom(atext)))'),
-                MyTestData(5, 'test."this is (a comment inside a quote"', 40, codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)), single_dot, word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)))'),
+                MyTestData(5, 'test."this is (a comment inside a quote".', 40, codes=['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)), single_dot, word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)))'),
                 MyTestData(6, 'test."this is (a comment) inside a quote.test.test', 0, codes=['ERR_UNCLOSED_QUOTED_STR'], error=True, history_str=''),
 
                 MyTestData(7, '.word', 0, history_str=''),
@@ -1043,9 +1048,9 @@ class TestEmailParser(unittest.TestCase):
             tests=[
                 MyTestData(1, 'word', 4, history_str='word(atom(atext))'),
                 MyTestData(2, 'word and another word', 0, codes=['ERR_ATEXT_AFTER_CFWS'], error=True),
-                MyTestData(3, '"this is a word"', 16, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
-                MyTestData(4, '"this is (a comment) inside a quote"', 36, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
-                MyTestData(5, '"this is (a comment inside a quote"', 35, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
+                MyTestData(3, '"this is a word".', 16, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
+                MyTestData(4, '"this is (a comment) inside a quote".', 36, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
+                MyTestData(5, '"this is (a comment inside a quote".', 35, codes=['RFC5321_QUOTED_STRING'], history_str='word(quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote))'),
                 MyTestData(6, '"this is (a comment) inside a quote', 0, codes=['ERR_UNCLOSED_QUOTED_STR'], error=True, history_str=''),
             ]
         )
@@ -1074,10 +1079,11 @@ class TestEmailParser(unittest.TestCase):
             tests=[
                 MyTestData(1, 'ABCdef123.abcder', 16, history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
                 MyTestData(2, 'abcdef-123.acac', 15, history_str='domain_addr(sub_domain(let_dig, ldh_str), single_dot, sub_domain(let_dig))'),
-                MyTestData(3, 'abcdef-.12345', 6, codes='RFC5321_TLD', history_str='domain_addr(sub_domain(let_dig))'),
-                MyTestData(4, '-abcdef.abcdef-', 0, history_str=''),
-                MyTestData(5, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain_addr(sub_domain(let_dig))'),
-                MyTestData(6, '1abcdef.1abcdef', 15, codes='RFC5321_TLD_NUMERIC', history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
+                MyTestData(3, 'abcdef-.12345', 0, codes=['ERR_EXPECTING_DTEXT', 'RFC5321_TLD'], history_str='', error=True),
+                MyTestData(4, 'abcdef.12345', 12, codes='RFC5321_TLD_NUMERIC', history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
+                MyTestData(5, '-abcdef.abcdef-', 0, codes=['ERR_EXPECTING_DTEXT'], history_str='', error=True),
+                MyTestData(6, 'abcdef', 6, codes='RFC5321_TLD', history_str='domain_addr(sub_domain(let_dig))'),
+                MyTestData(7, '1abcdef.1abcdef', 15, codes='RFC5321_TLD_NUMERIC', history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
             ]
         )
         self.run_test_data(td)
@@ -1119,8 +1125,8 @@ class TestEmailParser(unittest.TestCase):
             limit_to=-1,
             method_name='domain_literal',
             tests=[
-                MyTestData(1, '[test]', 6, codes=['RFC5322_DOMAIN_LITERAL'], history_str='domain_literal(open_sq_bracket, dtext, close_sq_bracket)'),
-                MyTestData(2, '[\\rtest]', 8, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
+                MyTestData(1, '[test]', 6, codes=['RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL'], history_str='domain_literal(open_sq_bracket, dtext, close_sq_bracket)'),
+                MyTestData(2, '[\\rtest]', 8, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(4, '[\r\nfoo][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
                 MyTestData(5, '"\r\nfoo[bar', 0, history_str=''),
 
@@ -1129,21 +1135,21 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(102, '[foo[bar]', 0, codes='ERR_EXPECTING_DTEXT', error=True, history_str=''),
 
                 # fws before
-                MyTestData(103, '[\t\\rtest]', 9, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
-                MyTestData(104, '[ foo-bar]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext, close_sq_bracket)'),
+                MyTestData(103, '[\t\\rtest]', 9, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
+                MyTestData(104, '[ foo-bar]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext, close_sq_bracket)'),
                 MyTestData(105, '[\t\t\r\nfoo][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws after
-                MyTestData(106, '[\\rtest ]', 9, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
-                MyTestData(107, '[foobar  ]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext, fws(wsp), close_sq_bracket)'),
+                MyTestData(106, '[\\rtest ]', 9, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
+                MyTestData(107, '[foobar  ]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, dtext, fws(wsp), close_sq_bracket)'),
                 MyTestData(108, '[\r\nfoo\t][bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # fws both
-                MyTestData(109, '[ \\rtest ]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
-                MyTestData(110, '[\tfoobar ]', 10, codes=['RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext, fws(wsp), close_sq_bracket)'),
+                MyTestData(109, '[ \\rtest ]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), fws(wsp), close_sq_bracket)'),
+                MyTestData(110, '[\tfoobar ]', 10, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'CFWS_FWS'], history_str='domain_literal(open_sq_bracket, fws(wsp), dtext, fws(wsp), close_sq_bracket)'),
 
                 # cfws before
-                MyTestData(200, '(This is a comment)[\\rtest]', 27, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT','CFWS_COMMENT'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
+                MyTestData(200, '(This is a comment)[\\rtest]', 27, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT','CFWS_COMMENT'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(201, '\t\t[foo[bar]', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True, history_str=''),
                 MyTestData(202, ' \r\n [\r\nfoo][bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
@@ -1153,17 +1159,17 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(205, '[\r\nfoo] \t\t [bar', 0, history_str='', codes=['ERR_EXPECTING_DTEXT'], error=True),
 
                 # cfws both
-                MyTestData(206, '(comment beore) [\\rtest] (and after)', 36, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
+                MyTestData(206, '(comment beore) [\\rtest] (and after)', 36, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
                 MyTestData(207, ' [foo[bar] \t\t', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_FWS'], error=True, history_str=''),
                 MyTestData(208, '\t[\r\nfoo] [bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 # mixed
-                MyTestData(302, '(comment before)[ \\rtest]', 25, codes=['RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
+                MyTestData(302, '(comment before)[ \\rtest]', 25, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT', 'CFWS_COMMENT', 'CFWS_FWS'], history_str='domain_literal(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)), open_sq_bracket, fws(wsp), dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
                 MyTestData(303, '(comment before)[foo[bar ] ', 0, codes=['ERR_EXPECTING_DTEXT', 'CFWS_COMMENT'], error=True, history_str=''),
                 MyTestData(304, '\t\t[ \r\nfoo](and after)\t[bar', 0, history_str='', codes=['CFWS_FWS', 'ERR_EXPECTING_DTEXT'], error=True),
 
                 MyTestData(401, '(comment before)[ \\rtest] blah', 0,
-                           codes=['RFC5322_DOM_LIT_OBS_DTEXT', 'ERR_ATEXT_AFTER_DOMLIT', 'CFWS_COMMENT', 'CFWS_FWS'],
+                           codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOM_LIT_OBS_DTEXT', 'ERR_ATEXT_AFTER_DOMLIT', 'RFC5322_DOMAIN_LITERAL', 'CFWS_COMMENT', 'CFWS_FWS'],
                            error=True),
 
             ]
@@ -1203,12 +1209,12 @@ class TestEmailParser(unittest.TestCase):
             limit_to=-1,
             method_name='obs_domain',
             tests=[
-                MyTestData(1, 'thisisanatom$%^.this_is_another_one', 35, history_str='obs_domain(atom(atext), single_dot, atom(atext))'),
-                MyTestData(2, '(this is a comment) atom (this is a comment).this_is_atom', 57, codes=['CFWS_FWS', 'CFWS_COMMENT'], history_str='obs_domain(atom(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), atext, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))), single_dot, atom(atext))'),
+                MyTestData(1, 'thisisanatom$%^.this_is_another_one', 35, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='obs_domain(atom(atext), single_dot, atom(atext))'),
+                MyTestData(2, '(this is a comment) atom (this is a comment).this_is_atom', 57, codes=['CFWS_FWS', 'CFWS_COMMENT',  'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='obs_domain(atom(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), atext, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))), single_dot, atom(atext))'),
                 MyTestData(3, 'blah_blah_blah.(this is a comment) atom (this is a comment', 0, codes=['ERR_UNCLOSED_COMMENT'], error=True, history_str=''),
                 MyTestData(4, 'blah_blah_blah.(this is a comment) atom (this is a comment'+make_char_str(0), 0, codes=['ERR_EXPECTING_CTEXT'], error=True, history_str=''),
                 MyTestData(5, '(this is a comment) atom (this is a comment).this_is_atom."This_is_a_quote"', 57,
-                           codes=['CFWS_FWS', 'CFWS_COMMENT'], history_str='obs_domain(atom(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), atext, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))), single_dot, atom(atext))'),
+                           codes=['CFWS_FWS', 'CFWS_COMMENT', 'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='obs_domain(atom(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), atext, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))), single_dot, atom(atext))'),
 
             ]
         )
@@ -1217,7 +1223,7 @@ class TestEmailParser(unittest.TestCase):
     def test_address_literal(self):
         td = MyTestDefs(
             limit_to=-1,
-            trace_filter=2,
+            # trace_filter=2,
             history_level=2,
             method_name='address_literal',
             tests=[
@@ -1287,7 +1293,7 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(402, '[123.123.123.123]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(403, '[13.13.255.0]', 13, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(404, '[255.255.255.255]', 17, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
-                MyTestData(405, '[0.0.0.0.]', 0, codes=[], error=False, history_str=''),
+                MyTestData(405, '[0.0.0.0.]', 0, codes=['ERR_INVALID_ADDR_LITERAL', 'RFC5322_IPV4_ADDR'], error=True, history_str=''),
                 MyTestData(406, '[0.0.0.0]', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
                 MyTestData(407, '[.0.0.0.0]', 0, codes=[], error=False, history_str=''),
                 MyTestData(408, '[1.2.3]', 0, codes=[], error=False, history_str=''),
@@ -1302,13 +1308,13 @@ class TestEmailParser(unittest.TestCase):
                 MyTestData(505, '[:snafu]', 0, history_str=''),
 
                 # Enclosure fail
-                MyTestData(601, '[1.1.1.1', 0, codes=['ERR_UNCLOSED_DOM_LIT'], error=True, history_str=''),
+                MyTestData(601, '[1.1.1.1', 0, codes=['ERR_INVALID_ADDR_LITERAL', 'RFC5322_IPV4_ADDR'], error=True, history_str=''),
 
                 # no start enclosure fail
                 MyTestData(602, '1.1.1.1]', 0, history_str=''),
 
                 # data past enclosure
-                MyTestData(603, '[1.1.1.1]foobar', 9, codes=['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'], history_str='address_literal(open_sq_bracket, ipv4_address_literal(...), close_sq_bracket)'),
+                MyTestData(603, '[1.1.1.1]foobar', 0, codes=['ERR_INVALID_ADDR_LITERAL', 'RFC5322_IPV4_ADDR'], error=True),
 
 
             ]
@@ -1758,56 +1764,56 @@ class TestEmailParser(unittest.TestCase):
             tests=[
 
                 # normal qs
-                MyTestData(1, '"test"', 6, codes='RFC5321_QUOTED_STRING',
+                MyTestData(1, '"test".', 6, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, qcontent(qtext), double_quote)'),
 
                 # qs with more words
-                MyTestData(2, '"this is a test"', 16, codes=['RFC5321_QUOTED_STRING'],
+                MyTestData(2, '"this is a test".', 16, codes=['RFC5321_QUOTED_STRING'],
                            history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
 
                 # qs with enclosed comment
-                MyTestData(3, '"this (is a) test"', 18, codes=['RFC5321_QUOTED_STRING'],
+                MyTestData(3, '"this (is a) test".', 18, codes=['RFC5321_QUOTED_STRING'],
                            history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
 
 
                 # qs with fail initially
-                MyTestData(4, ' "this is a test"', 17, codes=('RFC5321_QUOTED_STRING', 'CFWS_FWS'),
+                MyTestData(4, ' "this is a test".', 17, codes=('RFC5321_QUOTED_STRING', 'CFWS_FWS'),
                            history_str='quoted_string(cfws(fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
-                MyTestData(5, ' (this is a comment) "this is a test"', 37, codes=('RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'),
+                MyTestData(5, ' (this is a comment) "this is a test".', 37, codes=('RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'),
                            history_str='quoted_string(cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
-                MyTestData(6, 'blah"this is a test"', 0, history_str=''),
+                MyTestData(6, 'blah"this is a test".', 0, history_str=''),
 
                 # Qs with cfws after
-                MyTestData(8, '"this is a test" (this is a comment)', 36, codes=['RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'],
+                MyTestData(8, '"this is a test" (this is a comment).', 36, codes=['RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'],
                            history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
 
                 # qs with cfws both
-                MyTestData(9, ' (this is a pre comment) "this is a test" (this is a post comment)', 66,
+                MyTestData(9, ' (this is a pre comment) "this is a test" (this is a post comment).', 66,
                            codes=('RFC5321_QUOTED_STRING', 'CFWS_COMMENT', 'CFWS_FWS'),
                            history_str='quoted_string(cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), double_quote, qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis)))'),
 
                 # unclosed qs
-                MyTestData(10, '"this is a test', 0,
+                MyTestData(10, '"this is a test.', 0,
                            codes='ERR_UNCLOSED_QUOTED_STR', error=True, history_str=''),
 
                 # fws in qs
-                MyTestData(12, '" this\tis a test"', 17, codes='RFC5321_QUOTED_STRING',
+                MyTestData(12, '" this\tis a test".', 17, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
 
                 # mult fws in qs
-                MyTestData(13, '(  this is a test)', 0, history_str=''),
-                MyTestData(14, '(this is a  test)', 0, history_str=''),
+                MyTestData(13, '(  this is a test).', 0, history_str=''),
+                MyTestData(14, '(this is a  test).', 0, history_str=''),
 
                 # quoted pair in qs
-                MyTestData(15, '"this \\r\\nis a test"', 20, codes='RFC5321_QUOTED_STRING',
+                MyTestData(15, '"this \\r\\nis a test".', 20, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(qtext), fws(wsp), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
-                MyTestData(16, '"test"of a test', 6, codes='RFC5321_QUOTED_STRING',
-                           history_str='quoted_string(double_quote, qcontent(qtext), double_quote)'),
+                MyTestData(16, '"test"of a test.', 0, codes=['ERR_ATEXT_AFTER_QS', 'RFC5321_QUOTED_STRING'], error=True,
+                           history_str=''),
 
-                MyTestData(17, '"this \\" is \\"a test"', 21, codes='RFC5321_QUOTED_STRING',
+                MyTestData(17, '"this \\" is \\"a test".', 21, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), fws(wsp), qcontent(qtext), fws(wsp), qcontent(quoted_pair(back_slash, vchar_wsp)), qcontent(qtext), fws(wsp), qcontent(qtext), double_quote)'),
 
-                MyTestData(18, '"\\\\"', 4, codes='RFC5321_QUOTED_STRING',
+                MyTestData(18, '"\\\\".', 4, codes='RFC5321_QUOTED_STRING',
                            history_str='quoted_string(double_quote, qcontent(quoted_pair(back_slash, vchar_wsp)), double_quote)'),
 
             ]
