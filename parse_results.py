@@ -66,6 +66,15 @@ class ParseHistoryData(object):
     def __getitem__(self, item):
         return self.children[item]
 
+    def __contains__(self, item):
+        if self.name == item:
+            return True
+        else:
+            for c in self.children:
+                if item in c:
+                    return True
+        return False
+
     def clear(self):
         self.children.clear()
         self.name = ''
@@ -411,16 +420,75 @@ class ParseResultItem(object):
         return self.value >= other.value
 '''
 
+
+class ParseFlags(object):
+    def __init__(self):
+        self.data = {}
+
+    def add(self, *flags, **kwargs):
+        for flag in flags:
+            if isinstance(flag, dict):
+                self.data.update(flag)
+            elif isinstance(flag, ParseFlags):
+                self.data.update(flag.data)
+            else:
+                self.data[flag] = None
+        if kwargs:
+            self.data.update(kwargs)
+        return self
+    __iadd__ = add
+    __call__ = add
+
+    def rem(self, *flags):
+        for f in flags:
+            try:
+                del self.data[f]
+            except KeyError:
+                pass
+        return self
+    __del__ = rem
+    __isub__ = rem
+
+    def clear(self):
+        self.data.clear()
+
+    def __contains__(self, item):
+        return item in self.data
+
+    def __getitem__(self, item):
+        return self.data[item]
+
+    def __bool__(self):
+        return bool(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __str__(self):
+        tmp_ret = []
+        for d in self.data:
+            if self.data[d] is None:
+                tmp_ret.append(d)
+            else:
+                tmp_ret.append('%s(%s)' % (d, self.data[d]))
+
+        return ', '.join(tmp_ret)
+
+    def __repr__(self):
+        return 'Flags(%s)' % str(self)
+
+
 class ParseResultFootball(object):
 
     def __init__(self, parser, segment='', position=0, length=0, stage=''):
         self.parser = parser
         self.email_in = parser.email_in
         if length > 0:
-            self.length = length
+            self._length = length
         else:
-            self.length = 0
+            self._length = 0
 
+        self._max_length = 0
         self.at_loc = None
         self.results = []
         self.stage = stage
@@ -433,12 +501,17 @@ class ParseResultFootball(object):
         self.depth = 0
         self.hist_cache = None
         self.error = False
-
+        self.flags = ParseFlags()
         self.domain_type = None
+
+    def set_length(self, length):
+        self._max_length = max(length, self._max_length)
+        self._length = length
 
     def copy(self):
         tmp_ret = self.__class__(self.parser)
-        tmp_ret.length = self.length
+        tmp_ret._length = self._length
+        tmp_ret._max_length = self._max_length
         tmp_ret.results = self.results.copy()
         tmp_ret.stage = self.stage
         tmp_ret._local_comments = self._local_comments.copy()
@@ -447,12 +520,17 @@ class ParseResultFootball(object):
         tmp_ret.at_loc = self.at_loc
         tmp_ret.error = self.error
         tmp_ret._history = self._history.clean(self.parser.email_in)
+        tmp_ret.flags = self.flags
         return tmp_ret
     __copy__ = copy
 
     @property
     def l(self):
-        return self.length
+        return self._length
+
+    @property
+    def length(self):
+        return self._length
 
     def diags(self):
         tmp_ret = []
@@ -461,40 +539,14 @@ class ParseResultFootball(object):
                 tmp_ret.append(r[0])
         return tmp_ret
 
-    """
-    def _make_history(self, depth=0, parent=None):
-
-        tmp_children = []
-        self.depth = depth
-
-        for c in self.children:
-            tmp_child = c._make_history(depth=depth+1, parent=None)
-            if isinstance(tmp_child, (list, tuple)):
-                tmp_children.extend(tmp_child)
-            else:
-                tmp_children.append(tmp_child)
-
-        if depth == 0 or self.segment_name != 0:
-            tmp_hist = ParseHistory(self.parser, parent, self.segment_name, self.begin, self.length, depth=depth)
-            tmp_hist.extend(tmp_children)
-            return tmp_hist
-        return tmp_children
-
-    @property
-    def history(self):
-        if self.hist_cache is None:
-            self.hist_cache = self._make_history()
-        return self.hist_cache
-    """
-
-    def clear(self, keep_results=False):
-        self.length = 0
-        if not keep_results:
-            self.results.clear()
-            self.is_finished = False
-            self._refresh()
-            self.hist_cache = None
-        return self
+    # def clear(self, keep_results=False):
+    #     self._length = 0
+    #     if not keep_results:
+    #         self.results.clear()
+    #         self.is_finished = False
+    #         self._refresh()
+    #         self.hist_cache = None
+    #     return self
 
     def set_sub_segment(self):
         self.segment_name = None
@@ -532,7 +584,7 @@ class ParseResultFootball(object):
 
     def __iadd__(self, other):
         if isinstance(other, int):
-            self.length += other
+            self.set_length(self.length + other)
         else:
             self.merge(other)
 
@@ -543,7 +595,7 @@ class ParseResultFootball(object):
     __radd__ = __add__
 
     def __isub__(self, other):
-        self.length -= other
+        self.set_length(self.length - int(other))
         return self
 
     def __sub__(self, other):
@@ -558,7 +610,8 @@ class ParseResultFootball(object):
     def merge(self, other):
         if isinstance(other, ParseResultFootball):
             self.is_finished = False
-            self.length += other.length
+            self.set_length(self.length + other.length)
+            self._max_length = max(self._max_length, other._max_length)
             # self.status = max(self.status, other.status)
             self.results.extend(other.results)
             self._set_error(other.error)
@@ -573,7 +626,9 @@ class ParseResultFootball(object):
 
             self.at_loc = self.at_loc or other.at_loc
 
-    def add_diag(self, diag, begin=None, length=None, raise_on_error=True):
+            self.flags += other.flags
+
+    def add_diag(self, diag, begin=None, length=None, raise_on_error=False):
         if begin is None:
             begin = self.begin
         if length is None:
@@ -588,7 +643,7 @@ class ParseResultFootball(object):
         self._set_error(tmp_error)
 
         if tmp_error:
-            self.length = 0
+            self.set_length(0)
             if raise_on_error:
                 raise ParsingError(self)
 
@@ -601,7 +656,7 @@ class ParseResultFootball(object):
             position=None,
             length=None,
             set_length=None,
-            raise_on_error=True):
+            raise_on_error=False):
         """
         for *args
             if string, this will be a diag str if we can look it up in diags, a segment name if not.
@@ -615,10 +670,10 @@ class ParseResultFootball(object):
             self.begin = position
 
         if length is not None:
-            self.length += length
+            self.set_length(self.length + length)
 
         if set_length is not None:
-            self.length = set_length
+            self.set_length(set_length)
 
         if segment is not None:
             self.segment_name = segment
@@ -635,7 +690,7 @@ class ParseResultFootball(object):
             if isinstance(arg, ParseResultFootball):
                 self.merge(arg)
             elif isinstance(arg, int):
-                self.length += arg
+                self.set_length(self.length + arg)
             elif isinstance(arg, dict):
                 self.add_diag(raise_on_error=raise_on_error, **arg)
             elif isinstance(arg, (tuple, list)):
@@ -646,30 +701,30 @@ class ParseResultFootball(object):
         return self
     __call__ = add
 
-    @staticmethod
-    def _make_int(other):
-        if isinstance(other, int):
-            return other
-        else:
-            return other.length
+    # @staticmethod
+    # def _make_int(other):
+    #     if isinstance(other, int):
+    #         return other
+    #     else:
+    #         return other.length
 
     def __lt__(self, other):
-        return self.length < self._make_int(other)
+        return self.length < int(other)
 
     def __le__(self, other):
-        return self.length <= self._make_int(other)
+        return self.length <= int(other)
 
     def __eq__(self, other):
-        return self.length == self._make_int(other)
+        return self.length == int(other)
 
     def __ne__(self, other):
-        return self.length != self._make_int(other)
+        return self.length != int(other)
 
     def __gt__(self, other):
-        return self.length > self._make_int(other)
+        return self.length > int(other)
 
     def __ge__(self, other):
-        return self.length >= self._make_int(other)
+        return self.length >= int(other)
 
     def __contains__(self, item):
         for r in self.results:
@@ -679,8 +734,13 @@ class ParseResultFootball(object):
 
     def __repr__(self):
         tmp_str = ''
+        if self.segment_name:
+            tmp_str = '<%s>' % self.segment_name
+        else:
+            tmp_str = '<unk>'
+
         if self.error:
-            tmp_str = 'ERROR '
+            tmp_str += ' ERROR '
 
         if self.length == 0:
             tmp_str += '(not found)'
@@ -696,9 +756,9 @@ class ParseResultFootball(object):
         return repr(self)
 
     def __bool__(self):
-        if self.length == 0:
-            return False
-        return True
+        if not self.error and self.length > 0:
+            return True
+        return False
 
     def __int__(self):
         return self.length

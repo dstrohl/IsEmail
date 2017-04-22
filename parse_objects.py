@@ -2,7 +2,7 @@
 from parse_results import ParseResultFootball,ParsingError
 # from collections import deque
 from functools import wraps
-from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
+from meta_data import ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS, META_LOOKUP
 
 def make_char_str(*chars_in):
     tmp_ret = []
@@ -17,7 +17,7 @@ def make_char_str(*chars_in):
     return ''.join(tmp_ret)
 
 
-def as_football(segment=True, comment=False, skip=False):
+def as_football(segment=True, comment=False, skip=False, diags=None):
     def football_decorator(func):
         @wraps(func)
         def func_wrapper(self, position, *args, non_segment=False, **kwargs):
@@ -47,20 +47,28 @@ def as_football(segment=True, comment=False, skip=False):
                     error_raised = err
                     tmp_ret = err.results
 
-                if not isinstance(tmp_ret, (ParseResultFootball)):
+                if not isinstance(tmp_ret, ParseResultFootball):
                     raise AttributeError('invalid return object = %r' % tmp_ret)
 
             else:
                 tmp_ret = self._empty
 
+            tmp_ret.segment_name = stage_name
+
             if tmp_ret and is_segment and not tmp_ret.error:
-                tmp_ret.add(segment=stage_name, position=position)
+                tmp_ret.add(position=position)
                 tmp_ret._history.name = stage_name
                 tmp_ret._history.begin = position
                 tmp_ret._history.length = tmp_ret.l
             else:
                 tmp_ret._history.clear()
                 tmp_ret.segment_name = ''
+
+            if tmp_ret and diags is not None:
+                if isinstance(diags, (list, tuple)):
+                    tmp_ret.add(*diags)
+                else:
+                    tmp_ret.add(diags)
 
             if not tmp_ret or tmp_ret.error:
                 self.near_at_flag = tmp_near_at_flag
@@ -79,6 +87,181 @@ def as_football(segment=True, comment=False, skip=False):
     
         return func_wrapper
     return football_decorator
+
+"""
+
+def full_domain_segment():
+    def football_decorator(func):
+        @wraps(func)
+        def func_wrapper(self, position, *args, **kwargs):
+            tmp_char = self.this_char(position)
+            if tmp_char == self.HYPHEN:
+                tmp_ret = self._empty
+                return tmp_ret('ERR_DOMAIN_HYPHEN_START')
+            elif tmp_char == self.DOT:
+                tmp_ret = self._empty
+                return tmp_ret('ERR_DOT_START')
+
+            tmp_ret = func(self, position, *args, **kwargs)
+
+            tmp_ret_codes = []
+
+            def check_pos(pos):
+                tmp_sub_codes = []
+                self.add_note_trace('Checking Char: %s' % self.this_char(pos))
+                sub_ret = self.dot(pos, non_segment=True)
+                if sub_ret:
+                    tmp_sub_codes.append('ERR_DOT_END')
+                else:
+                    sub_ret = self.back_slash(pos, non_segment=True)
+                    if sub_ret:
+                        tmp_sub_codes.append('ERR_BACKSLASH_END')
+                    elif is_domain:
+                        sub_ret = self.hyphen(pos, non_segment=True)
+                        if sub_ret:
+                            tmp_sub_codes.append('ERR_DOMAIN_HYPHEN_END')
+                if not sub_ret:
+                    sub_ret = None
+                return tmp_sub_codes, sub_ret
+
+            tmp_ret = None
+            plus_pos = None
+
+            self.add_note_trace('Start End verification')
+            self._set_trace(1)
+            if is_domain:
+                self.add_note_trace('In Domain')
+
+                if football > 255:
+                    tmp_ret_codes.append('RFC5322_DOMAIN_TOO_LONG')
+
+                end_pos = self.email_len
+                if not self.at_end(position + football):
+                    self.add_note_trace('Not at end')
+                    if not self.at_end(position + football + 1):
+                        plus_pos = end_pos + 1
+                        self.add_note_trace('Has One Extra Char')
+                        tmp_ret_codes.append(err_expecting_code)
+                        return tmp_ret_codes, None
+            else:
+                self.add_note_trace('In Local')
+
+                end_pos = position + football
+                if self.this_char(position + football) != self.AT:
+                    self.add_note_trace('Not at end')
+                    if self.this_char(position + football + 1) != self.AT:
+                        plus_pos = end_pos + 1
+                        self.add_note_trace('Has One Extra Char')
+                        tmp_ret_codes.append(err_expecting_code)
+                        return tmp_ret_codes, None
+
+            if plus_pos is not None:
+                codes, tmp_ret = check_pos(plus_pos)
+                if codes:
+                    tmp_ret_codes.extend(codes)
+                else:
+                    tmp_ret_codes.append(err_expecting_code)
+            else:
+                codes, junk = check_pos(end_pos)
+                tmp_ret_codes.extend(codes)
+
+            self._set_trace(-1)
+
+            if tmp_ret:
+                self.add_note_trace('Finish end verification: returning obj + %r' % tmp_ret_codes)
+            else:
+                self.add_note_trace('Finish end verification: returning %r' % tmp_ret_codes)
+
+            return tmp_ret_codes, tmp_ret
+
+            return tmp_ret
+
+        return func_wrapper
+
+    return football_decorator
+
+
+def full_local_segment(post_text_error):
+    def football_decorator(func):
+        @wraps(func)
+        def func_wrapper(self, position, *args, non_segment=False, **kwargs):
+            return tmp_ret
+
+        return func_wrapper
+
+    return football_decorator
+
+
+
+def wrapped_segment(pre_seg_char=None, post_segment_char=None):
+    def football_decorator(func):
+        @wraps(func)
+        def func_wrapper(self, position, *args, non_segment=False, **kwargs):
+
+            tmp_ret = self.empty
+
+            tmp_ret = func(self, position, *args, **kwargs)
+
+
+
+            is_segment = segment and not non_segment
+            raise_error = False
+            error_raised = None
+            tmp_near_at_flag = self.near_at_flag
+
+            stage_name = kwargs.get('stage_name', func.__name__)
+            self.stage.append(stage_name)
+
+            self.add_begin_trace(position)
+
+            position = int(position)
+
+            if not self.at_end(position):
+
+                try:
+                    # self.add_note_trace('** checking near_at_flag: %s' % self.near_at_flag)
+
+                    tmp_ret = func(self, position, *args, **kwargs)
+                    # self.add_note_trace('** checking at_in_cfws: %s' % self.at_in_cfws)
+
+                except ParsingError as err:
+                    self.near_at_flag = tmp_near_at_flag
+                    raise_error = True
+                    error_raised = err
+                    tmp_ret = err.results
+
+                if not isinstance(tmp_ret, (ParseResultFootball)):
+                    raise AttributeError('invalid return object = %r' % tmp_ret)
+
+            else:
+                tmp_ret = self._empty
+
+            tmp_ret.add(segment=stage_name)
+            if tmp_ret and is_segment and not tmp_ret.error:
+                tmp_ret.add(position=position)
+                tmp_ret._history.name = stage_name
+                tmp_ret._history.begin = position
+                tmp_ret._history.length = tmp_ret.l
+            else:
+                tmp_ret._history.clear()
+                tmp_ret.segment_name = ''
+
+            if not tmp_ret or tmp_ret.error:
+                self.near_at_flag = tmp_near_at_flag
+
+            self.add_end_trace(position, tmp_ret, raise_error=raise_error)
+
+            self.stage.pop()
+
+            if raise_error:
+                raise error_raised
+
+            return tmp_ret
+
+        return func_wrapper
+
+    return football_decorator
+"""
 
 """
 def as_int(func):
@@ -346,35 +529,41 @@ class EmailParser(object):
         tmp_ret = '\nTRACE (%s records, string: %s): \n%s\n-----------------' % (len(self.trace), repr(self.email_in), '\n'.join(tmp_list))
         return tmp_ret
 
+    def _set_trace(self, trace_level_change=0):
+        if self.verbose == 2:
+            self.trace_level += trace_level_change
+            if self.trace_filter == -1 or self.trace_filter >= self.trace_level:
+                return True
+        return False
+
     def add_begin_trace(self, position):
-        self.trace_level += 1
-        self._add_trace(position, is_begin=True)
+        if self._set_trace(1):
+            self._add_trace(position, is_begin=True)
 
     def add_end_trace(self, position, results, raise_error=False):
-        self._add_trace(position, results=results, raise_error=raise_error)
-        self.trace_level -= 1
+        if self._set_trace():
+            self._add_trace(position, results=results, raise_error=raise_error)
+        self._set_trace(-1)
 
     def add_note_trace(self, note, position=0):
-        self.trace_level += 1
-        self._add_trace(position, is_note=True, note_str=note)
-        self.trace_level -= 1
+        if self._set_trace(1):
+            self._add_trace(position, is_note=True, note_str=note)
+        self._set_trace(-1)
 
     def _add_trace(self, position, is_note=False, note_str=None, results=None, is_begin=False, raise_error=False):
         if results is not None:
             results = results.copy()
-        if self.verbose == 2:
-            if self.trace_filter == -1 or self.trace_filter >= self.trace_level:
-                self.trace.append(TraceObj(
-                    parser=self,
-                    stage=self.cur_stage,
-                    full_stage=self.stage_str,
-                    position=position,
-                    begin=is_begin,
-                    trace_level=self.trace_level,
-                    results=results,
-                    note=is_note,
-                    note_text=note_str,
-                    raise_error=raise_error))
+        self.trace.append(TraceObj(
+            parser=self,
+            stage=self.cur_stage,
+            full_stage=self.stage_str,
+            position=position,
+            begin=is_begin,
+            trace_level=self.trace_level,
+            results=results,
+            note=is_note,
+            note_text=note_str,
+            raise_error=raise_error))
 
     def parse(self,
               email_in=None,
@@ -657,40 +846,79 @@ class EmailParser(object):
         else:
             return 0, ParseResultFootball(self)
 
-    def football_max(self, *footballs):
-        # self.add_note_trace('    Comparing:  %s' % footballs)
+    def football_max(self, *footballs, names=None):
+        names = names or []
 
-        tmp_ret = self._empty
+        self.add_note_trace('Comparing Footballs')
+        if self._set_trace(1):
+            for index, fb in enumerate(footballs):
+                if len(names) < index+1:
+                    if fb.segment_name == '':
+                        names.append('#%s' % index)
+                    else:
+                        names.append(fb.segment_name)
+
+                if fb.error:
+                    self.add_note_trace('Comp %s [ERROR] (%s/%s)' % (names[index], int(fb), fb._max_length))
+                else:
+                    self.add_note_trace('Comp %s (%s/%s)' % (names[index], int(fb), fb._max_length))
+                self.add_note_trace('        %r' % fb.diags())
+
+
+        tmp_ret = None
         tmp_index = -1
+        a_index = -1
+        b_index = -1
+        ab_note = ''
 
         for index, fb in enumerate(footballs):
+            if tmp_ret is None:
+                tmp_ret = fb
+                tmp_index = index
+                continue
+
+            a_index = tmp_index
+            b_index = index
+            ab_note = ''
+            update_ret = False
+
             if tmp_ret.error != fb.error:
                 if tmp_ret.error:
                     if fb:
-                        tmp_ret = fb
-                        tmp_index = index
+                        update_ret = False
+                        ab_note = '(B has error, A haa content)'
                 elif fb.error:
                     if not tmp_ret:
-                        tmp_ret = fb
-                        tmp_index = index
+                        update_ret = False
+                        ab_note = '(A has Error, B no content)'
             else:
                 if fb > tmp_ret:
-                    tmp_ret = fb
-                    tmp_index = index
+                    update_ret = False
+                    ab_note = '(A is larger)'
+                elif fb == tmp_ret:
+                    if fb._max_length > tmp_ret._max_length:
+                        update_ret = False
+                        ab_note = '(A max length longer)'
 
-            if tmp_index == index:
-                self.add_note_trace('    Compare (%s): %s[%s] > %s[%s]' % (index, fb, index, tmp_ret, tmp_index))
-            else:
-                self.add_note_trace('    Compare (%s): %s[%s] > %s[%s]' % (tmp_index, tmp_ret, tmp_index, fb, index))
+            if update_ret:
+                tmp_ret = fb
+                tmp_index = index
+                a_index = index
+                b_index = tmp_index
 
-        self.add_note_trace('    Returning (%s): %r' % (tmp_index, tmp_ret))
-        return tmp_index, tmp_ret
+            if self._set_trace():
+                self.add_note_trace('Test #%s: %s > %s  %s' % (index, names[a_index], names[b_index], ab_note))
+
+        if self._set_trace(-1):
+            self.add_note_trace('Returning %s' % names[tmp_index])
+        return tmp_ret
 
     def check_part_end(self, position, football, err_expecting_code, is_domain):
         tmp_ret_codes = []
 
         def check_pos(pos):
             tmp_sub_codes = []
+            self.add_note_trace('Checking Char: %s' % self.this_char(pos))
             sub_ret = self.dot(pos, non_segment=True)
             if sub_ret:
                 tmp_sub_codes.append('ERR_DOT_END')
@@ -709,35 +937,50 @@ class EmailParser(object):
         tmp_ret = None
         plus_pos = None
 
+        self.add_note_trace('Start End verification')
+        self._set_trace(1)
         if is_domain:
+            self.add_note_trace('In Domain')
+
             if football > 255:
                 tmp_ret_codes.append('RFC5322_DOMAIN_TOO_LONG')
 
             end_pos = self.email_len
             if not self.at_end(position + football):
-                plus_pos = end_pos + 1
+                self.add_note_trace('Not at end')
                 if not self.at_end(position + football + 1):
+                    plus_pos = end_pos + 1
+                    self.add_note_trace('Has One Extra Char')
                     tmp_ret_codes.append(err_expecting_code)
                     return tmp_ret_codes, None
         else:
+            self.add_note_trace('In Local')
+
             end_pos = position + football
             if self.this_char(position + football) != self.AT:
-                plus_pos = end_pos + 1
+                self.add_note_trace('Not at end')
                 if self.this_char(position + football + 1) != self.AT:
+                    plus_pos = end_pos + 1
+                    self.add_note_trace('Has One Extra Char')
                     tmp_ret_codes.append(err_expecting_code)
                     return tmp_ret_codes, None
 
         if plus_pos is not None:
-            self.add_note_trace('-- Verification: One Extra Char, Checking...')
             codes, tmp_ret = check_pos(plus_pos)
             if codes:
                 tmp_ret_codes.extend(codes)
             else:
                 tmp_ret_codes.append(err_expecting_code)
         else:
-            self.add_note_trace('-- Verification: End of part, Checking...')
             codes, junk = check_pos(end_pos)
             tmp_ret_codes.extend(codes)
+
+        self._set_trace(-1)
+
+        if tmp_ret:
+            self.add_note_trace('Finish end verification: returning obj + %r' % tmp_ret_codes)
+        else:
+            self.add_note_trace('Finish end verification: returning %r' % tmp_ret_codes)
 
         return tmp_ret_codes, tmp_ret
 
@@ -942,75 +1185,106 @@ class EmailParser(object):
         self.near_at_flag = False
         tmp_ret = self._empty
         self.add_note_trace('Address Length: ' + str(self.email_len))
+
         if self.email_len == 0:
             self.add_note_trace('Empty address')
             return tmp_ret('ERR_EMPTY_ADDRESS')
+
         tmp_ret += self.local_part(position)
+
+        if not tmp_ret:
+            tmp_ret += self.at(position)
+            if tmp_ret:
+                return tmp_ret('ERR_NO_LOCAL_PART')
+            else:
+                return tmp_ret('ERR_UNKNOWN')
 
         self.in_local_part = False
 
-        if tmp_ret:
+        tmp_ret_2 = self.at(position + tmp_ret)
 
-            if tmp_ret.l > 64:
-                tmp_ret('RFC5322_LOCAL_TOO_LONG')
+        self.near_at_flag = True
+        self.in_domain_part = True
 
-            self.add_note_trace('checking at_in_cfws: %s' % self.at_in_cfws)
+        if tmp_ret_2:
+            tmp_ret_2.at_loc = position + tmp_ret
 
-            if self.at_in_cfws:
-                self.add_note_trace('Adding DEPREC_CFWS_NEAR_AT')
-                tmp_ret('DEPREC_CFWS_NEAR_AT')
+            tmp_ret_3 = self.domain(position + tmp_ret + tmp_ret_2)
 
-            tmp_ret_2 = self.at(position + tmp_ret)
-
-            self.near_at_flag = True
-            self.in_domain_part = True
-            self.in_local_part = False
-
-            if tmp_ret_2:
-                tmp_ret_2.at_loc = position + tmp_ret
-
-                tmp_ret_3 = self.domain(position + tmp_ret + tmp_ret_2)
-
-                if tmp_ret_3:
-                    tmp_ret += tmp_ret_2
-                    tmp_ret += tmp_ret_3
-                    if tmp_ret_3 > 255:
-                        tmp_ret('RFC5322_DOMAIN_TOO_LONG')
-                else:
-                    tmp_ret(tmp_ret_2, 'ERR_NO_DOMAIN_PART')
+            if tmp_ret_3:
+                tmp_ret += tmp_ret_2
+                tmp_ret += tmp_ret_3
             else:
+                return tmp_ret(tmp_ret_2, 'ERR_NO_DOMAIN_PART')
+
+        elif not self.find(position + tmp_ret, self.AT, skip_quoted_str=True):
                 tmp_ret('ERR_NO_DOMAIN_SEP')
-
-        if tmp_ret:
-            if not self.at_end(position + tmp_ret):
-                tmp_ret('ERR_UNKNOWN')
-            else:
-                if tmp_ret.l > 254:
-                    tmp_ret('RFC5322_TOO_LONG')
-
-            if not tmp_ret.results:
-                tmp_ret('VALID')
         else:
-            tmp_ret += self.at(position)
-            if tmp_ret:
-                tmp_ret('ERR_NO_LOCAL_PART')
-            else:
-                tmp_ret('ERR_UNKNOWN')
+            return tmp_ret
+
+        if tmp_ret > 254:
+            tmp_ret('RFC5322_TOO_LONG')
+
+        if not tmp_ret.results:
+            tmp_ret('VALID')
+
         return tmp_ret
 
-    def local_part_skip(self, position, football):
-        skip_next = False
-        if football and not football.error:
-            if self.at_end(position + football) and not football.error:
-                self.add_note_trace('Skipping due to at the end (and no error)')
-                skip_next = True
-            elif self.this_char(position + football) == self.AT and not football.error:
-                self.add_note_trace('Skipping due to @ next (and no error)')
-                skip_next = True
-        return skip_next
+    # def local_part_skip(self, position, football):
+    #     skip_next = False
+    #     if football and not football.error:
+    #         if self.at_end(position + football) and not football.error:
+    #             self.add_note_trace('Skipping due to at the end (and no error)')
+    #             skip_next = True
+    #         elif self.this_char(position + football) == self.AT and not football.error:
+    #             self.add_note_trace('Skipping due to @ next (and no error)')
+    #             skip_next = True
+    #     return skip_next
 
     @as_football()
     def local_part(self, position):
+
+        tmp_ret = self._empty
+
+        if self.this_char(position) == self.DOT:
+            return tmp_ret('ERR_DOT_START')
+
+        tmp_ret += self._local_part(position)
+
+        if 'RFC5321_QUOTED_STRING' in tmp_ret:
+            extra_text_error = 'ERR_ATEXT_AFTER_QS'
+        else:
+            if 'CFWS_LAST' in tmp_ret.flags:
+                extra_text_error = 'ERR_ATEXT_AFTER_CFWS'
+            else:
+                extra_text_error = 'ERR_EXPECTING_ATEXT'
+
+        if self.at_in_cfws:
+            tmp_ret('DEPREC_CFWS_NEAR_AT')
+
+        if self.this_char(position + tmp_ret) != self.AT:
+            tmp_ret(extra_text_error)
+
+            if not self.find(position + tmp_ret, self.AT, skip_quoted_str=True):
+                tmp_ret('ERR_NO_DOMAIN_SEP')
+
+        else:
+            if tmp_ret > 64:
+                tmp_ret('RFC5322_LOCAL_TOO_LONG')
+
+            last_char = self.this_char(-1)
+
+            if last_char == self.BACKSLASH:
+                tmp_ret('ERR_BACKSLASH_END')
+            elif last_char == self.DOT:
+                tmp_ret('ERR_DOT_END')
+
+        if tmp_ret.error:
+            raise ParsingError(tmp_ret)
+
+        return tmp_ret
+
+    def _local_part(self, position):
         """        
         local-part      =   dot-atom / quoted-string / obs-local-part
             // http://tools.ietf.org/html/rfc5321#section-4.5.3.1.1
@@ -1022,148 +1296,122 @@ class EmailParser(object):
         [1067]    RFC5322_LOCAL_TOO_LONG  The local part of the address is too long (ISEMAIL_RFC5322)
 
         """
-        tmp_ret = self._empty
 
-        if self.this_char(position) == self.DOT:
-            tmp_ret('ERR_DOT_START')
+        tmp_dot_atom = self.dot_atom(position)
+        if tmp_dot_atom:
+            return tmp_dot_atom
 
-        # errors_to_add = []
-        skip_next = False
-        is_qs = False
+        tmp_qstring = self.quoted_string(position)
+        if tmp_qstring:
+            return tmp_qstring
 
-        try:
-            tmp_ret_2 = self.dot_atom(position)
+        tmp_obs_lpart = self.obs_local_part(position)
+        if tmp_obs_lpart:
+            return tmp_obs_lpart
 
-        except ParsingError as err:
-            tmp_ret_2 = err.results
+        return self.football_max(tmp_dot_atom, tmp_qstring, tmp_obs_lpart,
+                                 names=['dot-atom', 'quoted_string', 'obs_local_part'])
 
-        skip_next = self.local_part_skip(position, tmp_ret_2)
+        # try:
+        #     tmp_ret_2 = self.dot_atom(position)
+        #
+        # except ParsingError as err:
+        #     tmp_ret_2 = err.results
+        #
+        # skip_next = self.local_part_skip(position, tmp_ret_2)
+        #
+        # if not skip_next:
+        #     self.add_note_trace('Trying Quoted String')
+        #     try:
+        #         tmp_ret_3 = self.quoted_string(position)
+        #
+        #     except ParsingError as err:
+        #         tmp_ret_3 = err.results
+        #
+        #     tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
+        #     if tmp_ch == 0:
+        #         is_qs = True
+        #
+        #     skip_next = self.local_part_skip(position, tmp_ret_3)
+        # else:
+        #     self.add_note_trace('skipping Quoted String')
+        #
+        # if not skip_next:
+        #     try:
+        #         self.add_note_trace('trying obs-local-part')
+        #         tmp_ret_3 = self.obs_local_part(position)
+        #
+        #     except ParsingError as err:
+        #         tmp_ret_3 = err.results
+        #
+        #     tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
+        #     if tmp_ch == 0:
+        #         is_qs = False
+        # else:
+        #     self.add_note_trace('skipping obs-local-part')
+        #
+        # tmp_ret(tmp_ret_2, raise_on_error=False)
+        #
+        # self.add_note_trace('Returning length: ' + str(tmp_ret.l))
+        # if not self.at_end(position + tmp_ret):
+        #     self.add_note_trace('not at the end, checking next char: ' + self.this_char(position + tmp_ret))
+        #     if self.this_char(position + tmp_ret) == self.DOT:
+        #         self.add_note_trace('adding a dot end warning')
+        #         # errors_to_add.append('ERR_DOT_END')
+        #         tmp_ret('ERR_DOT_END', raise_on_error=False)
+        #
+        # if tmp_ret:
+        #     if not self.at_end(position + tmp_ret):
+        #         if self.this_char(position + tmp_ret) != self.AT:
+        #             if is_qs:
+        #                 self.add_note_trace('adding ERR_ATEXT_AFTER_QS for QS')
+        #                 tmp_ret('ERR_ATEXT_AFTER_QS', raise_on_error=False)
+        #             else:
+        #                 self.add_note_trace('adding ERR_EXPECTING_ATEXT')
+        #                 tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
+        #
+        # if 'DEPREC_LOCAL_PART' in tmp_ret and 'CFWS_COMMENT' in tmp_ret:
+        #     tmp_ret('DEPREC_COMMENT')
+        #
+        # if tmp_ret.error:
+        #     self.add_note_trace('Raising the error')
+        #     raise ParsingError(results=tmp_ret)
+        #
+        # return tmp_ret
 
-        if not skip_next:
-            self.add_note_trace('Trying Quoted String')
-            try:
-                tmp_ret_3 = self.quoted_string(position)
-
-            except ParsingError as err:
-                tmp_ret_3 = err.results
-
-            tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
-            if tmp_ch == 0:
-                is_qs = True
-
-            skip_next = self.local_part_skip(position, tmp_ret_3)
-        else:
-            self.add_note_trace('skipping Quoted String')
-
-        if not skip_next:
-            try:
-                self.add_note_trace('trying obs-local-part')
-                tmp_ret_3 = self.obs_local_part(position)
-
-            except ParsingError as err:
-                tmp_ret_3 = err.results
-
-            tmp_ch, tmp_ret_2 = self.football_max(tmp_ret_2, tmp_ret_3)
-            if tmp_ch == 0:
-                is_qs = False
-        else:
-            self.add_note_trace('skipping obs-local-part')
-
-        tmp_ret(tmp_ret_2, raise_on_error=False)
-
-        self.add_note_trace('Returning length: ' + str(tmp_ret.l))
-        if not self.at_end(position + tmp_ret):
-            self.add_note_trace('not at the end, checking next char: ' + self.this_char(position + tmp_ret))
-            if self.this_char(position + tmp_ret) == self.DOT:
-                self.add_note_trace('adding a dot end warning')
-                # errors_to_add.append('ERR_DOT_END')
-                tmp_ret('ERR_DOT_END', raise_on_error=False)
-
+    def domain_dot_atom(self, *args, **kwargs):
+        tmp_ret = self.dot_atom(*args, **kwargs)
         if tmp_ret:
-            if not self.at_end(position + tmp_ret):
-                if self.this_char(position + tmp_ret) != self.AT:
-                    if is_qs:
-                        self.add_note_trace('adding ERR_ATEXT_AFTER_QS for QS')
-                        tmp_ret('ERR_ATEXT_AFTER_QS', raise_on_error=False)
-                    else:
-                        self.add_note_trace('adding ERR_EXPECTING_ATEXT')
-                        tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
-
-        if 'DEPREC_LOCAL_PART' in tmp_ret and 'CFWS_COMMENT' in tmp_ret:
-            tmp_ret('DEPREC_COMMENT')
-
-        if tmp_ret.error:
-            self.add_note_trace('Raising the error')
-            raise ParsingError(results=tmp_ret)
-
+            tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
+            tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
         return tmp_ret
 
     @as_football()
-    def dot_atom(self, position, init_cfws=None, in_domain=None):
+    def dot_atom(self, position, init_cfws=None):
         """
         dot-atom        =   [CFWS] dot-atom-text [CFWS]
         """
-        if in_domain is None:
-            in_domain = self.in_domain_part
 
         tmp_ret = self._empty
         self.near_at_flag = False
         self.at_in_cfws = False
+
         if init_cfws is None:
             tmp_ret_cfws = self.cfws(position)
         else:
             tmp_ret_cfws = init_cfws
+
+        tmp_ret_cfws.flags -= 'CFWS_LAST'
 
         tmp_ret_2 = self.dot_atom_text(position + tmp_ret_cfws)
 
         if tmp_ret_2:
             tmp_ret += tmp_ret_cfws
             tmp_ret += tmp_ret_2
+
             tmp_ret_cfws = self.cfws(position + tmp_ret)
+
             tmp_ret += tmp_ret_cfws
-            if not in_domain:
-                if tmp_ret_cfws and self.this_char(position + tmp_ret) != self.AT:
-                    tmp_ret('ERR_ATEXT_AFTER_CFWS', raise_on_error=False)
-
-            else:
-                tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
-                if position + tmp_ret + 1 == self.email_len:
-                    self.add_note_trace('checking char after str')
-                    tmp_ret_2 = self.hyphen(position + tmp_ret)
-                    if tmp_ret_2:
-                        tmp_ret += tmp_ret_2
-                        tmp_ret('ERR_DOMAIN_HYPHEN_END', raise_on_error=False)
-                    else:
-                        tmp_ret_2 = self.dot(position + tmp_ret)
-                        if tmp_ret_2:
-                            tmp_ret += tmp_ret_2
-                            tmp_ret('ERR_DOT_END', raise_on_error=False)
-
-                        else:
-                            tmp_ret_2 = self.back_slash(position + tmp_ret)
-                            if tmp_ret_2:
-                                tmp_ret += tmp_ret_2
-                                tmp_ret('ERR_BACKSLASH_END', raise_on_error=False)
-                            else:
-                                tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
-
-                elif self.at_end(position + tmp_ret):
-                    self.add_note_trace('checking last char')
-                    if self.this_char(position + tmp_ret - 1) == self.HYPHEN:
-                        tmp_ret('ERR_DOMAIN_HYPHEN_END', raise_on_error=False)
-
-                    if self.this_char(position + tmp_ret - 1) == self.DOT:
-                        tmp_ret('ERR_DOT_END', raise_on_error=False)
-
-                if not self.at_end(position + tmp_ret):
-                    tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
-
-                tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
-        elif in_domain and not self.at_end(position + tmp_ret):
-            tmp_ret('ERR_EXPECTING_ATEXT', raise_on_error=False)
-
-        if tmp_ret > 255:
-            tmp_ret('RFC5322_DOMAIN_TOO_LONG', raise_on_error=False)
 
         return tmp_ret
 
@@ -1191,25 +1439,28 @@ class EmailParser(object):
 
         return tmp_ret
 
-    @as_football()
+    @as_football(diags='DEPREC_LOCAL_PART')
     def obs_local_part(self, position):
         """
             obs-local-part = word *("." word)
 
         """
+        tmp_word = self.word(position)
         tmp_ret = self._empty
-        tmp_ret += self.word(position)
 
-        if not tmp_ret:
-            return self._empty
+        if not tmp_word:
+            return tmp_ret
+
+        tmp_ret += tmp_word
 
         tmp_ret += self.try_and(position + tmp_ret,
                                 self.single_dot,
                                 self.word,
                                 min_loop=0, max_loop=256)
 
-        if tmp_ret:
-            tmp_ret('DEPREC_LOCAL_PART')
+        if 'CFWS_COMMENT' in tmp_ret:
+            tmp_ret('DEPREC_COMMENT')
+
         return tmp_ret
 
     @as_football()
@@ -1219,10 +1470,20 @@ class EmailParser(object):
         """
         self.at_in_cfws = False
         tmp_ret = self._empty
-        tmp_act, tmp_ret2 = self.try_or(position,
-                               self.atom,
-                               self.quoted_string)
-        return tmp_ret(tmp_ret2)
+        # tmp_act, tmp_ret2 = self.try_or(position,
+        #                       self.atom,
+        #                       self.quoted_string)
+
+        tmp_ret_2 = self.atom(position)
+        if tmp_ret_2 and not tmp_ret_2.error:
+            return tmp_ret(tmp_ret_2)
+
+        tmp_ret_3 = self.quoted_string(position)
+        if tmp_ret_3 and not tmp_ret_3.error:
+            return tmp_ret(tmp_ret_3)
+
+        return tmp_ret(self.football_max(tmp_ret_2, tmp_ret_3, names=['atom', 'quoted_string']))
+
 
     @as_football()
     def atom(self, position, init_cfws=None):
@@ -1239,26 +1500,28 @@ class EmailParser(object):
             tmp_ret += self.cfws(position)
         else:
             tmp_ret += init_cfws
-        # tmp_near_at_flag = self.near_at_flag
+
+        tmp_ret.flags -= 'CFWS_LAST'
+
         self.near_at_flag = False
 
         tmp_ret_2 = self.atext(position + tmp_ret)
 
         if not tmp_ret_2:
-            # self.near_at_flag = tmp_near_at_flag
-            return self._empty
+            return tmp_ret('ERR_EXPECTING_ATEXT')
 
         tmp_ret += tmp_ret_2
         tmp_ret_cfws = self.cfws(position + tmp_ret)
+
+        tmp_ret += tmp_ret_cfws
 
         if tmp_ret and tmp_ret_cfws:
             self.add_note_trace('Found last CFWS')
             if not (self.at_end(position + tmp_ret + tmp_ret_cfws) or
                     self.this_char(position + tmp_ret + tmp_ret_cfws) == self.AT or
                     self.this_char(position + tmp_ret + tmp_ret_cfws) == self.DOT):
-                tmp_ret('ERR_ATEXT_AFTER_CFWS')
+                tmp_ret('ERR_ATEXT_AFTER_CFWS', raise_on_error=False)
 
-        tmp_ret += tmp_ret_cfws
         # if not tmp_ret or tmp_ret.error:
         #     self.near_at_flag = tmp_near_at_flag
 
@@ -1273,7 +1536,7 @@ class EmailParser(object):
             ; NB For SMTP mail, the domain-literal is restricted by RFC5321 as follows:
                     Mailbox        = Local-part "@" ( domain-addr / address-literal )
             -----------------------------------------------------------------------------------------
-    
+
             // http://tools.ietf.org/html/rfc5322#section-3.4.1
             //      Note: A liberal syntax for the domain portion of addr-spec is
             //      given here.  However, the domain portion contains addressing
@@ -1286,10 +1549,10 @@ class EmailParser(object):
             // have reached is this: "addressing information" must comply with
             // RFC 5321 (and in turn RFC 1035), anything that is "semantically
             // invisible" must comply only with RFC 5322.
-    
+
             // http://tools.ietf.org/html/rfc5321#section-4.5.3.1.2
             //   The maximum total length of a domain name or number is 255 octets.
-    
+
             // http://tools.ietf.org/html/rfc5321#section-4.1.2
             //   Forward-path   = Path
             //
@@ -1308,9 +1571,9 @@ class EmailParser(object):
             //   address in MAIL and RCPT commands of 254 characters.  Since addresses
             //   that do not fit in those fields are not normally useful, the upper
             //   limit on address lengths should normally be considered to be 254.
-    
-    
-    
+
+
+
             //  dns check
             // http://tools.ietf.org/html/rfc5321#section-2.3.5
             //   Names that can
@@ -1329,7 +1592,7 @@ class EmailParser(object):
             // sufficient evidence of the domain's existence. For performance reasons
             // we will not repeat the DNS lookup for the CNAME's target, but we will
             // raise a warning because we didn't immediately find an MX record.
-    
+
             // dns tld
             // Check for TLD addresses
             // -----------------------
@@ -1378,7 +1641,7 @@ class EmailParser(object):
 
         only_domain_lit = False
         is_literal = False
-        has_cfws = False
+        # has_cfws = False
 
         lit_init = self._empty
         lit_sb = self.open_sq_bracket(position)
@@ -1386,10 +1649,11 @@ class EmailParser(object):
         if lit_sb:
             is_literal = True
             lit_init += lit_sb
+            lit_cfws = self._empty
         else:
             lit_cfws = self.cfws(position)
             if lit_cfws:
-                has_cfws = True
+                # has_cfws = True
                 lit_init += lit_cfws
                 lit_sb += self.open_sq_bracket(position + lit_cfws)
                 if lit_sb:
@@ -1398,60 +1662,85 @@ class EmailParser(object):
                     lit_init += lit_sb
 
         if is_literal:
-
-            tmp_close_loc = self.find(position + lit_init, self.CLOSESQBRACKET)
-            if tmp_close_loc == -1:
-                return tmp_ret('ERR_UNCLOSED_DOM_LIT')
-
-            if not only_domain_lit:
-                tmp_addr_lit = self.address_literal(position, lit_init)
-                if tmp_addr_lit and not tmp_addr_lit.error:
-                    return tmp_ret(tmp_addr_lit)
-            else:
-                tmp_addr_lit = self._empty
-
-            tmp_dom_lit = self.domain_literal(position, lit_init)
-            if tmp_dom_lit and not tmp_dom_lit.error:
-                return tmp_ret(tmp_dom_lit)
-
-            tmp_index, tmp_ret_2 = self.football_max(tmp_addr_lit, tmp_dom_lit)
-            tmp_ret += tmp_ret_2
-
-            if tmp_ret_2.error:
-                raise ParsingError(tmp_ret)
-
-            return tmp_ret
-
+            tmp_ret += self._domain_literals(position, lit_init, only_domain_lit)
         else:
-
             tmp_char = self.this_char(position)
             if tmp_char == self.HYPHEN:
                 return tmp_ret('ERR_DOMAIN_HYPHEN_START')
             elif tmp_char == self.DOT:
                 return tmp_ret('ERR_DOT_START')
 
-            if not has_cfws:
-                tmp_domain_addr = self.domain_addr(position)
-                if tmp_domain_addr and not tmp_domain_addr.error:
-                    return tmp_ret(tmp_domain_addr)
+            tmp_ret += self._domain_non_literals(position, lit_cfws)
+
+        if is_literal:
+            extra_text_error = 'ERR_ATEXT_AFTER_DOMLIT'
+        elif 'RFC5322_LIMITED_DOMAIN' in tmp_ret:
+            if 'CFWS_LAST' in tmp_ret.flags:
+                extra_text_error = 'ERR_ATEXT_AFTER_CFWS'
             else:
-                tmp_domain_addr = self._empty
+                extra_text_error = 'ERR_EXPECTING_ATEXT'
+        else:
+            extra_text_error = 'ERR_EXPECTING_DTEXT'
 
-            tmp_dot_atom = self.dot_atom(position, init_cfws=lit_cfws, in_domain=True)
-            if tmp_dot_atom and not tmp_dot_atom.error:
-                return tmp_ret(tmp_dot_atom)
+        if not self.at_end(position + tmp_ret):
+            tmp_ret(extra_text_error)
+        else:
+            if tmp_ret > 255:
+                tmp_ret('RFC5322_DOMAIN_TOO_LONG')
 
-            tmp_obs_domain = self.obs_domain(position, init_cfws=lit_cfws)
-            if tmp_obs_domain and not tmp_obs_domain.error:
-                return tmp_ret(tmp_obs_domain)
+            last_char = self.this_char(-1)
 
-            tmp_index, tmp_ret_2 = self.football_max(tmp_domain_addr, tmp_dot_atom, tmp_obs_domain)
-            tmp_ret += tmp_ret_2
+            if last_char == self.HYPHEN:
+                tmp_ret('ERR_DOMAIN_HYPHEN_END')
+            elif last_char == self.BACKSLASH:
+                tmp_ret('ERR_BACKSLASH_END')
+            elif last_char == self.DOT:
+                tmp_ret('ERR_DOT_END')
 
-            if tmp_ret_2.error:
-                raise ParsingError(tmp_ret_2)
+        if tmp_ret.error:
+            raise ParsingError(tmp_ret)
 
-            return tmp_ret
+        return tmp_ret
+
+    def _domain_non_literals(self, position, init_cfws=None):
+
+        if not init_cfws:
+            tmp_domain_addr = self.domain_addr(position)
+            if tmp_domain_addr:
+                return tmp_domain_addr
+        else:
+            tmp_domain_addr = self._empty
+
+        tmp_dot_atom = self.domain_dot_atom(position, init_cfws=init_cfws)
+        if tmp_dot_atom:
+            return tmp_dot_atom
+
+        tmp_obs_domain = self.obs_domain(position, init_cfws=init_cfws)
+        if tmp_obs_domain:
+            return tmp_obs_domain
+
+        return self.football_max(tmp_domain_addr, tmp_dot_atom, tmp_obs_domain, names=['domain_addr', 'dot_atom', 'obs_domain'])
+
+    def _domain_literals(self, position, init_lit, only_domain_lit):
+
+        tmp_close_loc = self.find(position + init_lit, self.CLOSESQBRACKET)
+        if tmp_close_loc == -1:
+            tmp_ret = self._empty
+            return tmp_ret('ERR_UNCLOSED_DOM_LIT')
+
+        if not only_domain_lit:
+            tmp_addr_lit = self.address_literal(position, init_lit)
+            if tmp_addr_lit:
+                return tmp_addr_lit
+        else:
+            tmp_addr_lit = self._empty
+
+        tmp_dom_lit = self.domain_literal(position, init_lit)
+        if tmp_dom_lit:
+            return tmp_dom_lit
+
+        return self.football_max(tmp_addr_lit, tmp_dom_lit, names=['addr_lit', 'domain_lit'])
+
 
     # @as_football(segment=False)
     # def literals(self, position):
@@ -1552,7 +1841,7 @@ class EmailParser(object):
         #         tmp_ret('RFC5321_TLD_NUMERIC')
 
         if not tmp_ret:
-            return tmp_ret('ERR_EXPECTING_DTEXT', raise_on_error=False)
+            return tmp_ret
 
         while True:
             tmp_ret_2 = self.single_dot(position + tmp_ret)
@@ -1574,12 +1863,6 @@ class EmailParser(object):
             tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS
         else:
             tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.DNS
-
-        tmp_ret_codes, tmp_ret_2 = self.check_part_end(position, tmp_ret, 'ERR_EXPECTING_DTEXT', is_domain=True)
-        if tmp_ret_2:
-            tmp_ret += tmp_ret_2
-        if tmp_ret_codes:
-            tmp_ret(*tmp_ret_codes, raise_on_error=False)
 
         return tmp_ret
 
@@ -1686,7 +1969,7 @@ class EmailParser(object):
     #
     #     return self._empty
 
-    @as_football()
+    @as_football(diags=['RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN'])
     def domain_literal(self, position, lit_init=None):
         """
         domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
@@ -1707,7 +1990,10 @@ class EmailParser(object):
             else:
                 lit_init += lit_init_sb
 
+        lit_init.flags -= 'CFWS_LAST'
+
         tmp_ret += lit_init
+
         # tmp_ret += self.cfws(position)
         # tmp_near_at_flag = self.near_at_flag
         self.near_at_flag = False
@@ -1773,30 +2059,30 @@ class EmailParser(object):
         if tmp_ret > 255:
             tmp_ret('RFC5322_DOMAIN_TOO_LONG', raise_on_error=False)
 
-        return tmp_ret('RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_LIMITED_DOMAIN')
-
-    @as_football()
-    def domain_literal_sub(self, position):
-        """
-        domain-literal-sub  =   *([FWS] dtext) [FWS]
-        """
-
-        tmp_ret = ParseResultFootball(self)
-        while True:
-            tmp_ret_fws = self.fws(position + tmp_ret.l)
-
-            tmp_ret_dtext = self.dtext(position + tmp_ret.l + tmp_ret_fws.l)
-
-            if tmp_ret_dtext:
-                tmp_ret += tmp_ret_fws
-                tmp_ret += tmp_ret_dtext
-            else:
-                break
-
-        if tmp_ret:
-            tmp_ret += self.fws(position + tmp_ret.l)
-
         return tmp_ret
+
+    # @as_football()
+    # def domain_literal_sub(self, position):
+    #     """
+    #     domain-literal-sub  =   *([FWS] dtext) [FWS]
+    #     """
+    #
+    #     tmp_ret = ParseResultFootball(self)
+    #     while True:
+    #         tmp_ret_fws = self.fws(position + tmp_ret.l)
+    #
+    #         tmp_ret_dtext = self.dtext(position + tmp_ret.l + tmp_ret_fws.l)
+    #
+    #         if tmp_ret_dtext:
+    #             tmp_ret += tmp_ret_fws
+    #             tmp_ret += tmp_ret_dtext
+    #         else:
+    #             break
+    #
+    #     if tmp_ret:
+    #         tmp_ret += self.fws(position + tmp_ret.l)
+    #
+    #     return tmp_ret
 
     @as_football()
     def dtext(self, position):
@@ -1832,7 +2118,7 @@ class EmailParser(object):
     #     """
     #     return self.simple_char(position, self.DTEXT)
 
-    @as_football()
+    @as_football(diags='RFC5322_DOM_LIT_OBS_DTEXT')
     def obs_dtext(self, position):
 
         """
@@ -1840,7 +2126,7 @@ class EmailParser(object):
         [1071] RFC5322_DOM_LIT_OBS_DTEXT  The domain literal is not a valid RFC 5321 address literal and it contains obsolete characters (ISEMAIL_RFC5322)
 
         """
-        tmp_ret = ParseResultFootball(self)
+        tmp_ret = self._empty
 
         while True:
             tmp_ret_2 = self.obs_dtext_sub(position + tmp_ret)
@@ -1852,12 +2138,9 @@ class EmailParser(object):
             else:
                 break
 
-        if tmp_ret:
-            return tmp_ret('RFC5322_DOM_LIT_OBS_DTEXT')
-        else:
-            return self._empty
+        return tmp_ret
 
-    @as_football()
+    @as_football(diags=['RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN'])
     def obs_domain(self, position, init_cfws=None):
         """
         obs-domain      =   atom *("." atom)
@@ -1905,10 +2188,10 @@ class EmailParser(object):
 
         tmp_ret(*add_to, raise_on_error=False)
 
-        return tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+        return tmp_ret
 
 
-    @as_football()
+    @as_football(diags='RFC5321_ADDRESS_LITERAL')
     def address_literal(self, position, lit_init=None):
         """
         address-literal  = "[" ( IPv4-address-literal /
@@ -1922,41 +2205,31 @@ class EmailParser(object):
         """
 
         tmp_ret = self._empty
-
         if lit_init is None:
             lit_init = self.open_sq_bracket(position)
             if not lit_init:
                 return tmp_ret
 
         tmp_ipv4 = self.ipv4_address_literal(position + tmp_ret + lit_init)
-        if tmp_ipv4 and not tmp_ipv4.error:
-            tmp_pos = position + tmp_ret + lit_init + tmp_ipv4
-            if self.at_end(tmp_pos +1) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
-                tmp_ret += lit_init
-                tmp_ret += tmp_ipv4
+        if tmp_ipv4:
+            tmp_csb = self.close_sq_bracket(position + tmp_ret + lit_init + tmp_ipv4)
+            if tmp_csb:
+                return tmp_ret(lit_init, tmp_ipv4, tmp_csb)
 
-        tmp_ipv6 = self._empty
-        if not tmp_ret:
-            tmp_ipv6 = self.ipv6_address_literal(position + tmp_ret + lit_init)
-            if tmp_ipv6 and not tmp_ipv6.error:
-                tmp_pos = position + tmp_ret + lit_init + tmp_ipv6
-                if self.at_end(tmp_pos + 1) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
-                    tmp_ret += lit_init
-                    tmp_ret += tmp_ipv6
+        tmp_ipv6 = self.ipv6_address_literal(position + tmp_ret + lit_init)
+        if tmp_ipv6:
+            tmp_csb = self.close_sq_bracket(position + tmp_ret + lit_init + tmp_ipv6)
+            if tmp_csb:
+                return tmp_ret(lit_init, tmp_ipv6, tmp_csb)
 
-        tmp_gen_lit = self._empty
-        if not tmp_ret:
-            tmp_gen_lit = self.general_address_literal(position + tmp_ret + lit_init)
-            if tmp_gen_lit and not tmp_gen_lit.error:
-                tmp_pos = position + tmp_ret + lit_init + tmp_gen_lit
-                if self.at_end(tmp_pos + 1) and self.this_char(tmp_pos) == self.CLOSESQBRACKET:
-                    tmp_ret += lit_init
-                    tmp_ret += tmp_gen_lit
-                    tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+        tmp_gen_lit = self.general_address_literal(position + tmp_ret + lit_init)
+        if tmp_gen_lit:
+            tmp_csb = self.close_sq_bracket(position + tmp_ret + lit_init + tmp_gen_lit)
+            if tmp_csb:
+                tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
+                return tmp_ret(lit_init, tmp_gen_lit, tmp_csb)
 
-        if not tmp_ret:
-            tmp_index, tmp_ret_2 = self.football_max(tmp_ipv4, tmp_ipv6, tmp_gen_lit)
-            tmp_ret += tmp_ret_2
+        tmp_ret = self.football_max(tmp_ipv4, tmp_ipv6, tmp_gen_lit, names=['ipv4', 'ipv6', 'gen_lit'])
 
         if not tmp_ret:
             return tmp_ret
@@ -1964,21 +2237,12 @@ class EmailParser(object):
         tmp_ret_2 = self.close_sq_bracket(position + tmp_ret)
 
         if tmp_ret_2:
-            tmp_ret += tmp_ret_2
-            tmp_ret('RFC5321_ADDRESS_LITERAL')
+            return tmp_ret(tmp_ret_2)
         else:
             return tmp_ret('ERR_INVALID_ADDR_LITERAL', raise_on_error=False)
 
-        if not self.at_end(position + tmp_ret):
-            tmp_ret('ERR_ATEXT_AFTER_DOMLIT', raise_on_error=False)
 
-        if tmp_ret > 255:
-            tmp_ret('RFC5322_DOMAIN_TOO_LONG', raise_on_error=False)
-
-        return tmp_ret
-
-
-    @as_football()
+    @as_football(diags='RFC5322_GENERAL_LITERAL')
     def general_address_literal(self, position):
         """
         General-address-literal  = Standardized-tag ":" 1*dcontent
@@ -1993,9 +2257,9 @@ class EmailParser(object):
                             self.dcontent)
         if tmp_ret_2:
             tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.GENERAL_LIT
-            return tmp_ret('RFC5322_GENERAL_LITERAL', tmp_ret_2)
+            return tmp_ret(tmp_ret_2)
         else:
-            return self._empty
+            return tmp_ret
 
     @as_football()
     def standardized_tag(self, position):
@@ -2028,7 +2292,7 @@ class EmailParser(object):
                 return tmp_ret
         return tmp_ret
 
-    @as_football()
+    @as_football('RFC5322_IPV4_ADDR')
     def ipv4_address_literal(self, position):
         """
         IPv4-address-literal  = Snum 3("."  Snum)
@@ -2045,9 +2309,7 @@ class EmailParser(object):
 
         if tmp_ret:
             tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.IPv4
-            return tmp_ret('RFC5322_IPV4_ADDR')
-        else:
-            return self._empty
+        return tmp_ret
 
     @as_football()
     def snum(self, position):
@@ -2066,7 +2328,7 @@ class EmailParser(object):
 
         return tmp_ret
 
-    @as_football()
+    @as_football(diags='RFC5322_IPV6_ADDR')
     def ipv6_address_literal(self, position):
         """
             IPv6-address-literal  = "IPv6:" IPv6-addr
@@ -2089,7 +2351,7 @@ class EmailParser(object):
             if tmp_ret_2:
                 tmp_ret += tmp_ret_2
                 tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.IPv6
-                return tmp_ret('RFC5322_IPV6_ADDR')
+                return tmp_ret
 
         return self._empty
 
@@ -2117,7 +2379,7 @@ class EmailParser(object):
         """
         return self.hexdigit(position)
 
-    @as_football()
+    @as_football(diags='RFC5322_IPV6_FULL_ADDR')
     def ipv6_full(self, position):
         """
                 IPv6-full      = IPv6-hex 7(":" IPv6-hex)
@@ -2127,11 +2389,11 @@ class EmailParser(object):
         tmp_ret = self._empty
         tmp_count, tmp_ret_2 = self.ipv6_segment(position, max_count=8, min_count=8)
         if tmp_ret_2:
-            return tmp_ret('RFC5322_IPV6_FULL_ADDR', tmp_ret_2)
+            return tmp_ret(tmp_ret_2)
         else:
             return self._empty
 
-    @as_football()
+    @as_football(diags='RFC5322_IPV6_COMP_ADDR')
     def ipv6_comp(self, position):
         """
                 IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
@@ -2171,9 +2433,9 @@ class EmailParser(object):
 
         else:
             self.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count) )
-            return tmp_ret('RFC5322_IPV6_COMP_ADDR')
+            return tmp_ret
 
-    @as_football()
+    @as_football(diags='RFC5322_IPV6_IPV4_ADDR')
     def ipv6v4_full(self, position):
         """
                 IPv6v4-full    = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
@@ -2202,9 +2464,9 @@ class EmailParser(object):
             return self._empty
 
         tmp_ret.remove('RFC5322_IPV4_ADDR')
-        return tmp_ret('RFC5322_IPV6_IPV4_ADDR')
+        return tmp_ret
 
-    @as_football()
+    @as_football(diags='RFC5322_IPV6_IPV4_COMP_ADDR')
     def ipv6v4_comp(self, position):
         """
                 IPv6v4-comp    = [IPv6-hex *3(":" IPv6-hex)] "::"
@@ -2276,7 +2538,7 @@ class EmailParser(object):
         else:
             self.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count))
             tmp_ret.remove('RFC5322_IPV4_ADDR')
-            return tmp_ret('RFC5322_IPV6_IPV4_COMP_ADDR')
+            return tmp_ret
 
     @as_football(skip=True)
     def cfws(self, position):
@@ -2303,21 +2565,24 @@ class EmailParser(object):
             # tmp_find = self.count(position, self.AT, length=tmp_ret.l)
             # self.add_note_trace('pre (1) checking for AT count: %s in: %s' % (tmp_find, self.mid(position, tmp_ret.l)))
 
-            if tmp_ret:
-                self.at_in_cfws = self.AT in self.mid(position, tmp_ret.l)
-                if self.at_in_cfws and self.near_at_flag:
-                    tmp_ret('DEPREC_CFWS_NEAR_AT')
+            # if tmp_ret:
+
+                #self.at_in_cfws = self.AT in self.mid(position, tmp_ret.l)
+
+                #if self.at_in_cfws and self.near_at_flag:
+                #    tmp_ret('DEPREC_CFWS_NEAR_AT')
 
             # self.add_note_trace('post (1) checking at_in_cfws: %s' % self.at_in_cfws)
 
-            return tmp_ret
+            # return tmp_ret
 
-        tmp_ret += self.fws(position)
+        # tmp_ret += self.fws(position)
+
+        if 'CFWS_LAST' in tmp_ret.flags and self.AT in self.mid(position, tmp_ret.l):
+            tmp_ret('DEPREC_CFWS_NEAR_AT')
 
         if tmp_ret:
-            self.at_in_cfws = self.AT in self.mid(position, tmp_ret.l)
-            if self.at_in_cfws and self.near_at_flag:
-                tmp_ret('DEPREC_CFWS_NEAR_AT')
+            tmp_ret.flags += 'CFWS_LAST'
 
         # self.add_note_trace('post (2) checking at_in_cfws: %s' % self.at_in_cfws)
 
@@ -2341,7 +2606,7 @@ class EmailParser(object):
             tmp_ret += self.fws(position + tmp_ret.l)
         return tmp_ret
 
-    @as_football(comment=True)
+    @as_football(comment=True, diags='CFWS_COMMENT')
     def comment(self, position):
         """
             comment         =   "(" *([FWS] ccontent) [FWS] ")"
@@ -2405,14 +2670,13 @@ class EmailParser(object):
                     tmp_ret('ERR_UNCLOSED_COMMENT')
                 tmp_ret('ERR_EXPECTING_CTEXT')
                 break
-
             else:
                 raise AttributeError('Invalid Action Name: %s' % action_name)
 
-        if has_close_quotes:
-            return tmp_ret('CFWS_COMMENT')
-        else:
+        if not has_close_quotes:
             return tmp_ret('ERR_UNCLOSED_COMMENT')
+
+        return tmp_ret
 
     @as_football()
     def ccontent(self, position):
@@ -2437,18 +2701,15 @@ class EmailParser(object):
         tmp_ret = self._empty
         return tmp_ret(self.sub_ctext(position) or self.obs_ctext(position))
 
-    @as_football()
+    @as_football(diags='DEPREC_CTEXT')
     def obs_ctext(self, position):
         """
             obs-ctext       =   obs-NO-WS-CTL
         [1038]              DEPREC_CTEXT  A comment contains a deprecated character (ISEMAIL_DEPREC)
         """
-        tmp_ret = self.simple_char(position, self.OBS_CTEXT)
-        if tmp_ret:
-            return tmp_ret('DEPREC_CTEXT')
-        return self._empty
+        return self.simple_char(position, self.OBS_CTEXT)
 
-    @as_football()
+    @as_football(diags='CFWS_FWS')
     def fws(self, position=None):
         """
         FWS             =   <fws_sub> /  obs-FWS
@@ -2503,8 +2764,6 @@ class EmailParser(object):
         if not tmp_ret:
             tmp_ret = self.obs_fws(position)
 
-        if tmp_ret:
-            tmp_ret('CFWS_FWS')
         return tmp_ret
 
     @as_football()
@@ -2537,7 +2796,7 @@ class EmailParser(object):
             else:
                 return self._empty
 
-    @as_football()
+    @as_football(diags='DEPREC_FWS')
     def obs_fws(self, position):
         """
             obs-FWS         =   1*([CRLF] WSP)     ; As amended in erratum #1908
@@ -2562,12 +2821,12 @@ class EmailParser(object):
 
             # if not self.at_end(position + tmp_ret.l) and self.this_char(position + tmp_ret.l) in self.WSP:
             # tmp_ret += 1
-            return tmp_ret('DEPREC_FWS', tmp_ret_2)
+            return tmp_ret(tmp_ret_2)
         else:
 
             return self._empty
 
-    @as_football()
+    @as_football(diags='RFC5321_QUOTED_STRING')
     def quoted_string(self, position):
         """
                 quoted-string   =   [CFWS]
@@ -2592,6 +2851,8 @@ class EmailParser(object):
         tmp_ret += self.cfws(position)
         self.near_at_flag = False
 
+        tmp_ret.flags -= 'CFWS_LAST'
+
         tmp_init_dquote = self.double_quote(position + tmp_ret)
 
         if tmp_init_dquote:
@@ -2600,7 +2861,6 @@ class EmailParser(object):
             return self._empty
 
         tmp_closing_dquote = self.find(position + tmp_ret, self.DQUOTE, skip_quoted_str=True)
-
         if tmp_closing_dquote == -1:
             return tmp_ret('ERR_UNCLOSED_QUOTED_STR')
 
@@ -2608,7 +2868,6 @@ class EmailParser(object):
         has_qtext = False
         while True:
 
-            # tmp_loop_1 = ParseResultFootball(self)
             tmp_loop_1 = self.fws(position + tmp_ret)
 
             if tmp_loop_1:
@@ -2628,27 +2887,15 @@ class EmailParser(object):
             else:
                 break
 
-        # if not has_qtext:
-        #     return tmp_ret('ERR_EXPECTING_QTEXT')
-
         tmp_last_quote = self.double_quote(position + tmp_ret)
 
         if tmp_last_quote:
             tmp_ret += tmp_last_quote
-            tmp_ret('RFC5321_QUOTED_STRING')
             tmp_cfws = self.cfws(position + tmp_ret.l)
             tmp_ret += tmp_cfws
-
-            if tmp_cfws:
-                if self.this_char(position + tmp_ret) not in (self.AT, self.DOT):
-                    tmp_ret('ERR_ATEXT_AFTER_CFWS', raise_on_error=False)
-            else:
-                if self.this_char(position + tmp_ret) not in (self.AT, self.DOT):
-                    tmp_ret('ERR_ATEXT_AFTER_QS', raise_on_error=False)
-
             return tmp_ret
         else:
-            return tmp_ret('ERR_EXPECTING_QTEXT', raise_on_error=False)
+            return tmp_ret('ERR_EXPECTING_QTEXT')
 
     @as_football()
     def qcontent(self, position):
@@ -2671,7 +2918,7 @@ class EmailParser(object):
         tmp_ret += self.simple_char(position, self.QTEXT) or self.obs_qtext(position)
         return tmp_ret
 
-    @as_football()
+    @as_football(diags='DEPREC_QTEXT')
     def obs_qtext(self, position):
         """
             obs-qtext       =   obs-NO-WS-CTL
@@ -2679,12 +2926,7 @@ class EmailParser(object):
         [1035]              DEPREC_QTEXT  A quoted string contains a deprecated character (ISEMAIL_DEPREC)
 
         """
-
-        tmp_ret = self.simple_char(position, self.OBS_QTEXT)
-
-        if tmp_ret:
-            return tmp_ret('DEPREC_QTEXT')
-        return self._empty
+        return self.simple_char(position, self.OBS_QTEXT)
 
     @as_football()
     def quoted_pair(self, position):
@@ -2744,7 +2986,7 @@ class EmailParser(object):
         '''
         return self.simple_char(position, self.VCHAR_WSP, max_count=1)
 
-    @as_football()
+    @as_football(diags='DEPREC_QP')
     def obs_qp(self, position):
         '''
             obs-qp = (%d0 / obs-NO-WS-CTL / LF / CR)
@@ -2752,11 +2994,7 @@ class EmailParser(object):
         [1036]                 DEPREC_QP  A quoted pair contains a deprecated character (ISEMAIL_DEPREC)
 
         '''
-        tmp_ret = self.simple_char(position, self.OBS_QP, max_count=1)
-        if tmp_ret:
-            return tmp_ret("DEPREC_QP")
-        else:
-            return self._empty
+        return self.simple_char(position, self.OBS_QP, max_count=1)
 
     @as_football()
     def crlf(self, position, in_crlf=False):
@@ -2786,12 +3024,9 @@ class EmailParser(object):
                 return tmp_ret('ERR_CR_NO_LF', set_length=2)
         return tmp_ret
 
-    @as_football(segment=False)
+    @as_football(segment=False, diags='DEPREC_CFWS_NEAR_AT')
     def no_at(self, position):
-        tmp_ret = self.simple_char(position, self.AT, max_count=1, stage_name='AT')
-        if tmp_ret:
-            tmp_ret('DEPREC_CFWS_NEAR_AT')
-        return tmp_ret
+        return self.simple_char(position, self.AT, max_count=1)
 
     @as_football()
     def at(self, position):        

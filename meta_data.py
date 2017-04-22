@@ -1901,16 +1901,19 @@ class MetaLookup(object):
     __call__ = get_report
 
     def max(self, *args):
+        return self.max_obj(*args).key
+
+    def max_obj(self, *args):
         tmp_list = []
         for a in args:
             tmp_list.append(self[a])
-        return max(tmp_list).key
+        return max(tmp_list)
+
+    def max_value(self, *args):
+        return self.max_obj(*args).value
 
     def max_status(self, *args):
-        tmp_list = []
-        for a in args:
-            tmp_list.append(self[a])
-        tmp_max = max(tmp_list)
+        tmp_max = self.max_obj(*args)
         return tmp_max.key, tmp_max.status
 
 
