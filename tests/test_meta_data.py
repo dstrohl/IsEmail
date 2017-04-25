@@ -1,126 +1,8 @@
-from meta_data import META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
+import unittest
+import json
+from parse_results import ParseResultFootball, ParsingError, ParseHistoryData
+from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
 
-CORRECTED_TESTS = {
-    'version': '4.00',
-    3: {
-        'diag'  : 'ERR_NO_DOMAIN_SEP',
-        'was': 'ERR_NO_DOMAIN_PART',
-        'reason': 'I find the lack of the domain sep first, then error out.'
-    },
-    6: {
-        'diag': 'RFC5321_TLD',
-        'was': 'VALID_CATEGORY',
-        'reason': 'while it is a valid email, it still justifies a warning that it is a TLD domain.'
-    },
-    13: {
-        'diag'  : 'DNSWARN_INVALID_TLD',
-        'was': 'DNSWARN_NO_RECORD',
-        'reason': 'We do not bother trying to lookup domains that are not listed in the TLD list.'
-    },
-    18: {
-        'diag'  : 'ERR_NO_DOMAIN_SEP',
-        'was': 'ERR_NO_DOMAIN_PART',
-        'reason': 'I find the lack of the domain sep first, then error out.'
-    },
-    22: {
-        'diag'  : 'DNSWARN_NO_MX_RECORD',
-        'was'   : 'VALID_CATEGORY',
-        'reason': "I guess they don't do mail there any more."
-    },
-    31: {
-        'diag'  : 'RFC5322_LIMITED_DOMAIN',
-        'codes': ['RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN'],
-        'was'   : 'ERR_DOMAIN_HYPHEN_END',
-        'reason': "while not valid for normal DNS, it's legal by RFC5322 (dot-atom)"
-    },
-    33: {
-        'diag'  : 'DNSWARN_INVALID_TLD',
-        'was'   : 'DNSWARN_NO_RECORD',
-        'reason': 'We do not bother trying to lookup domains that are not listed in the TLD list.'
-    },
-    37: {
-        'diag'  : 'DNSWARN_INVALID_TLD',
-        'was'   : 'DNSWARN_NO_RECORD',
-        'reason': 'We do not bother trying to lookup domains that are not listed in the TLD list.'
-    },
-    38: {
-        'diag'  : 'DNSWARN_INVALID_TLD',
-        'was'   : 'DNSWARN_NO_RECORD',
-        'reason': 'We do not bother trying to lookup domains that are not listed in the TLD list.'
-    },
-    41: {
-        'codes'  : ['RFC5322_DOMAIN_TOO_LONG', 'RFC5322_TOO_LONG'],
-        'reason': 'We can return multiple warnings'
-    },
-    44: {
-        'diag': 'ERR_ATEXT_AFTER_QS',
-        'codes'  : ['RFC5321_QUOTED_STRING', 'ERR_ATEXT_AFTER_QS'],
-        'was'   : 'ERR_EXPECTING_ATEXT',
-        'reason': "We saw the quoted string close OK, then detected that there was somethign else."
-    },
-    51: {
-        'codes' : ['ERR_ATEXT_AFTER_QS', 'RFC5321_QUOTED_STRING'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    53: {
-        'diag'  : 'ERR_ATEXT_AFTER_QS',
-        'codes' : ['RFC5321_QUOTED_STRING', 'ERR_ATEXT_AFTER_QS'],
-        'was'   : 'ERR_EXPECTING_ATEXT',
-        'reason': "We saw the quoted string close OK, then detected that there was somethign else."
-    },
-    54: {
-        'codes' : ['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    56: {
-        'codes' : ['RFC5321_QUOTED_STRING', 'DEPREC_LOCAL_PART'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    58: {
-        'addr' : '"test\\&#x2401;"@iana.org',
-        'codes': ['RFC5321_QUOTED_STRING', 'DEPREC_QP'],
-        'reason': 'the chr(00) is not allowed, so we return a different error'
-    },
-    59: {
-        'codes' : ['RFC5321_QUOTED_STRING', 'RFC5322_LOCAL_TOO_LONG'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    60: {
-        'codes' : ['RFC5321_QUOTED_STRING', 'RFC5322_LOCAL_TOO_LONG'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    61: {
-        'diag': 'RFC5322_IPV4_ADDR',
-        'was': 'RFC5321_ADDRESS_LITERAL',
-        'codes' : ['RFC5321_ADDRESS_LITERAL', 'RFC5322_IPV4_ADDR'],
-        'reason': 'new diagnosis code'
-    },
-    62: {
-        'codes' : ['ERR_EXPECTING_ATEXT', 'RFC5321_TLD'],
-        'reason': 'We can return multiple diagnosis codes'
-    },
-    63: {
-        'diag'  : 'RFC5322_LIMITED_DOMAIN',
-        'was'   : 'RFC5322_DOMAIN_LITERAL',
-        'codes' : ['RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOMAIN'],
-        'reason': 'new diagnosis code'
-    },
-
-}
-
-
-def _test_name(l1, l2=None, l3=None, suffix=None):
-    tmp_ret = l1
-    if l2 is not None:
-        tmp_ret += '-'
-        tmp_ret += RETURN_OBJ_L2[l2][0]
-    if l3 is not None:
-        tmp_ret += '-'
-        tmp_ret += RETURN_OBJ_L3[l3][0]
-    if suffix is not None:
-        tmp_ret += '-'
-        tmp_ret += suffix
-    return tmp_ret
 
 class ParserFixture(object):
     def __init__(self, email_in='', **kwargs):
@@ -481,3 +363,187 @@ RETURN_OBJ_TESTS = {
     },
 }
 
+
+def _test_name(l1, l2=None, l3=None, suffix=None):
+    tmp_ret = l1
+    if l2 is not None:
+        tmp_ret += '-'
+        tmp_ret += RETURN_OBJ_L2[l2][0]
+    if l3 is not None:
+        tmp_ret += '-'
+        tmp_ret += RETURN_OBJ_L3[l3][0]
+    if suffix is not None:
+        tmp_ret += '-'
+        tmp_ret += suffix
+    return tmp_ret
+
+
+class TestMetaLookup(unittest.TestCase):
+    maxDiff = None
+
+    # longMessage = False
+
+    def setUp(self):
+        META_LOOKUP.clear_overrides()
+
+    def test_hash(self):
+        tmp_dict = {}
+        tmp_obj = META_LOOKUP['DEPREC_QTEXT']
+        tmp_dict[tmp_obj] = 'foobar'
+        self.assertEqual(hash('DEPREC_QTEXT'), hash(tmp_obj))
+        self.assertEqual('foobar', tmp_dict[tmp_obj])
+
+    def test_lenths(self):
+        self.assertEquals(len(META_LOOKUP.categories), 7)
+        self.assertEquals(len(META_LOOKUP.diags), 67)
+
+    def test_get_by_value_diag(self):
+        tmp_item = META_LOOKUP['ISEMAIL_RFC5322']
+        self.assertEquals(tmp_item.name, 'Valid Address (unusable)')
+        self.assertEquals(tmp_item.description,
+                          "The address is only valid according to the broad definition of RFC 5322. It is otherwise invalid.", )
+        self.assertEquals(tmp_item.status, ISEMAIL_RESULT_CODES.WARNING)
+
+    def test_get_by_key_diag(self):
+        tmp_item = META_LOOKUP['DEPREC_QTEXT']
+        self.assertEquals(tmp_item.value, 103500)
+        self.assertEquals(tmp_item.category.value, 50000)
+        self.assertEquals(tmp_item.description, "A quoted string contains a deprecated character")
+        self.assertEquals(tmp_item.category.status, ISEMAIL_RESULT_CODES.WARNING)
+        self.assertEquals(tmp_item.smtp, "553 5.1.3 Bad destination mailbox address syntax")
+
+    def test_ia_error(self):
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('VALID')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('DNSWARN_COMM_ERROR')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.clear_overrides()
+
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on('ISEMAIL_DNSWARN')
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.clear_overrides()
+
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertFalse(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertFalse(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+        META_LOOKUP.set_error_on_warning()
+        self.assertTrue(META_LOOKUP.is_error('ERR_UNCLOSED_DOM_LIT'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_NO_RECORD'))
+        self.assertTrue(META_LOOKUP.is_error('DNSWARN_COMM_ERROR'))
+        self.assertTrue(META_LOOKUP.is_error('DEPREC_COMMENT'))
+        self.assertFalse(META_LOOKUP.is_error('VALID'))
+
+    def run_ret_obj_test(self, l1, l2, l3):
+        kwargs = {'diags': ['DNSWARN_INVALID_TLD', 'RFC5321_TLD_NUMERIC', 'RFC5321_QUOTED_STRING',
+                            'RFC5321_ADDRESS_LITERAL', 'ERR_UNCLOSED_COMMENT']}
+
+        kwargs.update(RETURN_OBJ_L2[l2][1])
+        kwargs.update(RETURN_OBJ_L3[l3][1])
+        if 'filter' in kwargs:
+            kwargs['filter'] = RETURN_OBJ_TESTS[l1][l2]['filter']
+
+        tmp_ret = META_LOOKUP(l1, **kwargs)
+        tmp_exp = RETURN_OBJ_TESTS[l1][l2][l3]
+
+        if l1 in ['key_dict', 'key_list', 'desc_list']:
+            tmp_ret_str = json.dumps(tmp_ret, indent=4)
+            tmp_exp_str = json.dumps(tmp_exp, indent=4)
+        elif l1 in ['document_string', 'formatted_string']:
+            tmp_ret_str = tmp_ret
+            tmp_exp_str = tmp_exp
+        else:
+            tmp_ret_str = repr(tmp_ret)
+            tmp_exp_str = repr(tmp_exp)
+
+        tmp_msg = '\n\n\nItems do not compare\n\n'
+        tmp_msg += 'L1: %s\n' % l1
+        tmp_msg += 'L2: %s\n' % l2
+        tmp_msg += 'L3: %s\n' % l3
+        tmp_msg += 'Test Name: %s\n\n' % _test_name(l1, l2, l3)
+
+        tmp_msg += 'kwargs:\n%s\n\n' % json.dumps(kwargs, indent=4)
+        tmp_msg += 'Expected:\n************************\n' \
+                   '%s\n\nReturned\n************************\n%s\n\n' % (tmp_exp_str, tmp_ret_str)
+
+        tmp_msg += '\n\n\n'
+        tmp_msg += 'Expected: %r\nReturned: %r\n\n' % (tmp_exp_str, tmp_ret_str)
+
+        self.assertEqual(tmp_ret, tmp_exp, msg=tmp_msg)
+
+    def run_raise_obj_test(self, l1, l2):
+        kwargs = {'diags': ['DNSWARN_INVALID_TLD', 'RFC5321_TLD_NUMERIC', 'RFC5321_QUOTED_STRING',
+                            'RFC5321_ADDRESS_LITERAL', 'ERR_UNCLOSED_COMMENT']}
+
+        kwargs.update(RETURN_OBJ_L2[l2][1])
+
+        if 'filter' in kwargs:
+            kwargs['filter'] = RETURN_OBJ_TESTS[l1][l2]['filter']
+
+        tmp_msg = '\n\n\nItems do not compare\n\n'
+        tmp_msg += 'L1: %s\n' % l1
+        tmp_msg += 'L2: %s\n' % l2
+        tmp_msg += 'Test Name: %s\n\n' % _test_name(l1, l2)
+
+        tmp_msg += 'kwargs:\n%s\n\n' % json.dumps(kwargs, indent=4)
+
+        with self.assertRaises(RETURN_OBJ_TESTS[l1][l2]['raises'], msg=tmp_msg):
+            tmp_ret = META_LOOKUP(l1, **kwargs)
+
+    def test_return_objects(self):
+        """
+        {
+        L1    'report_name':
+        L2        'inc_whatever':
+                       'raises'
+                      'filter':
+        L3            'show_all':
+                        'show_all_filtered'
+                        'show_one'
+                        'show_one_filtered'
+        """
+        # META_LOOKUP.set_error_on('RFC5321_QUOTED_STRING')
+        LIMIT_TO = ['', '', '']
+        # LIMIT_TO = ['desc_list', 'both', 'all-flt']
+
+        if LIMIT_TO != ['', '', '']:
+            with self.subTest('NOTE: Test Limited to: %r' % LIMIT_TO):
+                self.fail()
+
+        for l1 in RETURN_OBJ_TESTS.keys():
+            if LIMIT_TO[0] == '' or LIMIT_TO[0] == l1:
+                for l2 in RETURN_OBJ_L2.keys():
+                    if LIMIT_TO[1] == '' or LIMIT_TO[1] == RETURN_OBJ_L2[l2][0]:
+                        if 'raises' in RETURN_OBJ_TESTS[l1][l2]:
+                            with self.subTest(_test_name(l1, l2, suffix='raise')):
+                                self.run_raise_obj_test(l1, l2)
+                        else:
+                            for l3 in RETURN_OBJ_L3.keys():
+                                if LIMIT_TO[2] == '' or LIMIT_TO[2] == RETURN_OBJ_L3[l3][0]:
+                                    with self.subTest(_test_name(l1, l2, l3)):
+                                        for i in RETURN_OBJ_MD_CHANGE:
+                                            META_LOOKUP.clear_overrides()
+                                            if _test_name(l1, l2, l3).startswith(i):
+                                                META_LOOKUP.set_error_on(RETURN_OBJ_MD_CHANGE[i])
+                                        self.run_ret_obj_test(l1, l2, l3)
