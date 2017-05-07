@@ -125,11 +125,13 @@ class FlagManager(object):
 
     def __init__(self, *args, **kwargs):
         self._data = {}
+        self._init_fields = False
         for arg in args:
             self._add(arg)
         if kwargs:
             self._add(kwargs)
-
+        self._default = self._data.copy()
+        self._init_fields = True
         self.__initialised = True
 
     def _clear(self):
@@ -148,8 +150,7 @@ class FlagManager(object):
 
         elif isinstance(data_in, (list, tuple)):
             for d in data_in:
-                tmp_key, tmp_value = self._str_conv(d)
-                self[tmp_key] = tmp_value
+                self._add(d)
 
         elif isinstance(data_in, dict):
             self._update(data_in)
@@ -171,7 +172,7 @@ class FlagManager(object):
                 self._set_false(tmp_key)
 
         elif isinstance(data_in, dict):
-            for k in tmp_ret.keys():
+            for k in data_in.keys():
                 self._set_false(k)
 
         elif isinstance(data_in, (FlagManager, LockedFlagManager)):
@@ -180,15 +181,35 @@ class FlagManager(object):
 
         return self
 
+    def _reset(self, set_to=False, set_to_default=False):
+        if set_to_default:
+            self._data.clear()
+            self._data.update(self._default.copy())
+        else:
+            self._set_all(set_to)
+
+    def _set_all(self, set_to=False):
+        tmp_list = list(self._data.keys())
+        if set_to:
+            self._add(tmp_list)
+        else:
+            self._del(tmp_list)
+
     def _set_true(self, field):
-        self._validate_addr(field)
-        self._data[field] = True
+        if field == '*':
+            self._set_all(True)
+        else:
+            self._validate_addr(field)
+            self._data[field] = True
 
     def _set_false(self, field):
-        try:
-            del self._data[field]
-        except KeyError:
-            pass
+        if field == '*':
+            self._set_all(False)
+        else:
+            try:
+                del self._data[field]
+            except KeyError:
+                pass
 
     def _update(self, dict_in):
         for key, value in dict_in.items():
@@ -207,39 +228,50 @@ class FlagManager(object):
         return self._data.copy()
 
     def _and(self, other):
-        tmp_ret = FlagManager()
+        tmp_ret = self._copy(set_to=False)
+
         if not isinstance(other, (FlagManager, LockedFlagManager)):
             other = FlagManager(other)
 
         for key, value in self._data.items():
             if value and key in other._data and other._data[key]:
-                tmp_ret._data[key] = True
+                tmp_ret += key
+
         return tmp_ret
 
     def _or(self, other):
-        tmp_ret = FlagManager()
+        tmp_ret = self._copy(set_to=False)
         if not isinstance(other, (FlagManager, LockedFlagManager)):
             other = FlagManager(other)
 
         for key, value in self._data.items():
             if value or (key in other._data and other._data[key]):
-                tmp_ret._data[key] = True
+                tmp_ret += key
 
         for key, value in other._data.items():
             if value or (key in self._data and self._data[key]):
-                tmp_ret._data[key] = True
+                try:
+                    tmp_ret += key
+                except KeyError:
+                    pass
 
         return tmp_ret
 
-    def _copy(self):
-        tmp_ret = self.__class__(**self._data)
-        return tmp_ret
+    def _copy(self, set_to_default=False, set_to=None):
+        if set_to_default:
+            return self.__class__(**self._default)
+        else:
+            tmp_ret = self.__class__(**self._default)
+            if set_to is None:
+                tmp_ret._update(self._data)
+            else:
+                tmp_ret._set_all(set_to)
+            return tmp_ret
     __copy__ = _copy
 
     def __iter__(self):
         for k, i in self._data.items():
-            if i:
-                yield k
+            yield k
 
     def __contains__(self, item):
         return item in self._data and self._data[item]
@@ -262,13 +294,10 @@ class FlagManager(object):
             return False
 
     def __setitem__(self, key, value):
-        try:
-            if bool(value):
-                self._set_true(key)
-            else:
-                self._set_false(key)
-        except AttributeError as err:
-            raise KeyError(str(err))
+        if bool(value):
+            self._set_true(key)
+        else:
+            self._set_false(key)
 
     def __call__(self, *args, **kwargs):
         self._add(args)
@@ -309,16 +338,25 @@ class FlagManager(object):
     def __repr__(self):
         return 'FlagManager(%s)' % self.__str__()
 
+    def __eq__(self, other):
+        if not isinstance(other, (FlagManager, LockedFlagManager)):
+            other = FlagManager(other)
+
+        for key, item in self._data.items():
+            try:
+                if item != other[key]:
+                    return False
+            except KeyError:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self == other
+
 
 class LockedFlagManager(FlagManager):
     def __init__(self, *args, **kwargs):
-        self._init_fields = False
-        self._default = None
         super(LockedFlagManager, self).__init__(*args, **kwargs)
-
-        self._default = self._data.copy()
-
-        self._init_fields = True
         self.__initialised = True
 
     def _clear(self):
@@ -327,70 +365,17 @@ class LockedFlagManager(FlagManager):
         """
         self._data.clear()
         self._data.update(self._default)
-    #
-    # def _str_conv(self, flag_str):
-    #     if flag_str[0] in '+-':
-    #         return flag_str[1:], flag_str[0] == '+'
-    #     else:
-    #         return flag_str, True
-    #
-    # def _add(self, data_in):
-    #     if isinstance(data_in, str):
-    #         tmp_key, tmp_value = self._str_conv(data_in)
-    #         self[tmp_key] = tmp_value
-    #
-    #     elif isinstance(data_in, (list, tuple)):
-    #         for d in data_in:
-    #             tmp_key, tmp_value = self._str_conv(d)
-    #             self[tmp_key] = tmp_value
-    #
-    #     elif isinstance(data_in, dict):
-    #         self._update(data_in)
-    #
-    #     elif isinstance(data_in, (FlagManager, LockedFlagManager)):
-    #         self._update(data_in._data.copy())
-    #
-    #     return self
-    #
-    # def _del(self, data_in):
-    #     tmp_ret = {}
-    #     if isinstance(data_in, str):
-    #         tmp_key, tmp_value = self._str_conv(data_in)
-    #         self._set_false(tmp_key)
-    #
-    #     elif isinstance(data_in, (list, tuple)):
-    #         for d in data_in:
-    #             tmp_key, tmp_value = self._str_conv(d)
-    #             self._set_false(tmp_key)
-    #
-    #     elif isinstance(data_in, dict):
-    #         for k in tmp_ret.keys():
-    #             self._set_false(k)
-    #
-    #     elif isinstance(data_in, (FlagManager, LockedFlagManager)):
-    #         for k in data_in:
-    #             self._set_false(k)
-    #
-    #     return self
-
-    # def _set_true(self, field):
-    #     self._validate_addr(field)
-    #     self._data[field] = True
 
     def _set_false(self, field):
         self._validate_addr(field)
         self._data[field] = False
 
-    # def _update(self, dict_in):
-    #     for key, value in dict_in.items():
-    #         self[key] = value
-    #
     def _validate_addr(self, flag):
         if self._init_fields:
             if flag in self._data:
                 return True
             else:
-                raise AttributeError('Invalid flag name %s: valid ones are %s' % (flag, str(self)))
+                raise KeyError('Invalid flag name %r: valid ones are %r' % (flag, self._str(with_icons=False)))
         else:
             if flag.isidentifier():
                 if flag[0] != '_':
@@ -417,47 +402,6 @@ class LockedFlagManager(FlagManager):
         else:
             return self._data.copy()
 
-    # TODO: this
-    def _and(self, other):
-        tmp_ret = FlagManager()
-        if not isinstance(other, (FlagManager, LockedFlagManager)):
-            other = FlagManager(other)
-
-        for key, value in self._data.items():
-            if value and key in other._data and other._data[key]:
-                tmp_ret._data[key] = True
-        return tmp_ret
-
-    # TODO: this
-    def _or(self, other):
-        tmp_ret = FlagManager()
-        if not isinstance(other, (FlagManager, LockedFlagManager)):
-            other = FlagManager(other)
-
-        for key, value in self._data.items():
-            if value or (key in other._data and other._data[key]):
-                tmp_ret._data[key] = True
-
-        for key, value in other._data.items():
-            if value or (key in self._data and self._data[key]):
-                tmp_ret._data[key] = True
-
-        return tmp_ret
-
-    # def _copy(self):
-    #     tmp_ret = LockedFlagManager(**self._data)
-    #     return tmp_ret
-    #
-    # __copy__ = _copy
-
-    # def __iter__(self):
-    #     for k, i in self._data.items():
-    #         if i:
-    #             yield k
-    #
-    # def __contains__(self, item):
-    #     return item in self._data and self._data[item]
-    #
     def __getattr__(self, item):
         try:
             return self[item]
@@ -481,21 +425,9 @@ class LockedFlagManager(FlagManager):
             self._add(kwargs)
         return self._get(filter_for=True)
 
-    #
-    # def __len__(self):
-    #     return len(self._data)
-
     def __bool__(self):
         return all(self._data.values())
 
-    # def __iadd__(self, other):
-    #     self._add(other)
-    #     return self
-    #
-    # def __isub__(self, other):
-    #     self._del(other)
-    #     return self
-    #
     def __str__(self):
         return self._str(with_icons=True)
 

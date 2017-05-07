@@ -4,6 +4,7 @@ __all__ = ['make_char_str', 'ParsingError', 'ParseShortResult', 'ParseResultFoot
 
 from meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
 from dns_functions import dns_lookup
+from flag_manager import FlagManager
 
 # def _make_list(obj_in):
 #     if isinstance(obj_in, (str, int)):
@@ -178,63 +179,6 @@ class ParseHistoryData(object):
 
     def __str__(self):
         return self.as_string()
-
-
-class ParseFlags(object):
-    def __init__(self):
-        self.data = {}
-
-    def add(self, *flags, **kwargs):
-        for flag in flags:
-            if isinstance(flag, dict):
-                self.data.update(flag)
-            elif isinstance(flag, ParseFlags):
-                self.data.update(flag.data)
-            else:
-                self.data[flag] = None
-        if kwargs:
-            self.data.update(kwargs)
-        return self
-    __iadd__ = add
-    __call__ = add
-
-    def rem(self, *flags):
-        for f in flags:
-            try:
-                del self.data[f]
-            except KeyError:
-                pass
-        return self
-    __del__ = rem
-    __isub__ = rem
-
-    def clear(self):
-        self.data.clear()
-
-    def __contains__(self, item):
-        return item in self.data
-
-    def __getitem__(self, item):
-        return self.data[item]
-
-    def __bool__(self):
-        return bool(self.data)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __str__(self):
-        tmp_ret = []
-        for d in self.data:
-            if self.data[d] is None:
-                tmp_ret.append(d)
-            else:
-                tmp_ret.append('%s(%s)' % (d, self.data[d]))
-
-        return ', '.join(tmp_ret)
-
-    def __repr__(self):
-        return 'Flags(%s)' % str(self)
 
 
 class ParseResultFootball(object):
@@ -721,185 +665,6 @@ class ParseFullResult(ParseShortResult):
 
 
 # <editor-fold desc="Trace Objects">
-class TraceObjBase(object):
-    def __init__(self, tracer, stage, full_stage, indent_level, position=0, length=0):
-        self.tracer = tracer
-        self.stage_name = stage
-        self.full_stage_name = full_stage
-        self.indent = ''.rjust(indent_level * 4)
-        self.position = position
-        self.length = length
-
-
-class TraceObjBegin(TraceObjBase):
-    def __init__(self, *args, **kwargs):
-        super(TraceObjBegin, self).__init__(*args, **kwargs)
-
-    def __str__(self):
-        return '%sbegin (%s): %s  scanning: ->%r<-' % (self.indent, self.position, self.stage_name, self.tracer.mid(self.position))
-
-
-class TraceObjEnd(TraceObjBase):
-    def __init__(self, *args, results, raise_error=False, **kwargs):
-        super(TraceObjEnd, self).__init__(*args, **kwargs)
-        self.results = results
-        self.raise_error = raise_error
-        if self.length == 0:
-            self.length = results.l
-
-    def __str__(self):
-        if self.raise_error:
-            tmp_raised = ' -RAISED - '
-        else:
-            tmp_raised = ''
-
-        if self.results.l == 0 or self.results.error:
-            return '%send      %s : %s  -- %r ' % (self.indent, tmp_raised, self.stage_name, self.results)
-        else:
-            return '%send       (%r) %s : %s  -- %r ' % (self.indent,
-                                                         self.tracer.mid(self.position, self.results.length),
-                                                         tmp_raised,
-                                                         self.stage_name,
-                                                         self.results)
-
-
-class TraceObjNote(TraceObjBase):
-    def __init__(self, *args, note, **kwargs):
-        super(TraceObjNote, self).__init__(*args, **kwargs)
-        self.note = note
-
-    def __str__(self):
-        if self.position == 0:
-            return '%sNote : %s' % (self.indent, self.note)
-        else:
-            return '%sNote (%s): %s' % (self.indent, self.position, self.note)
-
-
-class StageHelper(object):
-    def __init__(self):
-        self._stage = []
-
-    def pop(self, count=1):
-        for i in range(count):
-            self._stage.pop()
-
-    def add(self, stage):
-        self._stage.append(stage)
-    __call__ = add
-
-    def __str__(self):
-        return self._stage[-1]
-
-    def __repr__(self):
-        return '.'.join(self._stage)
-
-    def __len__(self):
-        return len(self._stage)
-
-    def __getitem__(self, item):
-        item *= -1
-        return self._stage[item]
-
-
-class ParseTracer(object):
-    def __init__(self, email_in, trace_level=-1):
-        self._email_in = email_in
-        self._email_len = len(email_in)
-        self._traces = []
-        self._indent_level = 0
-        self._trace_level = trace_level
-        self.stage = StageHelper()
-
-    def indent(self, count=1):
-        self._indent_level += count
-        return self
-    i = indent
-    __iadd__ = indent
-
-    def outdent(self, count=1):
-        self._indent_level -= count
-        return self
-    o = outdent
-    __isub__ = outdent
-
-    def can_trace(self):
-        if self._trace_level == -1 or self._trace_level >= self._indent_level:
-            return True
-        return False
-    __bool__ = can_trace
-
-    def mid(self, begin: int = 0, length: int = 0):
-        if length > 0:
-            tmp_end = min(begin + length, self._email_len)
-        else:
-            tmp_end = self._email_len
-        return self._email_in[begin:tmp_end]
-
-    def trace_str(self):
-        tmp_list = []
-        for t in self._traces:
-            tmp_list.append(str(t))
-        tmp_ret = '\nTRACE (%s records, string: %s): \n%s\n-----------------' % (
-            len(self._traces), repr(self._email_in), '\n'.join(tmp_list))
-        return tmp_ret
-    __str__ = trace_str
-
-    def _trace_obj_dict(self, **kwargs):
-        kwargs.update(dict(
-            tracer=self,
-            stage=self.stage.__str__(),
-            full_stage=self.stage.__repr__(),
-            indent_level=self._indent_level))
-        return kwargs
-
-    def begin(self, position):
-        if self:
-            tmp_trace = TraceObjBegin(**self._trace_obj_dict(position=position))
-            self._traces.append(tmp_trace)
-        return self
-
-    def end(self, position, results, raise_error=False):
-        if self:
-            tmp_trace = TraceObjEnd(**self._trace_obj_dict(
-                position=position,
-                results=results,
-                raise_error=raise_error))
-            self._traces.append(tmp_trace)
-        return self
-
-    def note(self, note, position=0):
-        if self:
-            tmp_trace = TraceObjNote(**self._trace_obj_dict(position=position, note=note))
-            self._traces.append(tmp_trace)
-        return self
-
-    def __call__(self, *args):
-        if self:
-            tmp_position = 0
-            tmp_results = None
-            tmp_note = None
-            for a in args:
-                if isinstance(a, int):
-                    tmp_position = a
-                elif isinstance(a, str):
-                    tmp_note = a
-                elif isinstance(a, ParseResultFootball):
-                    tmp_results = a
-            if tmp_results is not None:
-                self.end(position=tmp_position, results=tmp_results)
-            elif tmp_note is None and tmp_position:
-                self.begin(position=tmp_position)
-            if tmp_note is not None:
-                self.note(note=tmp_note, position=tmp_position)
-        return self
-
-    def __len__(self):
-        return len(self._traces)
-
-    def __repr__(self):
-        return 'ParseTracer: (%s recs) %r' % (len(self._traces), self._email_in)
-# </editor-fold>
-
 
 class EmailInfo(object):
 
@@ -942,7 +707,7 @@ class EmailInfo(object):
         self.domain_type = None
         self.results = None
 
-        self.flags = ParseFlags()
+        self.flags = FlagManager()
 
         self.email_in = None
         self.email_len = None
