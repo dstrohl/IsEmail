@@ -1,7 +1,8 @@
 import unittest
-from trace_helper import TraceHelper, QueueCounterHelper, CounterHelper
 from datetime import datetime, timezone, timedelta
 from time import sleep
+
+from helpers.tracer.trace_helper import TraceHelper, QueueCounterHelper, CounterHelper
 
 _named_times = {}
 
@@ -655,6 +656,6 @@ class TestStagedTraceHelper(unittest.TestCase):
         tmp_exp = 'Begin: stage1\n|...t1\n|...|...Begin: stage1.stage2\n|...|...|...t2\n|...|...|...|...|...|...Begin: stage1.stage2.stage3\n|...|...|...|...|...|...|...t3\n|...|...|...|...|...|...End: stage3\n|...|...|...|...|...|...t4\n|...|...End: stage2\n|...|...t5\nEnd: stage1'
         tmp_ret = th.output()
         self.assertEqual(tmp_exp, tmp_ret, msg=self.format_results(tmp_exp, tmp_ret))
-        self.assertEqual(len(th), 13)
+        self.assertEqual(len(th), 11)
 
 

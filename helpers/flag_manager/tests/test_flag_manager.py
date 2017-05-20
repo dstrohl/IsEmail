@@ -1,66 +1,67 @@
 from unittest import TestCase
-from flag_manager import FlagManager, LockedFlagManager
+
+from helpers.flag_manager.flag_helper import FlagHelper
 
 
 class TestOpenFlagManager(TestCase):
     maxDiff = None
 
     def test_init(self):
-        fm = FlagManager()
+        fm = FlagHelper()
         fm.test = True
         self.assertTrue(fm.test)
         self.assertFalse(fm.test3)
 
     def test_add_item(self):
-        fm = FlagManager()
+        fm = FlagHelper()
         fm['test'] = True
         self.assertTrue(fm.test)
         self.assertFalse(fm.test3)
 
     def test_add_item_obj(self):
-        fm = FlagManager('test1', 'test2')
-        fm2 = FlagManager('-test2', 'test3')
-        fm += fm2
-        self.assertTrue(fm.test1)
-        self.assertTrue(fm.test2)
-        self.assertTrue(fm.test3)
+        fm = FlagHelper('+test1', '+test2')
+        fm2 = FlagHelper('-test2', '+test3')
+        fm3 = fm + fm2
+        self.assertTrue(fm3.test1)
+        self.assertFalse(fm3.test2)
+        self.assertTrue(fm3.test3)
 
     def test_add_item_invalid(self):
-        fm = FlagManager('-test1', 'test2', '-test3')
+        fm = FlagHelper('-test1', '+test2', '-test3')
         with self.assertRaises(AttributeError):
             fm['This is a test'] = True
         with self.assertRaises(AttributeError):
             fm['_test1'] = True
 
     def test_rem_item(self):
-        fm = FlagManager('test')
+        fm = FlagHelper('+test')
         self.assertTrue(fm.test)
         fm -= '+test'
-        self.assertFalse(fm.test)
-        self.assertFalse(fm.test3)
+        self.assertFalse(fm.test, repr(fm))
+        self.assertFalse(fm.test3, repr(fm))
 
     def test_rem_item_obj(self):
-        fm = FlagManager('test', 'test2')
-        fm2 = FlagManager('test')
+        fm = FlagHelper('+test', '+test2')
+        fm2 = FlagHelper('test')
         fm -= fm2
         self.assertFalse(fm.test)
         self.assertTrue(fm.test2)
 
     def test_rem_item_dict(self):
-        fm = FlagManager('test', 'test2')
+        fm = FlagHelper('+test', '+test2')
         fm -= {'test': False}
         self.assertFalse(fm.test)
         self.assertTrue(fm.test2)
 
     def test_add_on_init(self):
-        fm = FlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3')
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
         self.assertFalse(fm.test4)
 
     def test_rem_by_method(self):
-        fm = FlagManager(test1=True, test2=True, test3=False)
+        fm = FlagHelper(test1=True, test2=True, test3=False)
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -72,14 +73,14 @@ class TestOpenFlagManager(TestCase):
         self.assertFalse(fm.test3)
         self.assertFalse(fm.test4)
 
-    def test_add_by_iadd(self):
-        fm = FlagManager()
-        fm += 'test'
-        self.assertTrue(fm.test)
-        self.assertFalse(fm.test3)
+    # def test_add_by_iadd(self):
+    #     fm = FlagHelper()
+    #     fm += 'test'
+    #     self.assertTrue(fm.test)
+    #     self.assertFalse(fm.test3)
 
     def test_rem_by_isub(self):
-        fm = FlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3')
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -91,23 +92,23 @@ class TestOpenFlagManager(TestCase):
         self.assertFalse(fm.test3)
         self.assertFalse(fm.test4)
 
-    def test_add_mult_by_iadd(self):
-        fm = FlagManager()
-        fm += ('+test1', 'test2', '-test3')
+    def test_add_mult_by_call(self):
+        fm = FlagHelper()
+        fm += ('+test1', '+test2', '-test3')
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
         self.assertFalse(fm.test4)
 
-        fm -= ('test1', '-test2', '+test3')
-        self.assertFalse(fm.test1)
+        fm('+test1', '-test2', '+test3')
+        self.assertTrue(fm.test1)
         self.assertFalse(fm.test2)
-        self.assertFalse(fm.test3)
+        self.assertTrue(fm.test3)
         self.assertFalse(fm.test4)
 
     def test_contains(self):
-        fm = FlagManager()
-        fm += ('+test1', 'test2', '-test3')
+        fm = FlagHelper()
+        fm += ('+test1', '+test2', '-test3')
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -116,44 +117,47 @@ class TestOpenFlagManager(TestCase):
         tmp_test = 'test1' in fm
         self.assertTrue(tmp_test)
 
-        tmp_test = 'test3' in fm
+        tmp_test = 'test6' in fm
         self.assertFalse(tmp_test)
 
     def test_iterate(self):
-        fm = FlagManager('test1', 'test2', 'test3')
+        fm = FlagHelper('+test1', '+test2', 'test3')
         tmp_lst = list(fm)
 
         self.assertCountEqual(tmp_lst, ['test1', 'test2', 'test3'])
 
     def test_clear(self):
-        fm = FlagManager('test1', 'test2', 'test3')
+        fm = FlagHelper('+test1', '+test2', '+test3')
         self.assertEqual(len(fm), 3)
         self.assertTrue(fm)
-        fm._clear()
-        self.assertEqual(len(fm), 0)
+        fm.test2 = False
         self.assertFalse(fm)
 
+        fm._clear()
+        self.assertEqual(len(fm), 3)
+        self.assertTrue(fm)
+
     def test_get(self):
-        fm = FlagManager()
+        fm = FlagHelper()
         fm('test1', 'test2', 'test3')
-        tmp_lst = fm._get()
+        tmp_lst = list(fm)
 
         self.assertCountEqual(tmp_lst, ['test1', 'test2', 'test3'])
 
     def test_get_dict(self):
-        fm = FlagManager('test1', 'test2', 'test3')
+        fm = FlagHelper('+test1', '+test2', '+test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': True, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_copy(self):
-        fm = FlagManager('test1', 'test2', 'test3')
-        tmp_lst = fm._get()
+        fm = FlagHelper('+test1', '+test2', '+test3')
+        tmp_lst = list(fm)
         tmp_exp = ['test1', 'test2', 'test3']
         self.assertCountEqual(tmp_lst, tmp_exp)
 
         fm2 = fm.__copy__()
-        tmp_lst = fm2._get()
+        tmp_lst = list(fm2)
         tmp_exp = ['test1', 'test2', 'test3']
         self.assertCountEqual(tmp_lst, tmp_exp)
 
@@ -162,29 +166,30 @@ class TestOpenFlagManager(TestCase):
         self.assertFalse(fm2.test1)
 
     def test_call(self):
-        fm = FlagManager()
-        tmp_list = fm('test1', 'test2', 'test3')
-        self.assertCountEqual(tmp_list, ['test1', 'test2', 'test3'])
+        fm = FlagHelper()
+        fm('test1', 'test2', 'test3')
+        self.assertCountEqual(list(fm), ['test1', 'test2', 'test3'])
 
     def test_str(self):
-        fm = FlagManager()
+        fm = FlagHelper()
         fm('test1', 'test2', 'test3')
-        self.assertEqual(str(fm), 'test1, test2, test3')
+        self.assertEqual(str(fm), '(-)test1, (-)test2, (-)test3')
 
     def test_and(self):
-        fm1 = FlagManager('test1', 'test2', 'test3')
-        fm2 = FlagManager('test3', 'test4', 'test5')
+        fm1 = FlagHelper('+test1', '+test2', '+test3')
+        fm2 = FlagHelper('+test3', '+test4', '+test5')
 
-        fm = fm1._and(fm2)
+        fm = fm1 & fm2
+        # fm = fm1._and(fm2)
 
         exp_ret = ['test3']
         self.assertCountEqual(list(fm), exp_ret)
 
     def test_or(self):
-        fm1 = FlagManager('test1', 'test2', 'test3')
-        fm2 = FlagManager('test3', 'test4', 'test5')
+        fm1 = FlagHelper('+test1', '+test2', '+test3')
+        fm2 = FlagHelper('+test3', '+test4', '+test5')
 
-        fm = fm1._or(fm2)
+        fm = fm1 | fm2
         exp_ret = ['test1', 'test2', 'test3', 'test4', 'test5']
         self.assertCountEqual(list(fm), exp_ret)
 
@@ -192,60 +197,62 @@ class TestOpenFlagManager(TestCase):
 class TestLockedFlagManager(TestCase):
 
     def test_init(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         self.assertTrue(fm.test1)
         self.assertFalse(fm.test3)
 
     def test_add_item(self):
-        fm = LockedFlagManager('-test1', 'test2', '-test3')
+        fm = FlagHelper('-test1', '+test2', '-test3', lock_fields=True)
         fm['test1'] = True
         self.assertTrue(fm.test1)
         self.assertFalse(fm.test3)
 
     def test_add_item_obj_raises(self):
-        fm = LockedFlagManager('test1', 'test2')
-        fm2 = LockedFlagManager('-test2', 'test3')
-        with self.assertRaises(KeyError):
+        fm = FlagHelper('+test1', '+test2', lock_fields=True)
+        fm2 = FlagHelper('-test2', '+test3', lock_fields=True)
+        with self.assertRaises(AttributeError):
             fm += fm2
 
     def test_add_item_obj(self):
-        fm = LockedFlagManager('-test1', '-test2')
-        fm2 = LockedFlagManager('test1')
+        fm = FlagHelper('-test1', '-test2', lock_fields=True)
+        fm2 = FlagHelper('+test1', lock_fields=True)
         fm += fm2
         self.assertTrue(fm.test1)
         self.assertFalse(fm.test2)
 
     def test_add_item_invalid(self):
         with self.assertRaises(AttributeError):
-            fm = LockedFlagManager('-thjis is a test1', 'test2', '-test3')
+            fm = FlagHelper('-thjis is a test1', '+test2', '-test3', lock_fields=True)
         with self.assertRaises(AttributeError):
-            fm = LockedFlagManager('-_foobar', 'test2', '-test3')
+            fm = FlagHelper('-_foobar', '+test2', '-test3', lock_fields=True)
 
     def test_rem_item(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         self.assertTrue(fm.test1)
         fm('-test1')
         self.assertFalse(fm.test1)
         self.assertFalse(fm.test3)
 
-        with self.assertRaises(KeyError):
+        with self.assertRaises(AttributeError):
             fm['test5'] = True
 
     def test_rem_item_obj(self):
-        fm = LockedFlagManager('test', 'test2')
-        fm2 = LockedFlagManager('test', '-test2')
-        fm -= fm2
+        fm = FlagHelper('+test', '+test2', lock_fields=True)
+        fm2 = FlagHelper('+test', '-test2', lock_fields=True)
+        with self.assertRaises(AttributeError):
+            fm -= fm2
         self.assertFalse(fm.test)
         self.assertFalse(fm.test2)
 
     def test_rem_item_dict(self):
-        fm = LockedFlagManager('test', 'test2')
-        fm -= {'test': False}
+        fm = FlagHelper('+test', '+test2', lock_fields=True)
+        with self.assertRaises(AttributeError):
+            fm -= {'test': False}
         self.assertFalse(fm.test)
         self.assertTrue(fm.test2)
 
     def test_add_on_init(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -253,7 +260,7 @@ class TestLockedFlagManager(TestCase):
             exp = fm.test4
 
     def test_rem_by_method(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -264,14 +271,14 @@ class TestLockedFlagManager(TestCase):
         self.assertFalse(fm.test3)
 
     def test_add_by_iadd(self):
-        fm = LockedFlagManager(test1=True, test2=True, test3=False)
+        fm = FlagHelper(test1=True, test2=True, test3=False, lock_fields=True)
         self.assertFalse(fm.test3)
-        fm += 'test3'
+        fm.test3 = True
         self.assertTrue(fm.test1)
-        self.assertTrue(fm.test3)
+        self.assertTrue(fm.test3, repr(fm))
 
     def test_rem_by_isub(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
         self.assertFalse(fm.test3)
@@ -282,7 +289,7 @@ class TestLockedFlagManager(TestCase):
         self.assertFalse(fm.test3)
 
     def test_add_mult_by_iadd(self):
-        fm = LockedFlagManager('-test1', '-test2', '-test3')
+        fm = FlagHelper('-test1', '-test2', '-test3', lock_fields=True)
         fm += ('test1', 'test2', '-test3')
         self.assertTrue(fm.test1)
         self.assertTrue(fm.test2)
@@ -294,7 +301,7 @@ class TestLockedFlagManager(TestCase):
         self.assertFalse(fm.test3)
 
     def test_contains(self):
-        fm = LockedFlagManager('-test1', '-test2', '-test3')
+        fm = FlagHelper('-test1', '-test2', '-test3', lock_fields=True)
         self.assertFalse(fm.test1)
         self.assertFalse(fm.test2)
         self.assertFalse(fm.test3)
@@ -313,13 +320,13 @@ class TestLockedFlagManager(TestCase):
         self.assertFalse(tmp_test)
 
     def test_iterate(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
         tmp_lst = list(fm)
 
         self.assertCountEqual(tmp_lst, ['test1', 'test2', 'test3'])
 
     def test_clear(self):
-        fm = LockedFlagManager('test1', 'test2', 'test3')
+        fm = FlagHelper('+test1', '+test2', '+test3', lock_fields=True)
         self.assertEqual(len(fm), 3)
         self.assertTrue(fm)
         fm.test1 = False
@@ -331,36 +338,36 @@ class TestLockedFlagManager(TestCase):
         self.assertEqual(len(fm), 3)
 
     def test_get(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
-        tmp_lst = fm._get()
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
+        tmp_lst = list(fm)
         self.assertCountEqual(tmp_lst, ['test1', 'test2', 'test3'])
 
-        tmp_lst = fm._get(filter_for=True)
+        tmp_lst = list(fm)
         self.assertCountEqual(tmp_lst, ['test1', 'test3'])
 
         tmp_lst = fm._get(filter_for=False)
         self.assertCountEqual(tmp_lst, ['test2'])
 
     def test_get_dict(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_get_dict_true(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         tmp_lst = fm._get_dict(filter_for=True)
         tmp_exp = {'test1': True, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_get_dict_false(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         tmp_lst = fm._get_dict(filter_for=False)
         tmp_exp = {'test2': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_copy(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
@@ -373,20 +380,21 @@ class TestLockedFlagManager(TestCase):
 
         self.assertEqual(fm, fm2)
 
-        fm2 -= 'test1'
+        with self.assertRaises(AttributeError):
+            fm2 -= 'test1'
         self.assertTrue(fm.test1)
         self.assertFalse(fm2.test1)
 
         self.assertNotEqual(fm, fm2)
 
     def test_copy_default(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
-        fm2 = fm.__copy__(set_to_default=True)
+        fm2 = fm.__copy__()
         tmp_lst = fm2._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
@@ -398,13 +406,13 @@ class TestLockedFlagManager(TestCase):
         self.assertNotEquals(fm, fm2)
 
     def test_copy_true(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', 'test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
-        fm2 = fm.__copy__(set_to=True)
+        fm2 = fm.__copy__()
         tmp_lst = fm2._get_dict()
         tmp_exp = {'test1': True, 'test2': True, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
@@ -416,13 +424,13 @@ class TestLockedFlagManager(TestCase):
         self.assertNotEquals(fm, fm2)
 
     def test_copy_false(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', 'test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
-        fm2 = fm.__copy__(set_to=False)
+        fm2 = fm.__copy__()
         tmp_lst = fm2._get_dict()
         tmp_exp = {'test1': False, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
@@ -434,103 +442,103 @@ class TestLockedFlagManager(TestCase):
         self.assertNotEquals(fm, fm2)
 
     def test_reset_default(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', 'test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
-        fm._reset(set_to_default=True)
+        fm._clear()
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_reset_true(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', 'test2', '+test3', lock_fields=True)
         fm('-test3')
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': False, 'test3': False}
         self.assertEqual(tmp_lst, tmp_exp)
 
-        fm._reset(set_to=True)
+        fm._clear()
         tmp_lst = fm._get_dict()
         tmp_exp = {'test1': True, 'test2': True, 'test3': True}
         self.assertEqual(tmp_lst, tmp_exp)
 
     def test_call(self):
-        fm = LockedFlagManager('test1', 'test2', '-test3')
-        tmp_list = fm('-test2', 'test3')
-        self.assertCountEqual(tmp_list, ['test1', 'test3'])
+        fm = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
+        fm('-test2', 'test3')
+        self.assertCountEqual(list(fm), ['test1', 'test3'])
 
     def test_str(self):
-        fm = LockedFlagManager('test1', '-test2', 'test3')
+        fm = FlagHelper('+test1', '-test2', '+test3', lock_fields=True)
         self.assertEqual(str(fm), '(+)test1, (-)test2, (+)test3')
 
     def test_and_1(self):
-        fm1 = LockedFlagManager('-test1', 'test2', 'test3')
-        fm2 = LockedFlagManager('test3', 'test4', '-test5')
+        fm1 = FlagHelper('-test1', '+test2', '+test3', lock_fields=True)
+        fm2 = FlagHelper('+test3', '+test4', '-test5', lock_fields=True)
 
-        fm = fm1._and(fm2)
+        fm = fm1 & fm2
 
         exp_ret = ['test3']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_and_2(self):
-        fm1 = LockedFlagManager('test1', 'test2', 'test3')
-        fm2 = LockedFlagManager('test1', 'test2', '-test3')
+        fm1 = FlagHelper('+test1', '+test2', '+test3', lock_fields=True)
+        fm2 = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
 
-        fm = fm1._and(fm2)
+        fm = fm1 & fm2
 
         exp_ret = ['test1', 'test2']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_or_1(self):
-        fm1 = LockedFlagManager('-test1', 'test2', '-test3')
-        fm2 = LockedFlagManager('-test3', 'test4', 'test5')
+        fm1 = FlagHelper('-test1', '+test2', '-test3', lock_fields=True)
+        fm2 = FlagHelper('-test3', '+test4', '+test5', lock_fields=True)
 
-        fm = fm1._or(fm2)
+        fm = fm1 | fm2
         exp_ret = ['test2']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_or_2(self):
-        fm1 = LockedFlagManager('test1', 'test2', 'test3')
-        fm2 = LockedFlagManager('test1', 'test2', '-test3')
+        fm1 = FlagHelper('+test1', '+test2', '+test3', lock_fields=True)
+        fm2 = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
 
-        fm = fm1._or(fm2)
+        fm = fm1 | fm2
         exp_ret = ['test1', 'test2', 'test3']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_and_3(self):
-        fm1 = LockedFlagManager('-test1', 'test2', 'test3')
-        fm2 = FlagManager('test3', 'test4', '-test5')
+        fm1 = FlagHelper('-test1', '+test2', '+test3', lock_fields=True)
+        fm2 = FlagHelper('+test3', '+test4', '-test5')
 
-        fm = fm1._and(fm2)
+        fm = fm1 | fm2
 
         exp_ret = ['test3']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_and_4(self):
-        fm1 = LockedFlagManager('test1', 'test2', 'test3')
-        fm2 = FlagManager('test1', 'test2', '-test3')
+        fm1 = FlagHelper('+test1', '+test2', '+test3', lock_fields=True)
+        fm2 = FlagHelper('+test1', '+test2', '-test3')
 
-        fm = fm2._and(fm1)
+        fm = fm2 | fm1
 
         exp_ret = ['test1', 'test2']
-        self.assertCountEqual(fm._get(), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_or_3(self):
-        fm1 = LockedFlagManager('test1', 'test2', '-test3')
-        fm2 = FlagManager('test1', 'test4', '-test3')
+        fm1 = FlagHelper('+test1', '+test2', '-test3', lock_fields=True)
+        fm2 = FlagHelper('+test1', '+test4', '-test3')
 
-        fm = fm1._or(fm2)
+        fm = fm1 | fm2
         exp_ret = ['test1', 'test2']
-        self.assertCountEqual(fm._get(filter_for=True), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)
 
     def test_or_4(self):
 
-        fm1 = LockedFlagManager('test1', 'test4', '-test3')
-        fm2 = FlagManager('test3', 'test4', 'test5')
+        fm1 = FlagHelper('+test1', '+test4', '-test3', lock_fields=True)
+        fm2 = FlagHelper('+test3', '+test4', '+test5')
 
-        fm = fm2._or(fm1)
+        fm = fm2 | fm1
         exp_ret = ['test1', 'test3', 'test4', 'test5']
-        self.assertCountEqual(fm._get(), exp_ret)
+        self.assertCountEqual(fm._get_str(with_icons=True), exp_ret)

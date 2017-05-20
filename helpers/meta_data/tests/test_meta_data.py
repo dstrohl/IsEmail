@@ -1,7 +1,7 @@
-import unittest
 import json
-from parse_results import ParseResultFootball, ParsingError, ParseHistoryData
-from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
+import unittest
+
+from helpers.meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS
 
 
 class ParserFixture(object):

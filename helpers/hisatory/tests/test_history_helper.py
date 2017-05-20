@@ -1,5 +1,5 @@
 import unittest
-from parse_results import ParseHistoryData
+from helpers.hisatory.history_helper import HistoryHelper
 
 
 class TestHistory(unittest.TestCase):
@@ -7,7 +7,7 @@ class TestHistory(unittest.TestCase):
     FS = 'abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     def get_simple_history(self):
-        hd = ParseHistoryData('test_in', begin=0, length=1, from_string=self.FS)
+        hd = HistoryHelper('test_in', begin=0, length=1, from_string=self.FS)
         return hd
 
     def get_long_history(self, with_top=True):
@@ -36,50 +36,50 @@ class TestHistory(unittest.TestCase):
         else:
             top_str = ''
 
-        test_1_1_1_1 = ParseHistoryData('test_1_1_1_1', begin=0, length=3)
-        test_1_1_1_2 = ParseHistoryData('test_1_1_1_2', begin=3, length=3)
-        test_1_1_1_3 = ParseHistoryData('test_1_1_1_3', begin=6, length=3)
+        test_1_1_1_1 = HistoryHelper('test_1_1_1_1', begin=0, length=3)
+        test_1_1_1_2 = HistoryHelper('test_1_1_1_2', begin=3, length=3)
+        test_1_1_1_3 = HistoryHelper('test_1_1_1_3', begin=6, length=3)
 
-        test_1_1_1 = ParseHistoryData('', begin=0, length=9)
+        test_1_1_1 = HistoryHelper('', begin=0, length=9)
         test_1_1_1.extend((test_1_1_1_1, test_1_1_1_2, test_1_1_1_3))
 
-        test_1_1_2_1 = ParseHistoryData('', begin=9, length=1)
+        test_1_1_2_1 = HistoryHelper('', begin=9, length=1)
 
-        test_1_1_2_2_1_1_1 = ParseHistoryData('test_1_1_2_2', begin=10, length=1)
+        test_1_1_2_2_1_1_1 = HistoryHelper('test_1_1_2_2', begin=10, length=1)
 
-        test_1_1_2_2_1_1 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2_1_1 = HistoryHelper('', begin=10, length=1)
         test_1_1_2_2_1_1.append(test_1_1_2_2_1_1_1)
 
-        test_1_1_2_2_1 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2_1 = HistoryHelper('', begin=10, length=1)
         test_1_1_2_2_1.append(test_1_1_2_2_1_1)
 
-        test_1_1_2_2 = ParseHistoryData('', begin=10, length=1)
+        test_1_1_2_2 = HistoryHelper('', begin=10, length=1)
         test_1_1_2_2.append(test_1_1_2_2_1)
 
-        test_1_1_2_3 = ParseHistoryData('test_1_1_2_3', begin=11, length=1)
+        test_1_1_2_3 = HistoryHelper('test_1_1_2_3', begin=11, length=1)
 
-        test_1_1_2 = ParseHistoryData('test_1_1_2', begin=9, length=3)
+        test_1_1_2 = HistoryHelper('test_1_1_2', begin=9, length=3)
         test_1_1_2.extend((test_1_1_2_1, test_1_1_2_2, test_1_1_2_3))
 
-        test_1_1 = ParseHistoryData('test_1_1', begin=0, length=12)
+        test_1_1 = HistoryHelper('test_1_1', begin=0, length=12)
         test_1_1.append(test_1_1_1)
         test_1_1.append(test_1_1_2)
 
-        test_1_2 = ParseHistoryData('test_1_2', begin=12, length=4)
+        test_1_2 = HistoryHelper('test_1_2', begin=12, length=4)
 
-        test_1_3_1_1 = ParseHistoryData('test_1_3_1_1', begin=16, length=2)
-        test_1_3_1_2 = ParseHistoryData('test_1_3_1_2', begin=18, length=2)
-        test_1_3_1_3 = ParseHistoryData('test_1_3_1_3', begin=20, length=2)
+        test_1_3_1_1 = HistoryHelper('test_1_3_1_1', begin=16, length=2)
+        test_1_3_1_2 = HistoryHelper('test_1_3_1_2', begin=18, length=2)
+        test_1_3_1_3 = HistoryHelper('test_1_3_1_3', begin=20, length=2)
 
-        test_1_3_1 = ParseHistoryData('test_1_3_1', begin=16, length=6)
+        test_1_3_1 = HistoryHelper('test_1_3_1', begin=16, length=6)
         test_1_3_1.extend((test_1_3_1_1, test_1_3_1_2, test_1_3_1_3))
 
-        test_1_3_2 = ParseHistoryData('', begin=21, length=4)
+        test_1_3_2 = HistoryHelper('', begin=21, length=4)
 
-        test_1_3 = ParseHistoryData('test_1_3', begin=16, length=10)
+        test_1_3 = HistoryHelper('test_1_3', begin=16, length=10)
         test_1_3.extend((test_1_3_1, test_1_3_2))
 
-        test_1 = ParseHistoryData(top_str, begin=0, length=26, from_string=self.FS)
+        test_1 = HistoryHelper(top_str, begin=0, length=26, from_string=self.FS)
         test_1.extend((test_1_1, test_1_2, test_1_3))
 
         return test_1
@@ -134,11 +134,11 @@ class TestHistory(unittest.TestCase):
                     self.assertEqual(tmp_ret, tmp_exp, msg=tmp_msg)
 
     def test_sinple_history(self):
-        hd = ParseHistoryData('test_in')
+        hd = HistoryHelper('test_in')
         self.assertEquals(str(hd), 'test_in')
 
     def test_simple_history_w_str(self):
-        hd = ParseHistoryData('test_in', 0, 3, from_string='abcdef')
+        hd = HistoryHelper('test_in', 0, 3, from_string='abcdef')
         self.assertEquals(hd.as_string(from_string='abcdef', with_string=True), "test_in['abc']")
 
     def test_clear(self):

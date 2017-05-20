@@ -1,7 +1,7 @@
-from meta_data import ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
-from parser_helpers import ParsingError, ParseShortResult, ParseFullResult, EmailInfo
-from dns_functions import dns_lookup
 import email_parsers as p
+from helpers.email_dns_helper.dns_functions import dns_lookup
+from helpers.footballs.footballs import ParsingError, ParseShortResult, ParseFullResult, EmailInfo
+from helpers.meta_data.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
 
 
 def parse(email_in, parser=None, **kwargs):

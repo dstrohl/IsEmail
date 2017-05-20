@@ -1,18 +1,15 @@
 import unittest
-# from .old_test_data import TESTS
-# from CompIntel.helpers.IsEmail.meta import META_DICT
-from py_is_email import ParseEmail
-from meta_data import *
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
-from meta import IsEmailMetaData
+
+from py_is_email import ParseEmail
+
+from helpers.meta_data.meta_data import *
 
 # IS_EMAIL_META = IsEmailMetaData()
 
 # TEST_DATA = ET.parse('tests.xml').getroot()
 # TEST_DATA2 = ET.parse('tests-original.xml').getroot()
-import logging
-import sys
 '''
 logger = logging.getLogger()
 logger.setLevel(0)

@@ -1,5 +1,8 @@
-from meta_data import *
 from collections import deque
+
+from helpers.meta_data.meta_data import *
+
+
 # import logging
 
 # log = logging.getLogger(__name__)

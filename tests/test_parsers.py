@@ -1,7 +1,8 @@
 import unittest
+
+from helpers.email_dns_helper.dns_functions import DNSTimeoutError
+from helpers.meta_data.meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
 from parse_objects import EmailParser, make_char_str
-from meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
-from dns_functions import DNSTimeoutError
 
 ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS.append('http')
 

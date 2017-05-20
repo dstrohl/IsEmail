@@ -1,8 +1,10 @@
-import unittest
 import json
-from parse_results import ParseResultFootball, ParsingError, ParseHistoryData
-from meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
+import unittest
 
+from helpers.meta_data import META_LOOKUP, ISEMAIL_RESULT_CODES, ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
+from helpers.footballs.footballs import ParseResultFootball
+from helpers.hisatory import HistoryHelper
+from helpers.test_helpers import *
 
 def _test_name(l1, l2=None, l3=None, suffix=None):
     tmp_ret = l1

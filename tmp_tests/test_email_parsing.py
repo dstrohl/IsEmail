@@ -1,10 +1,11 @@
 import unittest
-from parse_objects import make_char_str, EmailParser
-from tests.email_test_data import CORRECTED_TESTS
-from meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, META_LOOKUP, ISEMAIL_RESULT_CODES, MetaCat
-from parse_results import ParseShortResult, ParseFullResult, ParsingError
 import xml.etree.ElementTree as ET
 
+from helpers.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, META_LOOKUP, ISEMAIL_RESULT_CODES, MetaCat
+from helpers.responses import ParseShortResult, ParseFullResult
+from helpers.exceptions import ParsingError
+from helpers.test_helpers.email_test_data import CORRECTED_TESTS
+from parse_objects import EmailParser
 
 XML_TEST_FILE = 'tests.xml'
 

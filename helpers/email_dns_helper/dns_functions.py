@@ -1,6 +1,6 @@
 __all__ = ['DNSTimeoutError', 'DNSCommError', 'dns_lookup']
 
-from meta_data import ISEMAIL_DNS_LOOKUP_LEVELS
+from helpers.meta_data.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS
 try:
     from dns import resolver, reversename
     from dns import exception as dns_except
@@ -9,7 +9,8 @@ except ImportError:
     import socket
     USE_SOCKETS = True
 
-#Uses dnspython if it exists, otherwise will use socket, in which case MX lookup is not possible.
+
+# Uses dnspython if it exists, otherwise will use socket, in which case MX lookup is not possible.
 
 
 # DNS TLD's from:

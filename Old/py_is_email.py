@@ -1,8 +1,9 @@
-import re
-from collections import deque
-from meta_data import *
-from isemail_parsers import *
 import sys
+from collections import deque
+
+from isemail_parsers import *
+
+from helpers.meta_data.meta_data import *
 
 '''
 class BrokenRange(object):

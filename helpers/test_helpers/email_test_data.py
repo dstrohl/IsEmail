@@ -1,4 +1,4 @@
-from meta_data import META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
+from helpers.meta_data import META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
 
 CORRECTED_TESTS = {
     'version': '4.00',
@@ -121,6 +121,7 @@ def _test_name(l1, l2=None, l3=None, suffix=None):
         tmp_ret += '-'
         tmp_ret += suffix
     return tmp_ret
+
 
 class ParserFixture(object):
     def __init__(self, email_in='', **kwargs):
