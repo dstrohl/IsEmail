@@ -45,5 +45,11 @@ class UnSet(object):
     def __eq__(self, other):
         return isinstance(other, UnSet)
 
+    def __ne__(self, other):
+        return not isinstance(other, UnSet)
+
+    def __bool__(self):
+        return False
+
 
 _UNSET = UnSet()

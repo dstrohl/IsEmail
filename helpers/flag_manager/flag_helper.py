@@ -7,101 +7,375 @@ from collections import namedtuple
     flag types
     <default_state><field_name><current_state>
 
+    x/x/x|<field_name>
+
+    (<allow none flag>/<default>/<current>)
+    (<allow none flag>/default-current)
+    (default/current)
+    (default-current)
+
+    or
+
+    <allow_none_flag><default-current>field_name
+
+
     States:
         + = True
         - = False (or no flag)
         * = None
-        ^ = No default
 
-    T/F flag default false= 'string_name' or '-string_name'
-    T/F flag default true = '+string_name'
-    T/F/N flag initial none = '*string_name'
+    T/F flag default false= 'string_name' or '-|string_name'
+    T/F flag default true = '+|string_name'
+    T/F/N flag initial none = '*|string_name'
 
-    T/F flag default false, current True = 'string_name+' or '-string_name+'
-    T/F flag default true, default false = '+string_name-'
-    T/F/N flag initial none, current_ none = '*string_name*'
+    T/F flag default false, current True = '-+|string_name'
+    T/F flag default true, default false = '+-|string_name'
+    T/F/N flag initial none, current_ none = '*|string_name'
+    T/F/N flag initial none, default_false, current_none = '*-*|string_name'
 
 
     TF flag set default all-false = ('flag_1', 'flag_2', 'flag_3')
-    TF flag set default flag = ('flag_1', '+flag_2', 'flag_3')
+    TF flag set default flag = ('-|flag_1', '+|flag_2', '-|flag_3')
     TF flag set initial None = ('*', 'flag_1', 'flag_2', 'flag_3')
-    TF flag set initial None current marked = ('*', 'flag_1', 'flag_2+', 'flag_3')
+    TF flag set initial None current marked = ('*', '--|flag_1', '++|flag_2', '--|flag_3')
 
     named flag set default None = ('flag_set_name', ('flag_1', 'flag_2', 'flag_3'))
-    named flag set default flag = ('flag_set_name', ('flag_1', 'flag_2', '+flag_3'))
-
-    via kwargs:
-
-    T/F flag default false= flag_name=False
-    T/F flag default true = flag_name=True
-    T/F/N flag starts at None = flag_name=None
-
-    T/F flags with default = flag_set_name = ('flag1', 'flag2', '+flag3')
-    T/F flags with allow_all_neg = flag_set_name = ('flag1', 'flag2', 'flag3')
-    T/F flags with is_initial_none = flag_set_name = ('*', 'flag1', 'flag2', 'flag3')
+    named flag set default flag = ('flag_set_name', ('-|flag_1', '-|flag_2', '+|flag_3'))
 
 
-    arg
-    T/F flag field default False = flag_name
-    t/F/N flag initial none = *flag_name
+    Set Rules:
+        - Initial None:
+            - clear resets to None
+            - reset resets to defaults
+        - normal
+            - clear + reset resets to defaults
+            - if no default marked, default = last field
+        - allow all False
+            - clear resets to all False
+            - reset resets to defaults
+            - if no default marked, all false
+        - allow all false + initial none
+            - clear resets to None
+            - reset resets to defaults
+            - if no default marked, default = all False
 
-    named flag set default None = ('flag_set_name', ('flag_1', 'flag_2', 'flag_3'))
-    named flag set default flag = ('flag_set_name', ('flag_1', 'flag_2', '+flag_3'))
+    item rules
+        - with initial None
+            - clear resets to None
+            - reset resets to default
+        - normal
+            - clear Sets to False
+            - reset resets to default
+            - default = false if not marked
 
 """
 PREFIX_LOOKUP = {'+': True, '-': False, '*': None, '^': _UNSET}
+PREFIX_STRING = {True: '+', False: '-', None: '*'}
+
+"""
+class FlagDefs(object):
+    name = ''
+    value = _UNSET
+    default = _UNSET    
+
+    def __init__(self, *args, **kwargs):
+"""
 
 
-def make_icon(field_data, inc=True, clean=True):
-    if not inc:
-        return ''
-    if clean:
-        tmp_tmplate = '(%s)'
+def make_icon(initial_none, default, value, pretty=False):
+    if initial_none:
+        tmp_ret = ['*']
     else:
-        tmp_tmplate = '%s'
+        tmp_ret = []
 
-    if field_data is None:
-        return tmp_tmplate % '*'
-    elif field_data is _UNSET:
-        return tmp_tmplate % '^'
-    elif field_data:
-        return tmp_tmplate % '+'
+    tmp_ret.append(PREFIX_STRING[default])
+    tmp_ret.append(PREFIX_STRING[value])
+
+    if pretty:
+        tmp_ret = '/'.join(tmp_ret)
     else:
-        return tmp_tmplate % '-'
+        tmp_ret = ''.join(tmp_ret)
 
+    return tmp_ret
 
+'''
 def strip_flag(flag_str):
     return flag_str.strip('+-*^')
+'''
 
-
+'''
 def strip_value(name, current=_UNSET):
     return name.strip('+-*^'), PREFIX_LOOKUP.get(name[-1], current)
 
+'''
 
-def parse_field(name, current=_UNSET, default=_UNSET):
-    name = name.strip('+-*^')
-    default = PREFIX_LOOKUP.get(name[0], default)
-    value = PREFIX_LOOKUP.get(name[-1], current)
-    value = value or default or False
-    return dict(name=name.strip('+-*^'), default=default, value=value)
+'''
+def parse_flag(name, return_as_obj=True, initial_none=False, **kwargs):
+    
+    name = str(name)
+    if name.strip('+-*|') == '':
+        raise AttributeError('Flag object must have a name, field passed = %r' % name)
 
+    initial_none = initial_none or name[0] == '*'
+    initial_name = name
+
+    if initial_none:
+        default = None
+        value = None
+    else:
+        default = False
+        value = False
+
+    if '|' in name:
+        state_flags, name = name.split('|', 1)
+
+    elif name[0] in '*-+':
+        state_flags = ''
+        for i in name:
+            if i in '*-+':
+                state_flags += i
+        name = name.strip('*-+')
+    else:
+        state_flags = []
+
+    if state_flags:
+        if '/' in state_flags:
+            state_flags = state_flags.split('/')
+
+        if len(state_flags) == 3:
+            if state_flags[0] != '*':
+                raise AttributeError('Invalud Flag Set for flag: %s' % initial_name)
+            default = PREFIX_LOOKUP[state_flags[1]]
+            value = PREFIX_LOOKUP[state_flags[2]]
+        elif len(state_flags) == 2:
+            default = PREFIX_LOOKUP[state_flags[0]]
+            value = PREFIX_LOOKUP[state_flags[1]]
+
+        elif len(state_flags) == 1:
+            default = PREFIX_LOOKUP[state_flags[0]]
+            value = default
+
+    value = kwargs.pop('value', value)
+    default = kwargs.pop('value', default)
+
+    if value is None and not initial_none:
+        raise AttributeError('Value cannot be None if initial_none is not set')
+
+    if not name.isidentifier() or name[0] == '_':
+        raise AttributeError('Flag name %r is invalid' % name)
+    
+    if return_as_obj:
+        kwargs.update(dict(name=name, default=default, value=value, initial_none=initial_none))
+        return FlagObj(**kwargs)
+
+    else:
+        return dict(name=name, default=default, value=value, initial_none=initial_none)
+
+
+def parse_flagset(name, *flags, **kwargs):
+    initial_all_none = False
+    allow_all_false = False
+    tmp_flags = []
+    current_flag = _UNSET
+
+    if not flags:
+        raise AttributeError('Flags must be specified')
+
+    if name is not None and (not name.isidentifier or name[0] == '_'):
+        raise AttributeError('FlagSet name %r is invalid' % name)
+
+    if len(flags) == 1:
+        if ' ' in flags:
+            flags = flags[0].split(' ')
+        else:
+            raise AttributeError('More than 1 flag must be specified')
+
+    if flags[0].strip('*-') == '':
+        if '*' in flags[0]:
+            initial_all_none = True
+        if '-' in flags[0]:
+            allow_all_false = True
+        flags = flags[1:]
+
+    has_default = False
+    has_default_true = False
+    has_value = False
+    has_true = False
+
+    for flag in flags:
+        if initial_all_none:
+            flag = "*" + flag
+        tmp_flag = parse_flag(flag, clean=False, return_as_obj=False)
+        tmp_flags.append(tmp_flag)
+
+        if tmp_flag['default'] is not _UNSET:
+            has_default = True
+            if tmp_flag['default']:
+                if has_default_true:
+                    raise AttributeError('Cannot have more than one default flag marked as True')
+                else:
+                    has_default_true = True
+
+        if tmp_flag['value'] is not _UNSET:
+            has_value = True
+
+            if tmp_flag['value']:
+                if has_true:
+                    raise AttributeError('Cannot have more than one flag marked as True')
+                else:
+                    has_true = True
+    
+    if initial_all_none and not has_default:
+        default_as = 'none'
+    else:
+        if allow_all_false and not has_default_true:
+            default_as = 'ff'
+        else:
+            default_as = 'tf'
+            
+    if initial_all_none and not has_value:
+        value_as = 'none'
+        current_flag = _UNSET
+    else:
+        if allow_all_false and not has_true:
+            value_as = 'ff'
+            current_flag = None
+        else:
+            value_as = 'tf'
+
+    if default_as == 'tf' and not has_default_true:
+        tmp_flags[-1]['default'] = True
+        
+    for flag in tmp_flags:
+        if default_as == 'none':
+            flag['default'] = None
+        elif default_as == 'ff':
+            flag['default'] = False
+        else:
+            if not flag['default']:
+                flag['default'] = False
+        
+        if value_as == 'none':
+            flag['value'] = None
+        elif value_as == 'ff':
+            flag['value'] = False
+        else:
+            if flag['value'] == _UNSET:
+                if has_true:
+                    flag['value'] = False
+                else:
+                    flag['value'] = flag['default']
+            if not flag['value']:
+                flag['value'] = False
+            else:
+                current_flag = flag['name']
+    
+    """
+    default     value
+
+    None        None        = not has_defaults, initial_none, not has_value
+    None        TF          = not has_defaults, initial_none, has_value, has_true or Not allow_all_false
+    None        FF          = not has_defaults, initial_none, has_value, allow_all_false
+    TF          TF          = has_defaults, has_true_default, or not allow_all_false, has_true or not allow_all_false
+    FF          FF          = has_defaults, allow_all_false,
+    TF          FF          = has_defaults, allow_all_false, has_default_true.
+
+    Default:
+
+    None        = not has_defaults, initial_none
+
+    TF          = has_defaults, has_true_default, or not allow_all_false,
+    
+    FF          = has_defaults, allow_all_false,
+
+    Value:
+
+    None        = not has_defaults, initial_none, not has_value
+
+    TF          = has_value, has_true or Not allow_all_false
+
+    FF          = has_value and not has_true, or not has_value, allow_all_false
+
+
+
+
+
+    """
+    
+    kwargs.update(dict(
+        name=name,
+        flags=tmp_flags,
+        allow_all_false=allow_all_false,
+        initial_all_none=initial_all_none,
+        current_flag=current_flag))
+    return FlagSetObj(**kwargs)
+'''
 
 class FlagObj(object):
     flag_set = False
 
-    def __init__(self, name, default=_UNSET, current=_UNSET, new_field=False):
+    def __init__(self, name, initial_none=False, locked=True, **kwargs):
+        # self.name = name
+        # self.default = default
+        # self.value = value
+        # self.initial_none = initial_none
+        self.locked = locked
 
-        self.name = name.strip('+-*^')
-        self.new_field = new_field
-        self.default = PREFIX_LOOKUP.get(name[0], default)
-        self.value = PREFIX_LOOKUP.get(name[-1], current)
-        self.value = self.value or self.default or False
+        name = str(name)
+        if name.strip('+-*|') == '':
+            raise AttributeError('Flag object must have a name, field passed = %r' % name)
+
+        self.initial_none = initial_none or name[0] == '*'
+        initial_name = name
+
+        if self.initial_none:
+            self.default = None
+            self.value = None
+        else:
+            self.default = False
+            self.value = False
+
+        if '|' in name:
+            state_flags, self.name = name.split('|', 1)
+
+        elif name[0] in '*-+':
+            state_flags = ''
+            for i in name:
+                if i in '*-+':
+                    state_flags += i
+            self.name = name.strip('*-+')
+        else:
+            state_flags = []
+            self.name = name
+
+        if state_flags:
+            if '/' in state_flags:
+                state_flags = state_flags.split('/')
+
+            if len(state_flags) == 3:
+                if state_flags[0] != '*':
+                    raise AttributeError('Invalud Flag Set for flag: %s' % initial_name)
+                self.default = PREFIX_LOOKUP[state_flags[1]]
+                self.value = PREFIX_LOOKUP[state_flags[2]]
+            elif len(state_flags) == 2:
+                self.default = PREFIX_LOOKUP[state_flags[0]]
+                self.value = PREFIX_LOOKUP[state_flags[1]]
+
+            elif len(state_flags) == 1:
+                self.default = PREFIX_LOOKUP[state_flags[0]]
+                self.value = self.default
+
+        self.value = kwargs.pop('value', self.value)
+        self.default = kwargs.pop('value', self.default)
+
+        if self.value is None and not self.initial_none:
+            raise AttributeError('Value cannot be None if initial_none is not set')
 
         if not self.name.isidentifier() or self.name[0] == '_':
-            raise AttributeError('Flag name %r is invalid' % self.name)
+            raise AttributeError('Flag name %r is invalid' % name)
 
     def copy(self):
-        return self.__class__(self.build_args)
+        return self.__class__(self.build_args, locked=self.locked)
     __copy__ = copy
 
     def __deepcopy__(self, memo):
@@ -109,14 +383,36 @@ class FlagObj(object):
         memo[id(self)] = result
         return result
 
-    def set(self, field=None, value=True):
+    def set(self, flag=None, value=True):
         self.value = bool(value)
 
-    def get(self, field=None):
+    def update(self, other):
+        if isinstance(other, self.__class__):
+            self.value = other.value
+            self.default = other.default
+            self.initial_none = other.initial_none
+            self.locked = other.locked
+        else:
+            self.set(other)
+
+    def get(self, flag=None):
         return self.value
 
     def reset(self):
         self.value = self.default
+
+    def clear(self):
+        """
+        - with initial None
+            - clear resets to None
+        - normal
+            - clear Sets to False
+
+        """
+        if self.initial_none:
+            self.value = None
+        else:
+            self.value = False
 
     @property
     def is_set(self):
@@ -126,25 +422,40 @@ class FlagObj(object):
     def has_default(self):
         return self.default is not _UNSET
 
+    @property
+    def is_default(self):
+        return self.value == self.default
+
     def __bool__(self):
         return bool(self.value)
 
-    def _str(self, show_current=True, show_default=True,
-             pretty=True, filter_for=_UNSET, fields_filter=None):
+    def _get_dict(self, *flags_filter, inc_sets=True, flat=False, filter_for=_UNSET):
+        tmp_dict = {}
+        if not flags_filter or self.name in flags_filter:
+            if filter_for is _UNSET or self.value in filter_for:
+                tmp_dict[self.name] = self.value
+        return tmp_dict
 
+    def _str(self, *fields_filter, show_state=True, show_default=True, pretty=True, filter_for=_UNSET, **kwargs):
         tmp_ret = ''
-        if fields_filter is None or self.name in fields_filter:
-            if filter_for is not _UNSET and self.value in filter_for:
-                tmp_ret = '%s%s%s' % (
-                    make_icon(self.default, inc=show_default, clean=pretty),
-                    self.name,
-                    make_icon(self.value, inc=show_current, clean=pretty))
+        if not fields_filter or self.name in fields_filter:
+            if filter_for is _UNSET or self.value in filter_for:
+                if show_state:
+                    if show_default:
+                        tmp_ret = '%s|%s' % (
+                            make_icon(initial_none=self.initial_none, default=self.default,
+                                      value=self.value, pretty=pretty),
+                            self.name)
+                    else:
+                        tmp_ret = '%s|%s' % (PREFIX_STRING[self.value], self.name)
+                else:
+                    tmp_ret = self.name
 
         return tmp_ret
 
     @property
     def build_args(self):
-        return self._str(show_current=True, show_default=True, pretty=False)
+        return self._str(show_state=True, show_default=True, pretty=False)
 
     def __str__(self):
         return self._str(pretty=True)
@@ -153,71 +464,66 @@ class FlagObj(object):
         tmp_ret = 'SingleFlagObject(%s)' % self.build_args
         return tmp_ret
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.name == other
+        elif isinstance(other, self.__class__):
+            return self.name == other.name and self.value == other.value
+        elif isinstance(other, bool):
+            return self.value == other
+        elif other is None:
+            return self.value is None
+
+    def __ne__(self, other):
+        return not self == other
+
 
 class FlagSetObj(object):
     flag_set = True
 
-    def __init__(self, *fields, name=None, new_field=False, **kwargs):
-
-        self.new_field = new_field
-        self.initial_all_none = False
-        self.allow_all_false = True
-        self.fields = {}
-        self.field_order = []
-        self.current_field = _UNSET
-
-        if not fields:
-            raise AttributeError('Fields must be specified')
-
-        if name is not None:
-            if not name.isidentifier or name[0] == '_':
-                raise AttributeError('FlagSet name %r is invalid' % name)
+    def __init__(self, name, *flags, allow_all_false=False, initial_all_none=False, locked=False, **kwargs):
         self.name = name
+        self.locked = locked
+        self.initial_all_none = initial_all_none
+        self.allow_all_false = allow_all_false
+        self.flags = {}
+        self.flag_order = []
 
-        if len(fields) == 1:
-            if ' ' in fields:
-                fields = fields[0].split(' ')
-            else:
-                raise AttributeError('More than 1 field must be specified')
+        default_true_flag = None
 
-        if fields[0].strip('*-') == '':
-            if '*' in fields[0]:
+        if flags[0].strip('*-') == '':
+            if '*' in flags[0]:
                 self.initial_all_none = True
-            if '-' in fields[0]:
+            if '-' in flags[0]:
                 self.allow_all_false = True
-            fields = fields[1:]
+            flags = flags[1:]
 
-        self._add_fields(*fields, **kwargs)
-
-    def _add_fields(self, *fields, **field_kwargs):
-        for field in fields:
-            self._add_field(field)
-
-        for field, value in field_kwargs:
-            self._add_fields(field, value)
-
-        if self.current_field is _UNSET and not self.initial_all_none:
-            if self.allow_all_false:
-                self.current_field = None
-            else:
-                self.current_field = self.field_order[0]
-
-    def _add_field(self, field, value=_UNSET):
         if self.initial_all_none:
-            field = field.rstrip('+-*^')
-            field += '*'
-        tmp_field = FlagObj(field, current=value)
+            self.current_flag = _UNSET
+        else:
+            self.current_flag = None
 
-        self.fields[tmp_field.name] = tmp_field
-        self.field_order.append(tmp_field)
-        if tmp_field:
-            self.current_field = tmp_field
-        if tmp_field.default:
-            self.default_field = tmp_field
+        for flag in flags:
+            tmp_flag = FlagObj(flag, initial_none=self.initial_all_none, locked=True)
+            self.flags[tmp_flag.name] = tmp_flag
+            self.flag_order.append(tmp_flag)
+            if tmp_flag:
+                if self.current_flag:
+                    raise AttributeError('Error, cannot set flag %s to True as existing flag %s is already True' % (tmp_flag.name, self.current_flag.name))
+                self.current_flag = tmp_flag
+            if tmp_flag.default:
+                if default_true_flag:
+                    raise AttributeError('Error, cannot set default flag %s to True as existing default flag %s is already True' % (tmp_flag.name, default_true_flag.name))
+                default_true_flag = tmp_flag
+
+        if not self.current_flag and not self.initial_all_none and not self.allow_all_false:
+            self.set(self.flag_order[-1].name, True)
+        if ((default_true_flag and not default_true_flag.default) or default_true_flag is None) and not self.initial_all_none and not self.allow_all_false:
+            self.flag_order[-1].default = True
 
     def copy(self):
         name, tmp_bl = self.build_args
-        return self.__class__(*tmp_bl, name=name)
+        return self.__class__(name, *tmp_bl)
     __copy__ = copy
 
     def __deepcopy__(self, memo):
@@ -225,83 +531,167 @@ class FlagSetObj(object):
         memo[id(self)] = result
         return result
 
-    def set(self, field, value):
+    def set(self, flag, value):
+        print('Setting %r to %r on %r' % (flag, value, self))
         if bool(value):
-            if self.current_field is _UNSET:
-                for set_field in self.field_order:
-                    if set_field.name == field:
-                        set_field.set(True)
-                        self.current_field = set_field
+            if self.current_flag is _UNSET:
+                for set_flag in self.flag_order:
+                    if set_flag.name == flag:
+                        set_flag.set(value=True)
+                        self.current_flag = set_flag
                     else:
-                        set_field.set(False)
+                        set_flag.set(value=False)
             else:
-                if self.current_field is not None:
-                    self.current_field.set(False)
-                self.current_field = self.fields[field]
-                self.current_field.set(True)
+                if self.current_flag is not None:
+                    self.current_flag.set(value=False)
+                self.current_flag = self.flags[flag]
+                self.current_flag.set(value=True)
         else:
             if self.allow_all_false:
-                if self.current_field is _UNSET:
-                    for set_field in self.field_order:
-                        set_field.set(False)
-                    self.current_field = None
+                if self.current_flag is _UNSET:
+                    for set_flag in self.flag_order:
+                        set_flag.set(value=False)
+                    self.current_flag = None
                 else:
-                    if self.current_field is not None:
-                        self.current_field.set(False)
-                        self.current_field = None
+                    if self.current_flag is not None and self.current_flag == flag:
+                        self.current_flag.set(value=False)
+                        self.current_flag = None
             else:
                 raise AttributeError('Cannot set item to false unless "allow_all_false" set')
+        print('Returning: %r\n\n' % self)
 
-    def get(self, field):
-        return self.fields[field].get()
+    def get(self, flag):
+        return self.flags[flag].get()
+
+    def update(self, other):
+        if isinstance(other, self.__class__):
+            for flag in other.flag_order:
+                self.update(flag)
+
+        elif isinstance(other, FlagObj):
+            self.flags[other.name].update(other)
+            if other.name == self.current_flag.name and other is False:
+                if not self.allow_all_false:
+                    raise AttributeError('Cannot set item to false unless "allow_all_false" set')
+                self.current_flag = None
+
+            elif other.value is None:
+                raise AttributeError('Cannot set item to None directly')
+
+            elif other and other.name != self.current_flag.name:
+                self.current_flag = self.flags[other.name]
+
+        else:
+            other = FlagObj(other)
+            self.update(other)
 
     def reset(self):
-        for field in self.field_order:
-            field.reset()
+        """
+        Set Rules:
+        - Initial None:
+            - reset resets to defaults
+        - normal
+            - clear + reset resets to defaults
+            - if no default marked, default = last flag
+        - allow all False
+            - reset resets to defaults
+            - if no default marked, all false
+        - allow all false + initial none
+            - reset resets to defaults
+            - if no default marked, default = all False
+
+        :return:
+        """
+        if self.initial_all_none:
+            self.current_flag = _UNSET
+        else:
+            self.current_flag = None
+
+        for flag in self.flag_order:
+            flag.reset()
+            if flag:
+                self.current_flag = flag
+
+    def clear(self):
+        """
+        Set Rules:
+        - Initial None:
+            - clear resets to None
+        - normal
+            - clear + reset resets to defaults
+        - allow all False
+            - clear resets to all False
+        - allow all false + initial none
+            - clear resets to None
+
+        :return:
+        """
+        if self.initial_all_none:
+            for f in self.flag_order:
+                f.clear()
+            self.current_flag = _UNSET
+        elif self.allow_all_false:
+            for f in self.flag_order:
+                f.set(value=False)
+            self.current_flag = None
+        else:
+            self.current_flag = None
+            for f in self.flag_order:
+                f.reset()
+                if f.value:
+                    self.current_flag = f
+            if self.current_flag is None:
+                self.set(self.flag_order[-1].name, True)
 
     @property
     def is_set(self):
-        return self.current_field is not _UNSET
-
-    @property
-    def has_default(self):
-        return self.default_field is not _UNSET
+        return self.current_flag is not _UNSET
 
     def __bool__(self):
-        return self.default_field is True
+        return self.current_flag is not None and self.current_flag is not _UNSET
 
-    def _fields_str(self, show_current=True, show_default=True, pretty=True,
-                    as_string=True, fields_filter=None, filter_for=_UNSET):
-
+    def _flags_str(self, *flags_filter, show_state=True, show_default=True, pretty=True, filter_for=_UNSET):
         tmp_ret = []
-        for field in self.field_order:
-            tmp_item = field._str(fields_filter=fields_filter, show_current=show_current,
+        for flag in self.flag_order:
+            tmp_item = flag._str(*flags_filter, show_state=show_state,
                                   show_default=show_default, pretty=pretty, filter_for=filter_for)
             if tmp_item:
                 tmp_ret.append(tmp_item)
 
-        if as_string:
-            tmp_ret = ', '.join(tmp_ret)
-
         return tmp_ret
 
-    def _str(self, *fields, show_current=True, show_default=True, pretty=True, show_name=True,
-             filter_for=_UNSET, inc_sets=True):
+    def _get_dict(self, *flags_filter, inc_sets=True, flat=False, filter_for=_UNSET):
+        tmp_dict = {}
+        if inc_sets:
+            if flags_filter and self.name in flags_filter:
+                flags_filter = []
+
+            for f in self.flag_order:
+                tmp_dict.update(f._get_dict(*flags_filter, filter_for=filter_for))
+
+        if tmp_dict and not flat:
+            tmp_dict = {self.name: tmp_dict.copy()}
+
+        return tmp_dict
+
+    def _str(self, *flags, show_state=True, show_default=True, pretty=True, show_name=True,
+             filter_for=_UNSET, inc_sets=True, flat=False):
         tmp_ret = []
         if inc_sets:
-            if fields and self.name in fields:
-                fields = []
-            tmp_ret = self._fields_str(
-                fields_filter = fields,
-                show_current=show_current,
+            if flags and self.name in flags:
+                flags = []
+            tmp_ret = self._flags_str(
+                *flags,
+                show_state=show_state,
                 show_default=show_default,
                 pretty=pretty,
                 filter_for=filter_for)
 
         if tmp_ret:
             tmp_ret = ', '.join(tmp_ret)
-            if show_name:
-                if self.name is not None:
+
+            if not flat:
+                if show_name:
                     tmp_ret = '%s(%s)' % (self.name, tmp_ret)
                 else:
                     tmp_ret = '(%s)' % tmp_ret
@@ -320,15 +710,44 @@ class FlagSetObj(object):
             tmp_str += '-'
         if tmp_str:
             tmp_ret.append(tmp_str)
-        tmp_ret.extend(self._fields_str(show_current=True, show_default=True, pretty=False, as_string=False))
+        tmp_ret.extend(self._flags_str(show_state=True, show_default=True, pretty=False))
 
         return self.name, tmp_ret
+
+    def __len__(self):
+        return len(self.flags)
 
     def __str__(self):
         return self._str(pretty=True)
 
     def __repr__(self):
-        return 'SingleFlagObject(%r)' % self.build_args
+        name, flags = self.build_args
+        if self.current_flag:
+            cf = self.current_flag.name
+        else:
+            cf = str(self.current_flag)
+        return 'SingleFlagObject(%s, %r, current=%s)' % (name, ', '.join(flags), cf)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.name == other
+        elif isinstance(other, self.__class__):
+            if self.name != other.name or len(self) != len(other):
+                return False
+            for f in self.flag_order:
+                if f != other[f.name]:
+                    return False
+        else:
+            try:
+                tmp_other = self.__class__(self.name, other)
+                return self == tmp_other
+            except AttributeError:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self == other
+
 
 # FlagSetDefs = namedtuple('FlagSetDefs', ('name', 'named', 'fields', 'init_none', 'default', 'all_false'))
 
@@ -359,7 +778,7 @@ class FlagHelper(object):
 
 
     arg
-    T/F flag field default False = flag_name
+    T/F flag flag default False = flag_name
     t/F/N flag initial none = *flag_name
 
     named flag set default None = ('flag_set_name', ('flag_1', 'flag_2', 'flag_3'))
@@ -491,74 +910,78 @@ class FlagHelper(object):
 
     # _data = None
 
-    def __init__(self, *fields, lock_fields=False, **field_kwargs):
+    def __init__(self, *flags, lock_flags=False, **flag_kwargs):
 
-        self._init_fields = False
+        self._init_flags = False
 
-        # self._field_data = {}
-        # self._field_set_data = {}
+        # self._flag_data = {}
+        # self._flag_set_data = {}
 
-        # self._field_sets = {}
-        # self._field_single_names = []
-        # self._field_set_fields = {}
+        # self._flag_sets = {}
+        # self._flag_single_names = []
+        # self._flag_set_flags = {}
 
-        self._field_data = {}
-        self._fields = {}
-        self._field_sets = {}
-        self._field_singles = {}
-        self._field_order = []
+        self._flag_data = {}
+        self._flags = {}
+        self._flag_sets = {}
+        self._flag_singles = {}
+        self._flag_order = []
 
-        # self._next_counter = 0
-        # self._max_counter = 999
+        self._next_counter = 0
+        self._max_counter = 999
         self._locked = False
 
-        if fields or field_kwargs:
-            self._update(*fields, **field_kwargs, new_field=True)
+        if flags or flag_kwargs:
+            self._update(*flags, **flag_kwargs, locked=True)
 
         # self._default = dict(
-        #     _field_data=self._field_data.copy(),
-        #     _field_set_data=self._field_set_data.copy())
+        #     _flag_data=self._flag_data.copy(),
+        #     _flag_set_data=self._flag_set_data.copy())
 
-        self._locked = lock_fields
+        self._locked = lock_flags
 
-        self._init_fields = True
+        self._init_flags = True
         self.__initialised = True
 
-    def _rem(self, field, raise_on_error=True):
-        if self.locked:
-            raise AttributeError('Field %s cannot be deleted from locked helper' % field)
+    def _rem(self, flag, raise_on_error=True):
+        if self._locked:
+            # print(repr(flag))
+            raise AttributeError('flag %s cannot be deleted from locked helper' % repr(flag))
 
-        if isinstance(field, str):
-            if field not in self:
+        if isinstance(flag, str):
+            flag = str(flag).strip('*-+|')
+            if flag not in self:
                 if raise_on_error:
-                    raise AttributeError('Field %r does not exist' % field)
+                    raise AttributeError('flag %r does not exist' % flag)
+                else:
+                    return
             else:
-                field = self._get_obj(field)
-                if field.flag_set:
-                    for f in field:
-                        del self._fields[f]
-                    del self._field_sets[field.name]
+                flag = self._get_obj(flag)
+                if flag.flag_set:
+                    for f in flag:
+                        del self._flags[f]
+                    del self._flag_sets[flag.name]
 
                 else:
-                    del self._field_singles[field.name]
-                    del self._fields[field.name]
+                    del self._flag_singles[flag.name]
+                    del self._flags[flag.name]
 
-                del self._field_data[field.name]
-                self._field_order.remove(field)
+                del self._flag_data[flag.name]
+                self._flag_order.remove(flag)
 
-        elif isinstance(field, (list, tuple)):
-            for f in field:
+        elif isinstance(flag, (list, tuple)):
+            for f in flag:
                 self._rem(f)
-        elif isinstance(field, dict):
-            for f, in field:
+        elif isinstance(flag, dict):
+            for f, in flag:
                 self._rem(f)
-        elif isinstance(field, self.__class__):
-            for f in field._field_order:
+        elif isinstance(flag, self.__class__):
+            for f in flag._flag_order:
                 self._rem(f.name)
-        elif isinstance(field, (FlagObj, FlagSetObj)):
-            self._rem(field.name)
+        elif isinstance(flag, (FlagObj, FlagSetObj)):
+            self._rem(flag.name)
         else:
-            self._rem(str(field))
+            self._rem(str(flag))
     __delitem__ = _rem
 
     # @staticmethod
@@ -568,11 +991,11 @@ class FlagHelper(object):
     #     raise AttributeError('Flag name %r is invalid' % flag)
     #
     # def _validate_add_addr(self, flag):
-    #     if flag in self._field_data:
+    #     if flag in self._flag_data:
     #         return True
     #     elif flag.isidentifier() and flag[0] != '_':
     #         if self._locked:
-    #             raise AttributeError('Flag not present and fields locked')
+    #             raise AttributeError('Flag not present and flags locked')
     #         return True
     #     raise AttributeError('Flag name %r is invalid' % flag)
     #
@@ -590,68 +1013,103 @@ class FlagHelper(object):
     #         else:
     #             return flag_str[1:], bool(value)
 
-    def _update(self, *fields, new_field=False, **field_kwargs):
-        for a in fields:
-            self._add(a, new_field=new_field)
-        for field, value in field_kwargs.items():
-            self._add(field, value, new_field=new_field)
+    def _update(self, *flags, locked=False, overwrite_flag=False, **flag_kwargs):
+        for a in flags:
+            self._add(a, locked=locked, overwrite_flag=overwrite_flag)
+        for flag, value in flag_kwargs.items():
+            self._add(flag, value, locked=locked, overwrite_flag=overwrite_flag)
 
-    def _add(self, field_name, *values, new_field=True, overwrite_field=False):
-        if isinstance(field_name, str):
+    def _add(self, flag_name, *values, locked=False, overwrite_flag=False):
+        if isinstance(flag_name, str):
             if len(values) == 0:
-                field = FlagObj(field_name, new_field=new_field)
-            elif len(values) == 1 and isinstance(values[0], str):
-                values = values[0].split(' ')
-                field = FlagSetObj(field_name, *values, new_field=new_field)
-            elif len(values) > 1:
-                field = FlagSetObj(field_name, *values, new_field=new_field)
+                flag = FlagObj(flag_name, locked=locked)
+            elif len(values) == 1:
+                if isinstance(values[0], str):
+                    values = values[0].split(' ')
+                    flag = FlagSetObj(flag_name, *values, locked=locked)
+                elif isinstance(values[0], (list, tuple)):
+                    flag = FlagSetObj(flag_name, *values[0], locked=locked)
+                else:
+                    flag = FlagObj(flag_name, value=bool(values[0]), locked=locked)
             else:
-                field = FlagObj(field_name, current=bool(values), new_field=new_field)
-        elif isinstance(field_name, (list, tuple)):
-            if len(field_name) == 2 and isinstance(field_name[1], (list, tuple)):
-                field = FlagSetObj(field_name[0], *field_name[1], new_field=new_field)
+                flag = FlagSetObj(flag_name, *values, locked=locked)
+
+        elif isinstance(flag_name, (list, tuple)):
+            if len(flag_name) == 2 and isinstance(flag_name[1], (list, tuple)):
+                flag = FlagSetObj(flag_name[0], *flag_name[1], locked=locked)
             else:
-                field = FlagSetObj(None, *field_name, new_field=new_field)
-        elif isinstance(field_name, self.__class__):
-            for f in field_name._field_order:
-                self._add(f, new_field=new_field, overwrite_field=overwrite_field)
+                for f in flag_name:
+                    self._add(f, locked=locked, overwrite_flag=overwrite_flag)
                 return
-        elif isinstance(field_name, (FlagSetObj, FlagObj)):
-            field = field_name
-            field.new_field = new_field
+
+        elif isinstance(flag_name, dict):
+            self._update(**flag_name)
+            return
+
+        elif isinstance(flag_name, self.__class__):
+            for f in flag_name._flag_order:
+                self._add(f, locked=locked, overwrite_flag=overwrite_flag)
+            return
+
+        elif isinstance(flag_name, (FlagSetObj, FlagObj)):
+            flag = flag_name.copy()
+            flag.locked = locked
         else:
-            raise AttributeError('Unable to determine field and value from %r and %r' % (field_name, values))
 
-        if field.name in self:
-            if not overwrite_field:
-                raise AttributeError('Field %s already exists in %r' % (field.name, self))
-            self._field_data[field.name].update(field)
+            raise AttributeError('Unable to determine flag and value from %r and %r' % (flag_name, values))
+
+        if flag.name in self:
+            if not overwrite_flag:
+                raise AttributeError('flag %s already exists in %r' % (flag.name, self))
+            self._flag_data[flag.name].update(flag)
 
         else:
-            if field.name is not None:
-                self._field_data[field.name] = field
+            if self._locked:
+                raise AttributeError('Unable to add flag "%s", flag manager locked' % flag.name)
 
-            self._field_order.append(field)
+            self._flag_data[flag.name] = flag
+            self._flag_order.append(flag)
 
-            if field.flag_set:
-                self._field_sets[field.name] = field
-                for f in field.fields:
-                    self._fields[f.name] = field
+            if flag.flag_set:
+                self._flag_sets[flag.name] = flag
+                for f in flag.flag_order:
+                    self._flags[f.name] = flag
             else:
-                self._field_singles[field.name] = field
-                self._fields[field.name] = field
+                self._flag_singles[flag.name] = flag
+                self._flags[flag.name] = flag
+
+    # @property
+    # def _make_new_set_name(self):
+    #     self._next_counter += 1
+    #     tmp_ret = '__unnamed_set_%s__' % str(self._next_counter)
+    #     while tmp_ret in self:
+    #         tmp_ret = self._make_new_set_name
+    #     return tmp_ret
 
     def _reset(self, rem_new=False):
-        for f in self._field_order:
-            if f.new_field and rem_new:
+        for f in self._flag_order:
+            if not f.locked and rem_new:
                 self._del(f.name)
             else:
                 f.reset()
 
+    def _clear(self, rem_new=False):
+        for f in self._flag_order:
+            if not f.locked and rem_new:
+                self._del(f.name)
+            else:
+                f.clear()
+
     def _copy(self):
         tmp_ret = self.__class__(*self._build_args)
+        tmp_ret._locked = self._locked
         return tmp_ret
     __copy__ = _copy
+
+    def __deepcopy__(self, memo):
+        result = self._copy()
+        memo[id(self)] = result
+        return result
 
     def _copy_default(self):
         tmp_ret = self._copy()
@@ -659,105 +1117,112 @@ class FlagHelper(object):
         return tmp_ret
 
     # def _get_set(self, set_name):
-    #     return self._field_sets[set_name]
+    #     return self._flag_sets[set_name]
 
-    def _get_dict(self, *fields, inc_sets=True, flat=False, filter_for=_UNSET):
+    def _get_dict(self, *flags, inc_sets=True, flat=False, filter_for=_UNSET):
         tmp_ret = {}
 
-        for field in self._field_order:
-            tmp_ret.update(field.get_dict(*fields, inc_sets=inc_sets, flat=flat, filter_for=filter_for))
+        if filter_for is _UNSET:
+            filter_for = (True, False, None)
+        elif not isinstance(filter_for, (tuple, list)):
+            filter_for = [filter_for]
+
+        for flag in self._flag_order:
+            tmp_ret.update(flag._get_dict(*flags, inc_sets=inc_sets, flat=flat, filter_for=filter_for))
 
         return tmp_ret
 
-    def _get_values(self, *fields, inc_sets=True):
+    def _get_values(self, *flags, inc_sets=True):
         tmp_ret = []
-        if not fields:
+        if not flags:
             if inc_sets:
-                for f in self._field_data:
+                for f in self._flag_order:
                     tmp_ret.append(bool(f))
             else:
-                for f in self._field_singles:
+                for f in self._flag_singles.values():
                     tmp_ret.append(bool(f))
         else:
-            for f in fields:
+            for f in flags:
                 tmp_ret.append(bool(self._get(f)))
         return tmp_ret
 
-    # def _get_field_str(self, field, with_icon=False):
-    #     if with_icon:
-    #         if self._field_data[field] is None:
-    #             return '(*)%s' % field
-    #         elif self._field_data[field]:
-    #             return '(+)%s' % field
-    #         else:
-    #             return '(-)%s' % field
-    #     else:
-    #         return field
-
-    def _get_str(self, *fields, inc_sets=True, flat=False, inc_current=True, inc_default=True,
-                 pretty=False, as_str=True, filter_for=_UNSET):
+    def _str(self, *flags, inc_sets=True, flat=False, show_state=True, show_default=True,
+             pretty=True, as_string=True, filter_for=_UNSET, show_name=True):
         tmp_ret = []
-        for field in self._field_order:
-            tmp_item = field._str(
-                *fields,
+
+        if filter_for is _UNSET:
+            filter_for = (True, False, None)
+        elif not isinstance(filter_for, (tuple, list)):
+            filter_for = [filter_for]
+
+        for flag in self._flag_order:
+            tmp_item = flag._str(
+                *flags,
                 inc_sets=inc_sets,
                 flat=flat,
-                inc_current=inc_current,
-                inc_default=inc_default,
+                show_state=show_state,
+                show_default=show_default,
                 pretty=pretty,
-                as_str=False,
+                # as_string=False,
+                show_name=show_name,
                 filter_for=filter_for)
             if tmp_item:
                 tmp_ret.append(tmp_item)
-        if as_str:
+        if as_string:
             return ', '.join(tmp_ret)
         else:
             return tmp_ret
 
-    def _all(self, *fields, inc_sets=True):
-        return all(self._get_values(*fields, inc_sets=inc_sets))
+    def _all(self, *flags, inc_sets=True):
+        return all(self._get_values(*flags, inc_sets=inc_sets))
 
-    def _any(self, *fields, inc_sets=True):
-        return any(self._get_values(*fields, inc_sets=inc_sets))
+    def _any(self, *flags, inc_sets=True):
+        return any(self._get_values(*flags, inc_sets=inc_sets))
 
-    def _set(self, field, value=_UNSET):
-        if field in self:
-            value = PREFIX_LOOKUP.get(field[-1], value)
-            field = field.strip('+-*^')
-            self._fields[field].set(field=field, value=value)
+    def _set(self, flag, value=_UNSET):
+        if flag in self:
+            value = PREFIX_LOOKUP.get(flag[-1], value)
+            flag = flag.strip('+-*^')
+            self._flags[flag].set(flag=flag, value=value)
         elif not self._locked:
-            self._add(field, value)
+            self._add(flag, value)
         else:
-            raise AttributeError('%s does not exist in %r' % (field, self))
+            raise AttributeError('%s does not exist in %r' % (flag, self))
 
-    def _get(self, field):
-        if field in self:
-            return self._fields[field].get(field)
+    def _get(self, flag):
+        if flag in self:
+            try:
+                return self._flags[flag].get(flag)
+            except KeyError:
+                return bool(self._flag_sets[flag])
         elif not self._locked:
-            self._add(field, False)
+            self._add(flag, False)
             return False
         else:
-            raise AttributeError('%s does not exist in %r' % (field, self))
+            raise AttributeError('%s does not exist in %r' % (flag, self))
 
-    def _get_obj(self, field):
-        return self._field_data[field]
+    def _get_obj(self, flag):
+        return self._flag_data[flag]
 
     @property
     def _build_args(self):
         tmp_args = []
-        for f in self._field_order:
+        for f in self._flag_order:
             tmp_args.append(f.build_args)
         return tmp_args
 
     def __iter__(self):
-        for k in self._fields:
+        for k in self._flags:
             yield k
 
-    def __contains__(self, field):
-        return field in self._fields
+    def __contains__(self, flag):
+        if flag in self._flags:
+            return True
+        else:
+            return flag in self._flag_sets
 
-    def __getattr__(self, field):
-        return self._get(field)
+    def __getattr__(self, flag):
+        return self._get(flag)
 
     def __setattr__(self, key, value):
         if '_FlagHelper__initialised' not in self.__dict__:
@@ -767,29 +1232,31 @@ class FlagHelper(object):
         else:
             self._set(key, value)
 
-    def __getitem__(self, field):
-        return self._get(field)
+    def __getitem__(self, flag):
+        return self._get(flag)
 
     def __setitem__(self, key, value):
         self._set(key, value)
 
     def __call__(self, *args, **kwargs):
-        for arg in args:
-            self._set(arg)
-        for field, value in kwargs.items():
-            self._set(field, value)
+        self._update(*args, **kwargs, locked=False, overwrite_flag=True)
 
     def __len__(self):
-        return len(self._fields)
+        return len(self._flags)
 
     def __bool__(self):
         return self._all()
 
     def __str__(self):
-        return self._get_str(pretty=True)
+        return self._str(pretty=True)
 
     def __repr__(self):
-        return 'FlagHelper(%s)' % self.__str__()
+        tmp_flags = []
+        for f in self._flag_order:
+            tmp_flags.append(repr(f))
+        tmp_flags = ', '.join(tmp_flags)
+
+        return 'FlagHelper(%s)' % tmp_flags
 
     def _make_other(self, other):
         if isinstance(other, (list, tuple)):
@@ -801,14 +1268,14 @@ class FlagHelper(object):
         elif isinstance(other, self.__class__):
             return other
         else:
-            raise AttributeError('Cound not determine other type ( %r )' % other)
+            raise AttributeError('Could not determine other type ( %r )' % other)
 
     def __eq__(self, other):
         other = self._make_other(other)
 
-        for key, item in self._field_data.items():
+        for item in self._flag_order:
             try:
-                if item != other._field_data[key]:
+                if item != other._flag_data[item.name]:
                     return False
             except KeyError:
                 return False
@@ -818,71 +1285,71 @@ class FlagHelper(object):
         return not self == other
 
     """
-    def _merge_fields(self, from_object, *fields):
-        if not fields:
-            fields = from_object._field_single_names
-        for field in fields:
-            if field in self or not self._locked:
-                self._add_field(field, from_object[field])
+    def _merge_flags(self, from_object, *flags):
+        if not flags:
+            flags = from_object._flag_single_names
+        for flag in flags:
+            if flag in self or not self._locked:
+                self._add_flag(flag, from_object[flag])
                 try:
-                    self._default['_field_data'][field] = from_object._default['_field_data'][field]
+                    self._default['_flag_data'][flag] = from_object._default['_flag_data'][flag]
                 except KeyError:
                     pass
             else:
-                raise AttributeError('Cannot add %s field, helper locked' % field)
+                raise AttributeError('Cannot add %s flag, helper locked' % flag)
 
     def _merge_sets(self, from_object, *set_names):
         if not set_names:
-            set_names = from_object._field_sets.keys()
+            set_names = from_object._flag_sets.keys()
         for set_name in set_names:
-            set_record = from_object._field_sets[set_name]
+            set_record = from_object._flag_sets[set_name]
             if set_record.named:
-                if set_record.name in self._field_sets:
-                    existing_set = self._field_sets[set_record.named]
+                if set_record.name in self._flag_sets:
+                    existing_set = self._flag_sets[set_record.named]
                 else:
                     existing_set = None
             else:
-                if set_record.fields[0] in self._field_set_fields:
-                    existing_set = self._field_sets[self._field_set_fields[set_record.fields[0]]]
+                if set_record.flags[0] in self._flag_set_flags:
+                    existing_set = self._flag_sets[self._flag_set_flags[set_record.flags[0]]]
                 else:
                     existing_set = None
 
             if existing_set is not None:
-                if len(set_record.fields) != len(existing_set.fields):
-                    raise AttributeError('Field set fields count mismatch')
+                if len(set_record.flags) != len(existing_set.flags):
+                    raise AttributeError('flag set flags count mismatch')
 
-                for field in set_record.fields:
-                    if field not in existing_set.fields:
-                        raise AttributeError('Field set field mismatch')
+                for flag in set_record.flags:
+                    if flag not in existing_set.flags:
+                        raise AttributeError('flag set flag mismatch')
 
                 del self[existing_set.name]
             elif self._locked:
-                raise AttributeError('Cannot add field set %s, manager locked' % set_name)
+                raise AttributeError('Cannot add flag set %s, manager locked' % set_name)
 
             if not set_record.named:
                 new_set_record = set_record._replace(name=self._get_next_name())
             else:
                 new_set_record = copy(set_record)
 
-            self._field_sets[new_set_record.name] = new_set_record
+            self._flag_sets[new_set_record.name] = new_set_record
 
             fs = new_set_record.name
 
-            for field in new_set_record.fields:
-                if field in self._field_single_names:
-                    raise AttributeError('Field %s exists outside of set' % field)
+            for flag in new_set_record.flags:
+                if flag in self._flag_single_names:
+                    raise AttributeError('flag %s exists outside of set' % flag)
 
-                self._field_data[field] = from_object[field]
-                self._field_set_fields[field] = fs
+                self._flag_data[flag] = from_object[flag]
+                self._flag_set_flags[flag] = fs
 
                 try:
-                    self._default['_field_data'][field] = from_object._default['_field_data'][field]
+                    self._default['_flag_data'][flag] = from_object._default['_flag_data'][flag]
                 except KeyError:
                     pass
 
-            self._field_set_data[fs] = from_object[fs]
+            self._flag_set_data[fs] = from_object[fs]
             try:
-                self._default['_field_set_data'][fs] = from_object._default['_field_set_data'][fs]
+                self._default['_flag_set_data'][fs] = from_object._default['_flag_set_data'][fs]
             except KeyError:
                 pass
 
@@ -891,55 +1358,55 @@ class FlagHelper(object):
         if to_obj is None:
             to_obj = self
 
-        to_obj._merge_fields(from_obj)
+        to_obj._merge_flags(from_obj)
         to_obj._merge_sets(from_obj)
 
-    def _move_field(self, field, from_obj, to_obj):
-        if field in to_obj._field_set_fields:
-            raise AttributeError('Cannot move to object, field name in field set.')
+    def _move_flag(self, flag, from_obj, to_obj):
+        if flag in to_obj._flag_set_flags:
+            raise AttributeError('Cannot move to object, flag name in flag set.')
         else:
-            to_obj._field_data[field] = from_obj._field_data[field]
+            to_obj._flag_data[flag] = from_obj._flag_data[flag]
             try:
-                to_obj._default['_field_data'][field] = from_obj._default['_field_data'][field]
+                to_obj._default['_flag_data'][flag] = from_obj._default['_flag_data'][flag]
             except KeyError:
                 pass
 
-    def _move_set(self, field, from_obj, to_obj):
-        if field in from_obj._field_sets:
-            if field in to_obj._field_data:
-                raise AttributeError('Merged flag set must not exist as field in target')
-            elif field in to_obj._field_sets:
+    def _move_set(self, flag, from_obj, to_obj):
+        if flag in from_obj._flag_sets:
+            if flag in to_obj._flag_data:
+                raise AttributeError('Merged flag set must not exist as flag in target')
+            elif flag in to_obj._flag_sets:
                 raise AttributeError('Cannot merge existing flag sets')
             else:
-                from_fs = from_obj._field_sets[field]
+                from_fs = from_obj._flag_sets[flag]
                 if from_fs.named:
-                    to_obj._field_sets[from_fs.name] = from_fs
+                    to_obj._flag_sets[from_fs.name] = from_fs
                     to_fs = from_fs
                 else:
                     tmp_name = to_obj._get_next_name()
                     to_fs = from_fs._replace(name=tmp_name)
-                    to_obj._field_sets[tmp_name] = to_fs
+                    to_obj._flag_sets[tmp_name] = to_fs
 
-                for f in to_fs.fields:
-                    if f in to_obj._field_data:
-                        raise AttributeError('Merged flag set field must not exist in target')
-                    to_obj._field_data[f] = from_obj._field_data[f]
-                    to_obj._default['_field_data'][f] = from_obj._field_data[f]
-                    to_obj._field_set_fields[f] = to_fs.name
+                for f in to_fs.flags:
+                    if f in to_obj._flag_data:
+                        raise AttributeError('Merged flag set flag must not exist in target')
+                    to_obj._flag_data[f] = from_obj._flag_data[f]
+                    to_obj._default['_flag_data'][f] = from_obj._flag_data[f]
+                    to_obj._flag_set_flags[f] = to_fs.name
 
-                to_obj._field_set_data[to_fs.name] = from_obj._field_set_data[from_fs.name]
-                to_obj._default['_field_set_data'][to_fs.name] = from_obj._field_set_data[from_fs.name]
+                to_obj._flag_set_data[to_fs.name] = from_obj._flag_set_data[from_fs.name]
+                to_obj._default['_flag_set_data'][to_fs.name] = from_obj._flag_set_data[from_fs.name]
 
-        elif field in from_obj._field_set_fields:
-            raise AttributeError('Cannot move individual field set fields')
+        elif flag in from_obj._flag_set_flags:
+            raise AttributeError('Cannot move individual flag set flags')
 
-        elif field in to_obj._field_set_fields:
-            raise AttributeError('Cannot move to object, field name in field set.')
+        elif flag in to_obj._flag_set_flags:
+            raise AttributeError('Cannot move to object, flag name in flag set.')
 
         else:
-            to_obj._field_data[field] = from_obj._field_data[field]
+            to_obj._flag_data[flag] = from_obj._flag_data[flag]
             try:
-                to_obj._default['_field_data'][field] = from_obj._default['_field_data'][field]
+                to_obj._default['_flag_data'][flag] = from_obj._default['_flag_data'][flag]
             except KeyError:
                 pass
 
@@ -948,9 +1415,9 @@ class FlagHelper(object):
     def __and__(self, other):
         other = self._make_other(other)
         tmp_ret = self.__class__()
-        for field in self._field_order:
-            if field and other[field.name]:
-                tmp_ret._add(other.get_obj(field.name))
+        for flag in self._flag_order:
+            if flag.name in other and flag and other[flag.name]:
+                tmp_ret._add(other._get_obj(flag.name))
         tmp_ret._locked = self._locked
         return tmp_ret
 
@@ -958,54 +1425,56 @@ class FlagHelper(object):
         other = self._make_other(other)
         tmp_ret = self.__class__()
 
-        for field in self._field_order:
-            if field:
-                tmp_ret.add(self._get_obj(field.name))
-            elif other[field.name]:
-                tmp_ret.add(other._get_obj(field.name))
+        for flag in self._flag_order:
+            if flag:
+                tmp_ret._add(self._get_obj(flag.name))
+
+        for flag in other._flag_order:
+            if flag.name not in tmp_ret:
+                if flag:
+                    tmp_ret._add(other._get_obj(flag.name))
+
 
         tmp_ret._locked = self._locked
         return tmp_ret
-
-
 
     # def _add_obj(self, from_obj, to_obj):
     #     if isinstance(from_obj, (list, tuple)):
     #         for o in from_obj:
     #             to_obj._set(o)
     #     elif isinstance(from_obj, dict):
-    #         for field, value in from_obj.items():
-    #             to_obj._set(field, value)
+    #         for flag, value in from_obj.items():
+    #             to_obj._set(flag, value)
     #     elif isinstance(from_obj, to_obj.__class__):
     #         to_obj._merge_sets(from_obj)
-    #         to_obj._merge_fields(from_obj)
+    #         to_obj._merge_flags(from_obj)
     #     else:
     #         to_obj._set(from_obj)
     #     return to_obj
 
     def __add__(self, other):
         tmp_ret = self._copy()
-        tmp_ret._add(other)
+        tmp_ret._add(other, overwrite_flag=True)
         return tmp_ret
 
     def __iadd__(self, other):
-        self._add(other)
+        self._add(other, overwrite_flag=True)
         return self
 
     # def _sub_obj(self, from_obj, to_obj):
     #     if to_obj._locked:
-    #         raise AttributeError('Fields cannot be deleted from locked helpers')
+    #         raise AttributeError('flags cannot be deleted from locked helpers')
     #     if isinstance(from_obj, (list, tuple)):
     #         for o in from_obj:
     #             del to_obj[o]
     #     elif isinstance(from_obj, dict):
-    #         for field, value in from_obj.items():
-    #             del to_obj[field]
+    #         for flag, value in from_obj.items():
+    #             del to_obj[flag]
     #     elif isinstance(from_obj, to_obj.__class__):
-    #         for field in to_obj._field_single_names.copy():
-    #             del to_obj[field]
-    #         for field in list(to_obj._field_sets):
-    #             del to_obj[field]
+    #         for flag in to_obj._flag_single_names.copy():
+    #             del to_obj[flag]
+    #         for flag in list(to_obj._flag_sets):
+    #             del to_obj[flag]
     #     else:
     #         del to_obj[from_obj]
     #
@@ -1013,467 +1482,11 @@ class FlagHelper(object):
 
     def __sub__(self, other):
         tmp_ret = self._copy()
-        tmp_ret._rem(other)
+        tmp_ret._locked = False
+        tmp_ret._rem(other, raise_on_error=False)
+        tmp_ret._locked = self._locked
         return tmp_ret
 
     def __isub__(self, other):
         self._rem(other)
         return self
-
-
-
-'''
-class OldFlagHelper(object):
-    _data = None
-    """
-    Manager to handle easier setting of boolean type flags.
-
-    locked:
-
-        FM = FlagHelper()
-
-        FM = FlagHelper()
-
-        FM = FlagHelper('+flag_1_name', '-flag_2_name', 'flag_3_name')
-
-        FM.flag1 = True
-        FM.flag1
-        >> True
-
-        FM.no_flag
-        >> False
-
-        FM += 'flag'
-        FM.flag
-        >> False
-
-        FM += ['flag1', '-flag2', 'flag3']
-        FM.flag
-        >> False
-
-        FM -= ['existing flag', 'flag2']
-        FM.existing_flag
-        >> False
-
-        for f in FM:
-        >> <True flag names>, ...
-
-        FM[<flag_name>]
-        >> True/False
-
-        FM._clear()
-
-        FM._get(filter_for=True)
-
-        FM._get_dict()
-
-        len(FM)
-
-        bool()
-         - when unlocked = has any flags
-
-        copy()
-
-        call()
-            will return all true flags
-            can pass list of flags to set
-
-        str()
-        flag1, flag2, flag3
-
-        repr()
-        FlagHelper(flag1=False, flag2=True, flag3=false)
-
-    open
-
-        FM = FlagHelper()
-
-        FM = FlagHelper(
-            add_on_plus=True,
-            allow_us_start=False,
-            case_sensitive=False,
-            fix_names=False)
-
-        FM = FlagHelper('+flag_1_name', '-flag_2_name', 'flag_3_name')
-
-        FM.flag1 = True
-        FM.flag1
-        >> True
-
-        FM.no_flag
-        >> False
-
-        FM += 'flag'
-        FM.flag
-        >> False
-
-        FM += ['flag1', '-flag2', 'flag3']
-        FM.flag
-        >> False
-
-        FM -= ['existing flag', 'flag2']
-        FM.existing_flag
-        >> False
-
-        for f in FM:
-        >> <True flag names>, ...
-
-        FM[<flag_name>]
-        >> True/False
-
-        FM._clear()
-
-        FM._get()
-
-        FM._get_dict()
-
-        len(FM)
-
-        bool() has any flags
-         - when locked = and all flags
-
-        copy()
-
-        call()
-            will return all true flags
-            can pass list of flags to set
-
-        str()
-        flag1, flag2, flag3
-
-        repr()
-        FlagHelper(flag1, flag2, flag3)
-
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        self._data = {}
-        self._init_fields = False
-        for arg in args:
-            self._add(arg)
-        if kwargs:
-            self._add(kwargs)
-        self._default = self._data.copy()
-        self._init_fields = True
-        self.__initialised = True
-
-    def _clear(self):
-        self._data.clear()
-
-    def _str_conv(self, flag_str):
-        if flag_str[0] in '+-':
-            return flag_str[1:], flag_str[0] == '+'
-        else:
-            return flag_str, True
-
-    def _add(self, data_in):
-        if isinstance(data_in, str):
-            tmp_key, tmp_value = self._str_conv(data_in)
-            self[tmp_key] = tmp_value
-
-        elif isinstance(data_in, (list, tuple)):
-            for d in data_in:
-                self._add(d)
-
-        elif isinstance(data_in, dict):
-            self._update(data_in)
-
-        elif isinstance(data_in, (FlagHelper, LockedFlagHelper)):
-            self._update(data_in._data.copy())
-
-        return self
-
-    def _del(self, data_in):
-        tmp_ret = {}
-        if isinstance(data_in, str):
-            tmp_key, tmp_value = self._str_conv(data_in)
-            self._set_false(tmp_key)
-
-        elif isinstance(data_in, (list, tuple)):
-            for d in data_in:
-                tmp_key, tmp_value = self._str_conv(d)
-                self._set_false(tmp_key)
-
-        elif isinstance(data_in, dict):
-            for k in data_in.keys():
-                self._set_false(k)
-
-        elif isinstance(data_in, (FlagHelper, LockedFlagHelper)):
-            for k in data_in:
-                self._set_false(k)
-
-        return self
-
-    def _reset(self, set_to=False, set_to_default=False):
-        if set_to_default:
-            self._data.clear()
-            self._data.update(self._default.copy())
-        else:
-            self._set_all(set_to)
-
-    def _set_all(self, set_to=False):
-        tmp_list = list(self._data.keys())
-        if set_to:
-            self._add(tmp_list)
-        else:
-            self._del(tmp_list)
-
-    def _set_true(self, field):
-        if field == '*':
-            self._set_all(True)
-        else:
-            self._validate_addr(field)
-            self._data[field] = True
-
-    def _set_false(self, field):
-        if field == '*':
-            self._set_all(False)
-        else:
-            try:
-                del self._data[field]
-            except KeyError:
-                pass
-
-    def _update(self, dict_in):
-        for key, value in dict_in.items():
-            self[key] = value
-
-    def _validate_addr(self, flag):
-        if flag.isidentifier():
-            if flag[0] != '_':
-                return True
-        raise AttributeError('Flag name %r is invalid' % flag)
-
-    def _get(self):
-        return list(self._data.keys())
-
-    def _get_dict(self):
-        return self._data.copy()
-
-    def _and(self, other):
-        tmp_ret = self._copy(set_to=False)
-
-        if not isinstance(other, (FlagHelper, LockedFlagHelper)):
-            other = FlagHelper(other)
-
-        for key, value in self._data.items():
-            if value and key in other._data and other._data[key]:
-                tmp_ret += key
-
-        return tmp_ret
-
-    def _or(self, other):
-        tmp_ret = self._copy(set_to=False)
-        if not isinstance(other, (FlagHelper, LockedFlagHelper)):
-            other = FlagHelper(other)
-
-        for key, value in self._data.items():
-            if value or (key in other._data and other._data[key]):
-                tmp_ret += key
-
-        for key, value in other._data.items():
-            if value or (key in self._data and self._data[key]):
-                try:
-                    tmp_ret += key
-                except KeyError:
-                    pass
-
-        return tmp_ret
-
-    def _copy(self, set_to_default=False, set_to=None):
-        if set_to_default:
-            return self.__class__(**self._default)
-        else:
-            tmp_ret = self.__class__(**self._default)
-            if set_to is None:
-                tmp_ret._update(self._data)
-            else:
-                tmp_ret._set_all(set_to)
-            return tmp_ret
-
-    __copy__ = _copy
-
-    def __iter__(self):
-        for k, i in self._data.items():
-            yield k
-
-    def __contains__(self, item):
-        return item in self._data and self._data[item]
-
-    def __getattr__(self, item):
-        return self[item]
-
-    def __setattr__(self, key, value):
-        if '_FlagHelper__initialised' not in self.__dict__:
-            object.__setattr__(self, key, value)
-        elif key in self.__dict__:
-            super(self.__class__).__setattr__(key, value)
-        else:
-            self[key] = bool(value)
-
-    def __getitem__(self, item):
-        try:
-            return self._data[item]
-        except KeyError:
-            return False
-
-    def __setitem__(self, key, value):
-        if bool(value):
-            self._set_true(key)
-        else:
-            self._set_false(key)
-
-    def __call__(self, *args, **kwargs):
-        self._add(args)
-        if kwargs:
-            self._add(kwargs)
-        return self._get()
-
-    def __len__(self):
-        return len(self._data)
-
-    def __bool__(self):
-        return bool(self._data)
-
-    def __iadd__(self, other):
-        self._add(other)
-        return self
-
-    def __isub__(self, other):
-        self._del(other)
-        return self
-
-    def _str(self, with_icons=False):
-        tmp_list = list(self._data.keys())
-        tmp_list.sort()
-
-        if with_icons:
-            for i in range(len(tmp_list)):
-                if self._data[tmp_list[i]]:
-                    tmp_list[i] = '(+)' + tmp_list[i]
-                else:
-                    tmp_list[i] = '(-)' + tmp_list[i]
-
-        return ', '.join(tmp_list)
-
-    def __str__(self):
-        return self._str()
-
-    def __repr__(self):
-        return 'FlagHelper(%s)' % self.__str__()
-
-    def __eq__(self, other):
-        if not isinstance(other, (FlagHelper, LockedFlagHelper)):
-            other = FlagHelper(other)
-
-        for key, item in self._data.items():
-            try:
-                if item != other[key]:
-                    return False
-            except KeyError:
-                return False
-        return True
-
-    def __ne__(self, other):
-        return not self == other
-
-
-class OldLockedFlagHelper(FlagHelper):
-    """
-    flag types
-    T/F flag default false= 'string_name'
-    T/F flag default true = '+string_name'
-    T/F/N flag default none = '*string_name'
-    T/F/N flag default true = '*+string_name'
-    T/F/N flag default false = '*-string_name'
-
-    flag set default None = ('flag_1', 'flag_2', 'flag_3')
-    flag set default flag = ('flag_1', '+flag_2', 'flag_3')
-
-    named flag set default None = ('flag_set_name', ('flag_1', 'flag_2', 'flag_3'))
-    named flag set default flag = ('flag_set_name', ('flag_1', 'flag_2', '+flag_3'))
-
-    LockedFlagHelper((flag_set_name, (
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(LockedFlagHelper, self).__init__(*args, **kwargs)
-        self.__initialised = True
-
-    def _clear(self):
-        """
-        This will return all fields to their default state
-        """
-        self._data.clear()
-        self._data.update(self._default)
-
-    def _set_false(self, field):
-        self._validate_addr(field)
-        self._data[field] = False
-
-    def _validate_addr(self, flag):
-        if self._init_fields:
-            if flag in self._data:
-                return True
-            else:
-                raise KeyError('Invalid flag name %r: valid ones are %r' % (flag, self._str(with_icons=False)))
-        else:
-            if flag.isidentifier():
-                if flag[0] != '_':
-                    return True
-            raise AttributeError('Flag name %r is invalid' % flag)
-
-    def _get(self, filter_for=None):
-        if filter_for is not None:
-            tmp_ret = []
-            for key, value in self._data.items():
-                if value == filter_for:
-                    tmp_ret.append(key)
-            return tmp_ret
-        else:
-            return list(self._data.keys())
-
-    def _get_dict(self, filter_for=None):
-        if filter_for is not None:
-            tmp_ret = {}
-            for key, value in self._data.items():
-                if value == filter_for:
-                    tmp_ret[key] = value
-            return tmp_ret
-        else:
-            return self._data.copy()
-
-    def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError:
-            raise AttributeError('Invalid flag name %s: valid ones are %s' % (item, str(self)))
-
-    def __setattr__(self, key, value):
-        if '_LockedFlagHelper__initialised' not in self.__dict__:
-            object.__setattr__(self, key, value)
-        elif key in self.__dict__:
-            super(LockedFlagHelper).__setattr__(key, value)
-        else:
-            self[key] = bool(value)
-
-    def __getitem__(self, item):
-        return self._data[item]
-
-    def __call__(self, *args, **kwargs):
-        self._add(args)
-        if kwargs:
-            self._add(kwargs)
-        return self._get(filter_for=True)
-
-    def __bool__(self):
-        return all(self._data.values())
-
-    def __str__(self):
-        return self._str(with_icons=True)
-
-    def __repr__(self):
-        return 'LockedFlagHelper(%s)' % self.__str__()
-
-'''
