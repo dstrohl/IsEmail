@@ -2,7 +2,13 @@
 def simple_char(email_info, position, parse_for, min_count=-1, max_count=99999, parse_until=None):
     tmp_ret = email_info.fb(position)
     tmp_count = 0
-    for i in email_info.remaining_complex(begin=position, count=max_count, until_char=parse_until):
+
+    if parse_until is None:
+        looper = email_info.remaining_complex(begin=position, count=max_count)
+    else:
+        looper = email_info.remaining_complex(begin=position, count=max_count, until_char=parse_until)
+
+    for i in looper:
         if i in parse_for:
             tmp_count += 1
         else:

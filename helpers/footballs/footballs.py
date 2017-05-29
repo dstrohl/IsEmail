@@ -3,19 +3,98 @@ from helpers.flag_manager import FlagHelper
 from helpers.meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
 from helpers.hisatory import HistoryHelper
 from helpers.exceptions import *
-from helpers.tracer import TraceHelper
+from helpers.tracer import TraceHelper, TraceFormatManager
+
+
+class EmailTracerFormatter(TraceFormatManager):
+
+    def begin(self, stage_name, position, **kwargs):
+        if self:
+            self.tracer._begin_stage(
+                stage_name=stage_name,
+                position=position,
+                parser=self._begin_parse,
+                remaining=self.tracer.email.mid(position),
+                **kwargs)
+        return self.tracer
+
+    def note(self, note, position=0, **kwargs):
+        if self:
+            self.tracer._add_trace(
+                position=position,
+                parser=self._note_parse,
+                note=note,
+                **kwargs)
+        return self.tracer
+
+    def end(self, results, raise_error=False, **kwargs):
+        if self:
+            self.tracer._end_stage(
+                parser=self._end_parse,
+                results=results,
+                stage_text=str(results),
+                raise_error=raise_error,
+                **kwargs)
+        return self.tracer
+
+        # *** Trace parsers ***********************************
+
+    def _begin_parse(self, *args, format_str='Begin: {stage}', **kwargs):
+        format_str = 'Begin ({position}): {stage}  scanning: ->{remaining}<-'
+        return format_str.format(*args, **kwargs)
+    _begin_parse.name = 'Begin'
+
+    def _end_parse(self, *args, format_str='End: {stage}', **kwargs):
+        if kwargs.get('raise_error', False):
+            tmp_raised = ' -RAISED - '
+        else:
+            tmp_raised = ''
+
+        results = kwargs['results']
+
+        if results.l == 0 or results.error:
+            format_str = 'End%s: UN-MATCHED : {stage}  -- {results!r}' % tmp_raised
+        else:
+            format_str = 'End%s: {stage_text} : {stage}  -- {results!r}' % tmp_raised
+
+        return format_str.format(*args, **kwargs)
+
+    _end_parse.name = 'End'
+
+    def _note_parse(self, *args, note, **kwargs):
+
+        if kwargs.get('position', 0) == 0:
+            format_str = 'Note : %s' % note
+        else:
+            format_str = 'Note (position): %s' % note
+        return format_str.format(*args, **kwargs)
+
+    _note_parse.name = 'Note'
+
+
+class EmailTracer(TraceHelper):
+    _trace_name = 'Email Parsing Trace'
+    _trace_format_manager = EmailTracerFormatter
+
+    def __init__(self, email_helper, trace_level=None, logger=None, max_traces=None, immediate_parse=False,
+                 name=None, tz='utc', formats=None, **kwargs):
+        self.email = email_helper
+        if name is None:
+            name = self.email.email_in
+        super().__init__(trace_level, logger, max_traces, immediate_parse, name, tz, formats, **kwargs)
+
 
 class ParseResultFootball(object):
 
-    def __init__(self, email_obj, segment, begin):
+    def __init__(self, email_obj, stage, begin):
         self.email_obj = email_obj
-        self._max_length = 0
         self.results = []
-        self._history = HistoryHelper()
         # self.children = []
         self.begin = begin
+        self._max_length = 0
         self._length = 0
-        self.segment = segment
+        self.stage = stage
+        self.history = HistoryHelper(stage, begin=begin)
         # self.depth = 0
         # self.hist_cache = None
         self.error = False
@@ -27,17 +106,25 @@ class ParseResultFootball(object):
         self._length = length
 
     def copy(self):
-        tmp_ret = self.__class__(self.email_obj, self.segment, self.begin)
+        tmp_ret = self.__class__(self.email_obj, self.stage, self.begin)
         tmp_ret._length = self._length
         tmp_ret._max_length = self._max_length
         tmp_ret.results = self.results.copy()
         tmp_ret.error = self.error
-        tmp_ret._history = self._history.clean(str(self.email_obj))
+        # tmp_ret._history = self._history.clean(str(self.email_obj))
         return tmp_ret
     __copy__ = copy
 
-    def set_as_element(self):
-        self._history.name = self.segment
+    # def set_as_element(self):
+    #     self._history.name = self.stage
+
+    def set_history(self, stage=None, begin=None, length=None):
+        if stage is not None:
+            self.history.name = stage or self.stage
+        if begin is not None:
+            self.history.begin = begin
+        if length is not None:
+            self.history.length = length
 
     @property
     def l(self):
@@ -119,7 +206,7 @@ class ParseResultFootball(object):
             self.results.extend(other.results)
             self._set_error(other.error)
             # if other.segment_name is not None and other.segment_name != '':
-            self._history.append(other._history)
+            self.history.append(other.history)
 
             # self._local_comments.update(other._local_comments)
             # self._domain_comments.update(other._domain_comments)
@@ -151,7 +238,6 @@ class ParseResultFootball(object):
             self.set_length(0)
             if raise_on_error:
                 raise ParsingError(self)
-
         return self
 
     def add(self, *args,
@@ -227,8 +313,8 @@ class ParseResultFootball(object):
         return False
 
     def __repr__(self):
-        if self.segment:
-            tmp_str = '<%s>' % self.segment
+        if self.stage:
+            tmp_str = '<%s>' % self.stage
         else:
             tmp_str = '<unk>'
 
@@ -246,7 +332,7 @@ class ParseResultFootball(object):
         return tmp_str
 
     def __str__(self):
-        return repr(self)
+        return self.email_obj.mid(self.begin, self.length)
 
     def __bool__(self):
         if not self.error and self.length > 0:
@@ -295,18 +381,19 @@ class EmailInfo(object):
         # self._at_in_cfws = False
         # self._near_at_flag = False
 
+        self.flags = FlagHelper('in_crlf', 'at_in_cfws', 'near_at_flag')
+
         self.at_loc = None
         self.local_comments = {}
         self.domain_comments = {}
         self.domain_type = None
         self.results = None
 
-        self.flags = FlagHelper()
-
         self.email_in = None
         self.email_len = None
         self.trace = None
         self.stage = None
+        self.full_stage = None
 
         if email_in is not None:
             self.setup(email_in)
@@ -314,23 +401,31 @@ class EmailInfo(object):
     def setup(self, email_in):
         self.email_len = len(email_in)
         self.email_in = email_in
-        self.trace = TraceHelper(email_in, self.trace_level)
-        self.stage = self.trace.stage
-        self.flags._set_all(False)
-        # self._in_local_part = False
-        # self._in_domain_part = False
-        # self._in_crlf = False
-        # self._at_in_cfws = False
-        # self._near_at_flag = False
+        self.trace = EmailTracer(self, self.trace_level)
+        self.stage = self.trace.get_stage
+        self.full_stage = self.trace.get_full_stage
+        self.flags._reset()
 
     def __getitem__(self, item):
         return self.email_in[item]
 
+    def begin_stage(self, stage_name, position, **kwargs):
+        self.trace.add.begin(stage_name=stage_name, position=position, **kwargs)
+
+    def end_stage(self, results, raise_error=False, **kwargs):
+        self.trace.add.end(results=results, raise_error=raise_error, **kwargs)
+
+    def note(self, note, position=0, **kwargs):
+        self.trace.add.note(note=note, position=position, **kwargs)
+
     def at_end(self, position):
         return int(position) >= self.email_len
 
+    def is_last(self, position):
+        return int(position) == self.email_len
+
     def fb(self, position):
-        return ParseResultFootball(self, str(self.stage), position)
+        return ParseResultFootball(self, str(self.stage), int(position))
 
     def __len__(self):
         return self.email_len
@@ -342,45 +437,35 @@ class EmailInfo(object):
         return 'Parse: "%s", at stage %s' % (self.email_in, self.stage)
 
     def mid(self, begin: int = 0, length: int = -1):
+        length = int(length)
         if length >= 0:
             return self.email_in[begin:min(int(begin) + length, self.email_len)]
         else:
             return self.email_in[int(begin):]
 
-    def remaining(self, begin, end=-1):
-        for c in self.mid(begin, end):
-            yield c
+    def slice(self, begin=0, end=999):
+        return self.email_in[int(begin):int(end)]
+
+    def remaining(self, begin, end=999, count=-1, **kwargs):
+        if not kwargs:
+            if count == -1:
+                for c in self.slice(begin, end):
+                    yield c
+            else:
+                for c in self.mid(begin, count):
+                    yield c
+        else:
+            for c in self.remaining_complex(begin, end, count, **kwargs):
+                yield c
+
     __call__ = remaining
 
-    def remaining_complex(self, begin, end=-1, count=-1, until_char=None, skip_quoted=False):
+    def remaining_complex(self, begin, end=999, count=-1, until_char=None, skip_quoted=False, ret_offset=False):
         in_qs = False
+        count = int(count)
         if until_char is None:
             until_char = ''
-        for i, c in enumerate(self.mid(begin, end)):
-            if count != -1 and i == count:
-                break
-            if until_char is not None:
-                if skip_quoted and c == '\\' and not in_qs:
-                    in_qs = True
-                    continue
-                if in_qs:
-                    in_qs=False
-                    continue
-                if c in until_char:
-                    break
-
-            yield c
-
-    def count(self, begin, search_for, end=-1, count=-1, until_char=None, skip_quoted=False):
-        tmp_ret = 0
-        for c in self.remaining_complex(begin, end, count, until_char, skip_quoted):
-            if c == search_for:
-                tmp_ret += 1
-        return tmp_ret
-
-    def find(self, begin, search_for, end=-1, count=-1, until_char=None, skip_quoted=False):
-        in_qs = False
-        for i, c in enumerate(self.mid(begin, end)):
+        for i, c in enumerate(self.slice(begin, end)):
             if count != -1 and i == count:
                 break
             if until_char is not None:
@@ -392,6 +477,20 @@ class EmailInfo(object):
                     continue
                 if c in until_char:
                     break
+            if ret_offset:
+                yield i + begin, c
+            else:
+                yield c
+
+    def count(self, begin, search_for, end=999, count=-1, until_char=None, skip_quoted=False):
+        tmp_ret = 0
+        for c in self.remaining_complex(begin, end, count, until_char, skip_quoted):
+            if c == search_for:
+                tmp_ret += 1
+        return tmp_ret
+
+    def find(self, begin, search_for, end=999, count=-1, until_char=None, skip_quoted=False):
+        for i, c in self.remaining_complex(begin, end, count, until_char, skip_quoted, ret_offset=True):
             if c == search_for:
                 return i
         return -1
@@ -407,8 +506,8 @@ class EmailInfo(object):
     def add_comment(self, football):
 
         if self.in_local:
-            self.local_comments[football.begin] = self.mid(football.begin+1, football.length-2)
+            self.local_comments[football.begin] = (football.begin, football.length, self.mid(football.begin+1, football.length-2))
         else:
-            self.domain_comments[football.begin] = self.mid(football.begin+1, football.length-2)
+            self.domain_comments[football.begin] = (football.betin, football.length, self.mid(football.begin+1, football.length-2))
         return self
 

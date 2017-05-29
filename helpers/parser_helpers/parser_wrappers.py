@@ -2,50 +2,74 @@ from functools import wraps
 from helpers.exceptions import *
 
 
-def email_parser(segment=True, is_comment=False, diags=None):
+def is_comment(func):
+    @wraps(func)
+    def func_wrapper(email_info, position, *args, **kwargs):
+        tmp_ret = func(email_info, position, *args, **kwargs)
+        if tmp_ret and is_comment:
+            email_info.add_comment(tmp_ret)
+        return tmp_ret
+    return func_wrapper
+
+
+def pass_diags(*diags):
     def func_decorator(func):
         @wraps(func)
         def func_wrapper(email_info, position, *args, **kwargs):
-            stage_name = kwargs.get('stage_name', func.__name__)
-            email_info.stage(stage_name)
-            email_info.trace.begin(position)
-            tmp_near_at_flag = email_info.flags('near_at')
+            tmp_ret = func(email_info, position, *args, **kwargs)
+            if tmp_ret and diags is not None:
+                tmp_ret.add(*diags)
+            return tmp_ret
+
+        return func_wrapper
+
+    return func_decorator
+
+
+def fail_diags(*diags):
+    def func_decorator(func):
+        @wraps(func)
+        def func_wrapper(email_info, position, *args, **kwargs):
+            tmp_ret = func(email_info, position, *args, **kwargs)
+            if not tmp_ret and diags is not None:
+                tmp_ret.add(*diags)
+            return tmp_ret
+        return func_wrapper
+    return func_decorator
+
+
+def email_parser(history_segment=True, name=None):
+    def func_decorator(func):
+        @wraps(func)
+        def func_wrapper(email_info, position, *args, **kwargs):
+            tmp_err = None
             position = int(position)
+            stage_name = kwargs.get('stage_name', name or func.__name__)
+
+            email_info.begin_stage(stage_name, position=position)
+
+            tmp_near_at_flag = email_info.flags('near_at')
             raise_error = False
 
             if not email_info.at_end(position):
-
                 try:
                     tmp_ret = func(email_info, position, *args, **kwargs)
-
                 except ParsingError as err:
+                    tmp_err = err
                     raise_error = True
                     tmp_ret = err.results
-
             else:
-                tmp_ret = email_info.fb
+                tmp_ret = email_info.fb(position)
 
-            if tmp_ret and segment:
-                tmp_ret.set_as_element()
+            if tmp_ret and history_segment:
+                tmp_ret.set_history()
 
-            if tmp_ret and diags is not None:
-                if isinstance(diags, (list, tuple)):
-                    tmp_ret.add(*diags)
-                else:
-                    tmp_ret.add(diags)
-
-            if tmp_near_at_flag:
-                email_info.flags('near_at')
-
-            email_info.end(position, tmp_ret)
-
-            email_info.stage.pop()
+            email_info.flags.near_at_flag = tmp_near_at_flag
+            email_info.end_stage(tmp_ret, raise_error=raise_error)
 
             if raise_error:
-                raise ParsingError(results=tmp_ret)
+                raise tmp_err
 
-            if tmp_ret and is_comment:
-                email_info.add_comment(position, tmp_ret.length)
             return tmp_ret
 
         return func_wrapper
@@ -82,3 +106,22 @@ def wrapped_parser(start_wrapper, end_wrapper=None, no_end_error='', bad_text_er
         return func_wrapper
 
     return func_decorator
+
+'''
+def must_end_local_part(fail_msg=None):
+    def func_decorator(func):
+        @wraps(func)
+        def func_wrapper(email_info, position, *args, **kwargs):
+            tmp_ret = func(email_info, position, *args, **kwargs)
+            if not tmp_ret and diags is not None:
+                tmp_ret.add(*diags)
+            return tmp_ret
+        return func_wrapper
+    return func_decorator
+
+def must_end_domain_part(fail_msg=None):
+
+
+def must_end_part(fail_msg=None):
+
+'''

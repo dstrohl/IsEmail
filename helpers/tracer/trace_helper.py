@@ -406,6 +406,8 @@ class TraceHelper(object):
     @property
     def get_stage(self):
         if self._stage:
+            if self._stage[-1] == '----':
+                return ''
             return self._stage[-1]
         return None
 
@@ -505,3 +507,5 @@ class TraceHelper(object):
         else:
             return tmp_ret
 
+    def __str__(self):
+        return self.output()
