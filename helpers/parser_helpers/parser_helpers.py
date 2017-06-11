@@ -1,4 +1,9 @@
 
+__all__ = ['simple_char', 'single_char', 'simple_str', 'parse_and', 'parse_or', 'parse_loop', 'parse_best']
+
+from helpers.footballs import ParseResultFootball
+
+
 def simple_char(email_info, position, parse_for, min_count=-1, max_count=99999, parse_until=None):
     tmp_ret = email_info.fb(position)
     tmp_count = 0
@@ -46,16 +51,6 @@ def simple_str(email_info, position, parse_for, caps_sensitive=True):
     return tmp_ret
 
 
-# **********************************************************************************
-# </editor-fold desc="PARSER HELPERS">
-# **********************************************************************************
-
-
-
-# **********************************************************************************
-# <editor-fold desc="PARSERS">
-# **********************************************************************************
-
 
 '''
 def _try_action(email_info, position, action_dict):
@@ -75,129 +70,93 @@ def _try_action(email_info, position, action_dict):
 
     else:
         return action_dict(position)
+'''
 
-def try_or(email_info, position, *args):
-    """
-    :param position:
-    :param args:
 
-     args =
-        dict(
-            name=<action_name>,
-            string_in="parse_string",
-            kwargs for simple_str),
-        dict(
-            name=<action_name>,
-            function="function_name",
-            kwargs fpr function)
-    :return:  (<action_name>, football)
-    """
-    position = email_info.pos(position)
-    for act in args:
-        if isinstance(act, dict):
-            tmp_name = act.pop('name')
-        elif isinstance(act, str):
-            tmp_name = act
+def _make_ret(email_info, position, parser, *args, **kwargs):
+    if isinstance(parser, ParseResultFootball):
+        return parser
+    elif isinstance(parser, str):
+        if len(parser) > 1 and parser[0] == '"' and parser[-1] == '"':
+            return simple_str(email_info, position, parser[1:-1])
         else:
-            tmp_name = act.__name__
-
-        tmp_ret = email_info._try_action(position, act)
-        if tmp_ret or tmp_ret.error:
-            return tmp_name, tmp_ret
-
-    return '', ParseResultFootball(email_info)
-
-def try_counted_and(email_info, position, *args, min_loop=1, max_loop=1):
-
-    final_loop_count = 0
-    position = email_info.pos(position)
-    tmp_ret = ParseResultFootball(email_info)
-    exit_break = False
-    empty_return = False
-
-    # email_info.add_note_trace('looping begin outside AND at: ', position + tmp_ret.l)
-    # email_info.trace_level += 1
-    for loop_count in range(max_loop):
-        tmp_loop_ret = ParseResultFootball(email_info)
-        email_info.add_begin_trace(position + tmp_ret.l)
-        # email_info.add_note_trace('looping begin inside  AND at: ', position + tmp_ret.l + tmp_loop_ret.l)
-        # email_info.trace_level += 1
-        for act in args:
-            # if isinstance(act, dict):
-            #     tmp_name = act.pop('name', '')
-            # elif isinstance(act, str):
-            #     tmp_name = act
-            # else:
-            #     tmp_name = act.__name__
-
-            tmp_ret_1 = email_info._try_action(position + tmp_ret.l + tmp_loop_ret.l, act)
-
-            if not tmp_ret_1:
-                exit_break = True
-                # email_info.add_note_trace('Breaking inside loop')
-                break
-
-            tmp_loop_ret += tmp_ret_1
-
-        # email_info.trace_level -= 1
-        # email_info.add_note_trace('looping end inside  AND', position + tmp_ret.l + tmp_loop_ret.l)
-        email_info.add_end_trace(position + tmp_ret.l, tmp_ret)
-        if exit_break:
-            if tmp_loop_ret:
-                # email_info.add_note_trace('Breaking outside loop - 1')
-                break
-            else:
-                tmp_ret += tmp_loop_ret
-                # email_info.add_note_trace('Breaking outside loop - 2')
-                break
-
-        else:
-            if tmp_loop_ret:
-                tmp_ret += tmp_loop_ret
-            else:
-                # email_info.add_note_trace('Breaking outside loop - 3')
-                break
-
-        final_loop_count += 1
-
-    # email_info.trace_level -= 1
-    # email_info.add_note_trace('looping end of outside AND at: ', position + tmp_ret.l)
-
-    if final_loop_count >= min_loop and not empty_return:
-        return final_loop_count, tmp_ret
+            return simple_char(email_info, position, parser)
     else:
-        return 0, ParseResultFootball(email_info)
+        return parser(email_info, position, *args, **kwargs)
 
-def try_and(email_info, position, *args, min_loop=1, max_loop=1):
-    count, tmp_ret = email_info.try_counted_and(position, *args, min_loop=min_loop, max_loop=max_loop)
+
+def parse_or(email_info, position, *parsers, **kwargs):
+    email_info.begin_stage('OR', position)
+    for p in parsers:
+        tmp_ret = _make_ret(email_info, position, p, **kwargs)
+        if tmp_ret:
+            email_info.end_stage(results=tmp_ret)
+            return tmp_ret
+    email_info.end_stage(results=email_info.fb(position))
+    return email_info.fb(position)
+
+
+def parse_and(email_info, position, *parsers, **kwargs):
+    email_info.begin_stage('OR', position)
+    tmp_ret = email_info.fb(position)
+    for p in parsers:
+        tmp_ret_2 = _make_ret(email_info, position + tmp_ret, p, **kwargs)
+        if not tmp_ret_2:
+            email_info.end_stage(results=tmp_ret)
+            return email_info.fb(position)
+        tmp_ret += tmp_ret_2
+    email_info.end_stage(results=tmp_ret)
     return tmp_ret
 
-def ipv6_segment(email_info, position, min_count=1, max_count=7):
+
+def parse_loop(email_info, position, parser, *args, min_loop=1, max_loop=256, ret_count=False, **kwargs):
+    email_info.begin_stage('LOOP', position)
     tmp_ret = email_info.fb(position)
-    tmp_ret += email_info.ipv6_hex(position)
+    loop_count = 0
 
-    if tmp_ret:
-        if max_count == 1:
-            return 1, tmp_ret
+    while loop_count in range(max_loop):
+        email_info.begin_stage('Loop #%s, @ %s' % (loop_count, position + tmp_ret), position + tmp_ret)
 
-        if not email_info.at_end(position + tmp_ret.l + 1) and \
-                        email_info.this_char(position + tmp_ret.l) == ':' and \
-                        email_info.this_char(position + tmp_ret.l + 1) == ':' and \
-                        min_count <= 1:
-            email_info.add_note_trace('Double Colons found, exiting')
-            return 1, tmp_ret
+        tmp_loop_ret = parser(email_info, position + tmp_ret, *args, **kwargs)
+        email_info.end_stage(results=tmp_loop_ret)
 
-        tmp_colon_str = {'string_in': email_info.COLON, 'min_count': 1, 'max_count': 1}
-        tmp_count, tmp_ret_2 = email_info.try_counted_and(position + tmp_ret.l,
-                                                    email_info.colon,
-                                                    email_info.ipv6_hex, min_loop=min_count - 1, max_loop=max_count - 1)
+        if tmp_loop_ret:
+            tmp_ret += tmp_loop_ret
+        else:
+            break
+
+        loop_count += 1
+
+    email_info.end_stage(results=tmp_ret)
+
+    if loop_count >= min_loop:
+        if ret_count:
+            return loop_count, tmp_ret
+        else:
+            return tmp_ret
     else:
-        return 0, ParseResultFootball(email_info)
+        if ret_count:
+            return 0, email_info.fb(position)
+        else:
+            return email_info.fb(position)
 
-    if tmp_ret_2:
-        return tmp_count + 1, tmp_ret(tmp_ret_2)
-    else:
-        return 0, ParseResultFootball(email_info)
+
+def parse_best(email_info, position, *parsers, try_all=False, **kwargs):
+    email_info.begin_stage('BEST', position)
+    tmp_ret = email_info.fb(position)
+
+    for p in parsers:
+        tmp_ret_2 = _make_ret(email_info, position, p, **kwargs)
+        if not try_all and tmp_ret_2 and email_info.at_end(position + tmp_ret_2):
+            tmp_ret = tmp_ret_2
+            break
+
+        tmp_ret = tmp_ret.max(tmp_ret_2)
+    email_info.end_stage(results=tmp_ret)
+    return tmp_ret
+
+
+'''
 
 def football_max(email_info, *footballs, names=None):
     names = names or []

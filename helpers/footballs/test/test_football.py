@@ -385,3 +385,204 @@ class TestParseFootball(unittest.TestCase):
         per.remove('DNSWARN_NO_MX_RECORD')
         self.assertEquals(len(per), 4)
 
+    def test_max_first_good_second_bad(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_1 += 10
+
+        self.assertEqual(per_1.l, 10)
+        self.assertEqual(per_2.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p1')
+
+    def test_max_second_good_first_bad(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+
+        self.assertEqual(per_2.l, 10)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p2')
+
+    def test_max_both_good_equal(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+
+        self.assertEqual(per_2.l, 10)
+        self.assertEqual(per_1.l, 10)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p1')
+
+    def test_max_both_good_one_longer(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 5
+
+        self.assertEqual(per_2.l, 10)
+        self.assertEqual(per_1.l, 5)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p2')
+
+    def test_max_both_good_equal_different_codes(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+        per_1('DNSWARN_NO_MX_RECORD')
+        per_2('DNSWARN_NO_RECORD')
+
+        self.assertEqual(per_2.l, 10)
+        self.assertEqual(per_1.l, 10)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p2')
+
+    def test_max_both_good_equal_different_codes_2(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+        per_2('DNSWARN_NO_MX_RECORD')
+        per_1('DNSWARN_NO_RECORD')
+
+        self.assertEqual(per_2.l, 10)
+        self.assertEqual(per_1.l, 10)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 10)
+        self.assertEqual(per_ret.history, 'p1')
+
+
+    def test_max_both_bad_different_codes(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+        per_2('ERR_CONSECUTIVE_DOTS')
+        per_1('ERR_ATEXT_AFTER_CFWS')
+
+        self.assertEqual(per_2.l, 0)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 0)
+        self.assertEqual(per_ret.history, 'p1')
+
+
+    def test_max_both_bad_different_codes_2(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+        per_1('ERR_CONSECUTIVE_DOTS')
+        per_2('ERR_ATEXT_AFTER_CFWS')
+
+        self.assertEqual(per_2.l, 0)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 0)
+        self.assertEqual(per_ret.history, 'p2')
+
+
+    def test_max_both_bad_different_max_lengths(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 5
+        per_1('ERR_CONSECUTIVE_DOTS')
+        per_2('ERR_CONSECUTIVE_DOTS')
+
+        self.assertEqual(per_2.l, 0)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 0)
+        self.assertEqual(per_ret.history, 'p2')
+
+    def test_max_both_bad_different_max_lengths_2(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_1 += 10
+        per_2 += 5
+        per_1('ERR_CONSECUTIVE_DOTS')
+        per_2('ERR_CONSECUTIVE_DOTS')
+
+        self.assertEqual(per_2.l, 0)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 0)
+        self.assertEqual(per_ret.history, 'p1')
+
+    def test_max_both_equal(self):
+        per_1 = self.fb('test_email_in')
+        per_1.set_history('p1', 0)
+        per_2 = self.fb('test_email_in')
+        per_2.set_history('p2', 0)
+
+        per_2 += 10
+        per_1 += 10
+        per_1('ERR_CONSECUTIVE_DOTS')
+        per_2('ERR_CONSECUTIVE_DOTS')
+
+        self.assertEqual(per_2.l, 0)
+        self.assertEqual(per_1.l, 0)
+
+        per_ret = per_1.max(per_2)
+
+        self.assertEqual(per_ret.l, 0)
+        self.assertEqual(per_ret.history, 'p1')

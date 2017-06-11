@@ -94,7 +94,7 @@ class ParseResultFootball(object):
         self._max_length = 0
         self._length = 0
         self.stage = stage
-        self.history = HistoryHelper(stage, begin=begin)
+        self._history = HistoryHelper(stage, begin=begin)
         # self.depth = 0
         # self.hist_cache = None
         self.error = False
@@ -120,11 +120,15 @@ class ParseResultFootball(object):
 
     def set_history(self, stage=None, begin=None, length=None):
         if stage is not None:
-            self.history.name = stage or self.stage
+            self._history.name = stage or self.stage
         if begin is not None:
-            self.history.begin = begin
+            self._history.begin = begin
         if length is not None:
-            self.history.length = length
+            self._history.length = length
+
+    @property
+    def history(self):
+        return str(self._history)
 
     @property
     def l(self):
@@ -134,12 +138,27 @@ class ParseResultFootball(object):
     def length(self):
         return self._length
 
+    @property
     def diags(self):
         tmp_ret = []
         for r in self.results:
             if r[0] not in tmp_ret:
                 tmp_ret.append(r[0])
         return tmp_ret
+
+    @property
+    def max_diag(self):
+        tmp_diag = self.diags
+        if not tmp_diag:
+            return None
+        return self.email_obj.meta_data.max_obj(*self.diags)
+
+    @property
+    def max_diag_value(self):
+        tmp_diag = self.max_diag
+        if tmp_diag is None:
+            return -1
+        return tmp_diag.value
 
     def remove(self, diag, position=None, length=None, rem_all=False):
         rem_list = []
@@ -206,7 +225,7 @@ class ParseResultFootball(object):
             self.results.extend(other.results)
             self._set_error(other.error)
             # if other.segment_name is not None and other.segment_name != '':
-            self.history.append(other.history)
+            self._history.append(other._history)
 
             # self._local_comments.update(other._local_comments)
             # self._domain_comments.update(other._domain_comments)
@@ -288,6 +307,35 @@ class ParseResultFootball(object):
         return self
     __call__ = add
 
+    def max(self, other):
+        if self and not other:
+            return self
+
+        elif other and not self:
+            return other
+
+        elif self and other:
+            if self > other:
+                return self
+            elif other > self:
+                return other
+            else:
+                if self.max_diag_value >= other.max_diag_value:
+                    return self
+                else:
+                    return other
+
+        else:  # neither self nor other
+            if self._max_length > other._max_length:
+                return self
+            elif other._max_length > self._max_length:
+                return other
+            else:
+                if self.max_diag_value >= other.max_diag_value:
+                    return self
+                else:
+                    return other
+
     def __lt__(self, other):
         return self.length < int(other)
 
@@ -327,7 +375,7 @@ class ParseResultFootball(object):
             tmp_str += '(%s)' % self.length
 
         if self.results:
-            tmp_str += ' [%s]' % ','.join(self.diags())
+            tmp_str += ' [%s]' % ','.join(self.diags)
 
         return tmp_str
 

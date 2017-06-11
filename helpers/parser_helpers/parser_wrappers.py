@@ -1,3 +1,5 @@
+__all__ = ['pass_diags', 'fail_diags', 'email_parser', 'wrapped_parser']
+
 from functools import wraps
 from helpers.exceptions import *
 
@@ -38,15 +40,17 @@ def fail_diags(*diags):
     return func_decorator
 
 
-def email_parser(history_segment=True, name=None):
+def email_parser(is_history_item=True, name=None):
     def func_decorator(func):
         @wraps(func)
-        def func_wrapper(email_info, position, *args, **kwargs):
+        def func_wrapper(email_info, position, *args, is_history_item=is_history_item, name=name, **kwargs):
             tmp_err = None
             position = int(position)
-            stage_name = kwargs.get('stage_name', name or func.__name__)
+            name = name or func.__name__
+            # stage_name = kwargs.get('name', name or func.__name__)
+            # is_history_item = kwargs.get('is_history_item', is_history_item)
 
-            email_info.begin_stage(stage_name, position=position)
+            email_info.begin_stage(name, position=position)
 
             tmp_near_at_flag = email_info.flags('near_at')
             raise_error = False
@@ -61,8 +65,8 @@ def email_parser(history_segment=True, name=None):
             else:
                 tmp_ret = email_info.fb(position)
 
-            if tmp_ret and history_segment:
-                tmp_ret.set_history()
+            if tmp_ret and is_history_item:
+                tmp_ret.set_history(name)
 
             email_info.flags.near_at_flag = tmp_near_at_flag
             email_info.end_stage(tmp_ret, raise_error=raise_error)
@@ -80,28 +84,35 @@ def email_parser(history_segment=True, name=None):
 def wrapped_parser(start_wrapper, end_wrapper=None, no_end_error='', bad_text_error=''):
     def func_decorator(func):
         @wraps(func)
-        def func_wrapper(email_info, position, *args, **kwargs):
+        def func_wrapper(email_info, position, *args, end_wrapper=end_wrapper, **kwargs):
+
+            if end_wrapper is None:
+                end_wrapper = start_wrapper
+
+            wrapped_stage_name = 'wrapping_in_%s%s' % (start_wrapper, end_wrapper)
+
+            email_info.begin_stage(wrapped_stage_name, position)
+
             if end_wrapper is None:
                 end_wrapper = start_wrapper
 
             tmp_ret = email_info.fb(position)
 
-            tmp_start = start_wrapper(email_info, position)
-
-            if not tmp_start:
+            if not email_info.at_end(position + tmp_ret) and email_info[position] == start_wrapper:
+                tmp_ret += 1
+            else:
                 return tmp_ret
 
-            if not email_info.find(position + tmp_start, end_wrapper.char, skip_quoted=True):
-                return tmp_ret(no_end_error)
+            tmp_ret += func(email_info, position + tmp_ret, *args, **kwargs)
 
-            tmp_ret += tmp_start
-            tmp_ret += func(email_info, position, *args, **kwargs)
-            tmp_end = end_wrapper(email_info, position)
-
-            if not tmp_end:
-                return tmp_ret(bad_text_error)
-
-            return tmp_ret(tmp_end)
+            if not email_info.at_end(position + tmp_ret) and email_info[position + tmp_ret] == end_wrapper:
+                tmp_ret += 1
+                return tmp_ret
+            else:
+                if email_info.at_end(position + tmp_ret):
+                    return tmp_ret(no_end_error)
+                else:
+                    return tmp_ret(bad_text_error)
 
         return func_wrapper
 
