@@ -1,1 +1,1 @@
-from helpers.footballs.footballs import EmailInfo, ParseResultFootball
+from helpers.footballs.footballs import ParsingObj, ParseResultFootball, EmailParsingObj

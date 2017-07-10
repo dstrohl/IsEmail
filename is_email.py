@@ -1,6 +1,6 @@
 import email_parsers as p
 from helpers.email_dns_helper.dns_functions import dns_lookup
-from helpers.footballs.footballs import ParsingError, ParseShortResult, ParseFullResult, EmailInfo
+from helpers.footballs.footballs import ParsingError, ParseShortResult, ParseFullResult, ParsingObj
 from helpers.meta_data.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS, ISEMAIL_DOMAIN_TYPE
 
 
@@ -11,7 +11,7 @@ def parse(email_in, parser=None, **kwargs):
     if email_in is None:
         email_in = ''
 
-    email_info = EmailInfo(email_in=str(email_in), **kwargs)
+    email_info = ParsingObj(email_in=str(email_in), **kwargs)
 
     if email_in == '':
         tmp_ret = email_info.fb(0)

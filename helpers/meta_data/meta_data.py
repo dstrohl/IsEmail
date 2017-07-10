@@ -82,6 +82,27 @@ Maximums:
     domain name = 255 RFC5322_DOMAIN_TOO_LONG
     domain name label = 63 : RFC5322_LABEL_TOO_LONG
 
+
+
+
+GENERAL ERRORS:
+    Invalid Character
+    Invalid Length - Too Long
+    Invalid Length - Too Short
+    Unclosed String
+    Invalid Location
+    Missing Character
+    Invalid End Character
+    Invalid Start Character
+    Missing Segment
+
+GENERAL WARNINGS:
+    Deprecated Content
+    Potential Error
+
+
+
+
 """
 
 class ISEMAIL_RESULT_CODES(IntEnum):

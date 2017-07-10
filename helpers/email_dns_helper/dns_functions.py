@@ -1,6 +1,7 @@
 __all__ = ['DNSTimeoutError', 'DNSCommError', 'dns_lookup']
 
-from helpers.meta_data.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS
+
+from helpers.meta_data import ISEMAIL_DNS_LOOKUP_LEVELS
 try:
     from dns import resolver, reversename
     from dns import exception as dns_except

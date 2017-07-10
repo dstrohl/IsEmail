@@ -1,8 +1,10 @@
 import unittest
 
-from helpers.email_dns_helper.dns_functions import DNSTimeoutError
-from helpers.meta_data.meta_data import META_LOOKUP, ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS, ISEMAIL_DOMAIN_TYPE, ISEMAIL_DNS_LOOKUP_LEVELS
-from parse_objects import EmailParser, make_char_str
+from helpers.email_dns_helper import DNSTimeoutError
+from helpers.meta_data import META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
+from email_parsers import *
+# from parse_objects import EmailParser, make_char_str
+from helpers.footballs import ParsingObj
 
 ISEMAIL_ALLOWED_GENERAL_ADDRESS_LITERAL_STANDARD_TAGS.append('http')
 
@@ -14,10 +16,9 @@ NOT_IN_DIAGS = ['RFC5321_IPV6_DEPRECATED', 'RFC5322_IPV6_2X2X_COLON', 'RFC5322_I
                 'RFC5322_IPV6_COLON_END', 'RFC5322_IPV6_COLON_STRT', 'RFC5322_IPV6_GRP_COUNT', 'RFC5322_IPV6_MAX_GRPS',
                 'DNSWARN_INVALID_TLD', 'DNSWARN_NO_MX_RECORD', 'DNSWARN_NO_RECORD', 'ERR_UNKNOWN', 'DNSWARN_COMM_ERROR',
                 'ERR_INVALID_ADDR_LITERAL']
+
 for diag in NOT_IN_DIAGS:
     DIAGS.remove(diag)
-
-# print('\n\nDiags Count = %s\n\n' % len(DIAGS))
 
 
 def full_ret_string(test_num, test_string, test_ret, extra_string=''):
@@ -49,40 +50,21 @@ def full_ret_string(test_num, test_string, test_ret, extra_string=''):
     return tmp_ret
 
 
-class TestMakeParseString(unittest.TestCase):
-
-    def test_make_string(self):
-        tmp_res = make_char_str('foobar')
-        self.assertEqual('foobar', tmp_res)
-
-    def test_from_int(self):
-        tmp_res = make_char_str(65, 66, 67)
-        self.assertEqual('ABC', tmp_res)
-
-    def test_from_string(self):
-        tmp_res = make_char_str('ABC', '123')
-        self.assertEqual('ABC123', tmp_res)
-
-    def test_from_int_range(self):
-        tmp_res = make_char_str((65, 67), (97, 99))
-        self.assertEqual('ABCabc', tmp_res)
-
+DEFAULT_EMAIL_KWARGS = {
+    'dns_lookup_level': ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP,
+    'trace_level': 9999,
+    'verbose': 2}
 
 class MyTestDefs(object):
-    def __init__(self, method_name, ret_football=True, tests=None, limit_to=-1, history_level=999, test_kwargs=None, **kwargs):
-        self.method_name = method_name
-        self.ret_football = ret_football
-        self.kwargs = kwargs
+    def __init__(self, method, tests=None, limit_to=-1, history_level=999, **email_kwargs):
+        self.method = method
+        # self.kwargs = kwargs
         self.limit_to = limit_to
         self.history_level = history_level
-        self.test_kwargs = test_kwargs or {}
-        if tests is None:
-            self.tests = []
-        else:
-            self.tests = tests
+        self.email_kwargs = email_kwargs
+        self.tests = tests
         
         for t in self.tests:
-            t.method_name = method_name
             t.defs = self
             
     def __iter__(self):
@@ -99,15 +81,14 @@ class MyTestData(object):
                  codes=None,
                  error=False,
                  history_str=None,
-                 **kwargs):
-        self.method_name = ''        
+                 **email_kwargs):
         self.test_num = test_num
         self.string_in = string_in
         self.result_length = result_length
         self.position = position
-        self.kwargs = kwargs
-        # self.kwargs.update(self.defs.test_kwargs)
         self.error = error
+        self.email_kwargs = DEFAULT_EMAIL_KWARGS.copy()
+        self.email_kwargs.update(email_kwargs)
 
         if history_str is None:
             if self.result_length == 0:
@@ -116,26 +97,28 @@ class MyTestData(object):
                 self.history_str = '--MISSING--'
         else:
             self.history_str = history_str
+
         self.defs = None
-        
+
         if codes is None:
             self.no_codes = True
+            self.codes = []
         else:
             self.no_codes = False
-
-        if codes is not None:
             if isinstance(codes, str):
                 self.codes = [codes]
             else:
                 self.codes = codes
-        else:
-            self.codes = []
+
+    @property
+    def method(self):
+        return self.defs.method
 
     @property
     def test_name(self):
         return '#%s %s in %s (%s) should == %s' % (
             self.test_num,
-            self.method_name,
+            self.method.__name__,
             self.string_in,
             self.position,
             self.result_length
@@ -165,27 +148,27 @@ class MyTestData(object):
 
         return tmp_ret
 
-    def run_test(self, tep=None):
+    def run_test(self):
         tmp_ret = dict(
             skip=False,
             fail=False,
             long_fail_msg='Passed all tests',
             short_fail_msg='PASSED Tests')
 
-        if tep is None or self.defs.kwargs:
-            tep = EmailParser(**self.defs.kwargs, verbose=3)
+        self.email_kwargs.update(self.defs.email_kwargs)
 
-        # tmp_meth = getattr(tep, self.method_name)
+        ei = ParsingObj(self.string_in, **self.email_kwargs)
 
-        # test_ret = tep.run_method_test(tmp_meth, position=self.position, **self.kwargs)
-        test_ret = tep(email_in=self.string_in, method=self.method_name, position=self.position, return_football=True, **self.kwargs)
+        test_ret = self.method(ei, self.position)
 
-        if not self.defs.ret_football:
-            if test_ret.length == self.result_length:
-                tmp_ret['short_fail_msg'] = '%s : INCORRECT LENGTH (%s != %s)' % (self.test_name, test_ret.length, self.result_length)
-                tmp_ret['long_fail_msg'] = '\n\nFailed Length:\n  EXPECTED: %s\n  RETURNED: %s\n' % (self.result_length, test_ret.length)
-                tmp_ret['fail'] = True
-            return tmp_ret
+        # test_ret = tep(email_in=self.string_in, method=self.method_name, position=self.position, return_football=True, **self.kwargs)
+
+        # if not self.defs.ret_football:
+        #     if test_ret.length == self.result_length:
+        #         tmp_ret['short_fail_msg'] = '%s : INCORRECT LENGTH (%s != %s)' % (self.test_name, test_ret.length, self.result_length)
+        #         tmp_ret['long_fail_msg'] = '\n\nFailed Length:\n  EXPECTED: %s\n  RETURNED: %s\n' % (self.result_length, test_ret.length)
+        #         tmp_ret['fail'] = True
+        #     return tmp_ret
 
         test_failed = False
         tmp_ret_long_list = []
@@ -211,8 +194,7 @@ class MyTestData(object):
             exp_codes = list(self.codes)
             exp_codes.sort()
 
-
-        ret_codes = list(test_ret.diags())
+        ret_codes = test_ret.diags
         ret_codes.sort()
 
         for code in ret_codes:
@@ -231,8 +213,7 @@ class MyTestData(object):
         # if test_ret._history is None:
         #    tmp_hist = ''
         # else:
-        test_ret._history.clean(self.string_in)
-        tmp_hist = test_ret._history(depth=self.defs.history_level)
+        tmp_hist = test_ret.get_history(depth=self.defs.history_level)
 
         if tmp_hist != self.history_str:
             test_failed = True
@@ -253,7 +234,7 @@ class MyTestData(object):
                 self.test_name,
                 self.string_in,
                 '\n'.join(tmp_ret_long_list),
-                tep.trace_str)
+                ei.trace)
             tmp_ret['fail'] = True
             tmp_ret['short_fail_msg'] = tmp_short
             tmp_ret['long_fail_msg'] = tmp_long
@@ -264,8 +245,6 @@ class MyTestData(object):
 
 
 class TestEmailParser(unittest.TestCase):
-    TRACE_LEVEL = 9999    
-    TEP = EmailParser(verbose=2, trace_filter=TRACE_LEVEL)
 
     def run_test_data(self, test_defs):
         if test_defs.limit_to != -1:
@@ -275,11 +254,13 @@ class TestEmailParser(unittest.TestCase):
         for test in test_defs:
             if test_defs.limit_to == -1 or test.test_num == test_defs.limit_to:
                 with self.subTest(test.test_name):
-                    tmp_result = test.run_test(self.TEP)
+                    tmp_result = test.run_test()
 
                     if tmp_result['fail']:
                         with self.subTest(tmp_result['short_fail_msg']):
                             self.fail(tmp_result['long_fail_msg'])
+
+    """
 
     def old_run_test_data(self, test_defs: MyTestDefs):
         if test_defs.limit_to != -1:
@@ -310,7 +291,7 @@ class TestEmailParser(unittest.TestCase):
 
                     with self.subTest(sub_name):
                         self.assertEquals(test.error, test_ret.error, msg=eph.trace_str)
-                    """
+
                     if test.has_code:
                         for code in test.has_code:
                             with self.subTest(test.test_name + ' has_code: %s' % code):
@@ -323,7 +304,7 @@ class TestEmailParser(unittest.TestCase):
                                 if code in test_ret:
                                     self.fail('Should not have code: %s\n\n%s' % (code, eph.trace_str))
 
-                    """
+
                     if test.codes:
                         with self.subTest(test.test_name + ' missing codes'):
                             self.assertCountEqual(test.codes, list(test_ret.diags()), msg=eph.trace_str)
@@ -366,6 +347,14 @@ class TestEmailParser(unittest.TestCase):
         tmp_ret = emp.simple_char(3, 'abcdef', min_count=4)
         self.assertEqual(tmp_ret.l, 0)
 
+    """
+    
+    def make_ls(self, *length, chars='X', prefix='', postfix=''):
+        tmp_ret = []
+        for l in length:
+            tmp_ret.append(''.ljust(l, chars[0]))
+        return '%s%s%s' % (prefix, '.'.join(tmp_ret), postfix)
+
     def test_zzzz_for_diags(self):
         tmp_len = len(DIAGS)
         DIAGS.sort()
@@ -373,12 +362,6 @@ class TestEmailParser(unittest.TestCase):
         tmp_str += '\n'.join(DIAGS)
         tmp_str += '\n'
         self.assertEquals(tmp_len, 0, msg=tmp_str)
-
-    def make_ls(self, *length, chars='X', prefix='', postfix=''):
-        tmp_ret = []
-        for l in length:
-            tmp_ret.append(''.ljust(l, chars[0]))
-        return '%s%s%s' % (prefix, '.'.join(tmp_ret), postfix)
 
     # ********************************************************
     #  PARSING TESTS
@@ -394,7 +377,7 @@ class TestEmailParser(unittest.TestCase):
             limit_to=-1,
             history_level=3,
             # trace_filter=4,
-            method_name='address_spec',
+            method=address_spec,
             tests=[
                 # valod addresses
                 MyTestData(100, 'dan@example.com', 15, codes=['VALID'], history_str='address_spec(local_part(dot_atom(...)), at, domain(domain_addr(...)))'),
@@ -535,7 +518,7 @@ class TestEmailParser(unittest.TestCase):
     def test_local_part(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='local_part',
+            method=local_part,
             # history_level=3,
             tests=[
                 # dot-atom
@@ -643,7 +626,7 @@ class TestEmailParser(unittest.TestCase):
         td = MyTestDefs(
             limit_to=-1,
             # trace_filter=999,
-            method_name='domain',
+            method=domain,
             history_level=3,
             tests=[
 
@@ -971,7 +954,7 @@ class TestEmailParser(unittest.TestCase):
     def test_domain_dot_atom(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='domain_dot_atom',
+            method=dot_atom_domain,
             # trace_filter=5,
             tests=[
                 MyTestData(1, 'abc.def', 7, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='dot_atom(dot_atom_text(atext, single_dot, atext))'),
@@ -1005,7 +988,7 @@ class TestEmailParser(unittest.TestCase):
     def test_local_dot_atom(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='local_dot_atom',
+            method=dot_atom_local,
             # trace_filter=5,
             tests=[
                 MyTestData(1, 'abc.def@', 7, history_str='dot_atom(dot_atom_text(atext, single_dot, atext))'),
@@ -1038,7 +1021,7 @@ class TestEmailParser(unittest.TestCase):
     def test_dot_atom_text(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='dot_atom_text',
+            method=dot_atom_text,
             tests=[
                 MyTestData(1, 'abc.def', 7, history_str='dot_atom_text(atext, single_dot, atext)'),
                 MyTestData(2, 'abc', 3, history_str='dot_atom_text(atext)'),
@@ -1059,7 +1042,7 @@ class TestEmailParser(unittest.TestCase):
     def test_obs_local_part(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='obs_local_part',
+            method=obs_local_part,
             tests=[
                 MyTestData(1, 'word@', 4, codes=['DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)))'),
                 MyTestData(2, 'word.and.another.word@', 21, codes=['DEPREC_LOCAL_PART'], history_str='obs_local_part(word(atom(atext)), single_dot, word(atom(atext)), single_dot, word(atom(atext)), single_dot, word(atom(atext)))'),
@@ -1079,7 +1062,7 @@ class TestEmailParser(unittest.TestCase):
     def test_word(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='word',
+            method=word,
             tests=[
                 MyTestData(1, 'word', 4, history_str='word(atom(atext))'),
                 MyTestData(2, 'word and another word', 0, codes=['ERR_ATEXT_AFTER_CFWS', 'CFWS_FWS'], error=True),
@@ -1094,7 +1077,7 @@ class TestEmailParser(unittest.TestCase):
     def test_atom(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='atom',
+            method=atom,
             tests=[
                 MyTestData(1, 'thisisanatom$%^', 15, history_str='atom(atext)'),
                 MyTestData(2, '(this is a comment) atom (this is a comment)', 44, codes=['CFWS_FWS', 'CFWS_COMMENT'],
@@ -1110,7 +1093,7 @@ class TestEmailParser(unittest.TestCase):
     def test_domain_addr(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='domain_addr',
+            method=domain_addr,
             tests=[
                 MyTestData(1, 'ABCdef123.abcder', 16, history_str='domain_addr(sub_domain(let_dig), single_dot, sub_domain(let_dig))'),
                 MyTestData(2, 'abcdef-123.acac', 15, history_str='domain_addr(sub_domain(let_dig, ldh_str), single_dot, sub_domain(let_dig))'),
@@ -1126,7 +1109,7 @@ class TestEmailParser(unittest.TestCase):
     def test_sub_domain(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='sub_domain',
+            method=sub_domain,
             tests=[
                 MyTestData(1, 'ABCdef123', 9, history_str='sub_domain(let_dig)'),
                 MyTestData(2, 'abcdef-123', 10, history_str='sub_domain(let_dig, ldh_str)'),
@@ -1140,7 +1123,7 @@ class TestEmailParser(unittest.TestCase):
     def test_let_str(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='let_str',
+            method='let_str',
             tests=[
                 MyTestData(1, 'ABCdef123', 9, history_str='let_str(ldh_str)'),
                 MyTestData(2, 'abcdef-123', 10, history_str='let_str(ldh_str)'),
@@ -1158,7 +1141,7 @@ class TestEmailParser(unittest.TestCase):
     def test_domain_literal(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='domain_literal',
+            method=domain_literal,
             tests=[
                 MyTestData(1, '[test]', 6, codes=['RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN', 'RFC5322_DOMAIN_LITERAL'], history_str='domain_literal(open_sq_bracket, dtext, close_sq_bracket)'),
                 MyTestData(2, '[\\rtest]', 8, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN_LITERAL', 'RFC5322_DOM_LIT_OBS_DTEXT'], history_str='domain_literal(open_sq_bracket, dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp))), close_sq_bracket)'),
@@ -1214,7 +1197,7 @@ class TestEmailParser(unittest.TestCase):
     def test_dtext(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='dtext',
+            method=dtext,
             tests=[
                 MyTestData(1, 'test', 4, history_str='dtext'),
                 MyTestData(2, '\\rtest', 6, codes='RFC5322_DOM_LIT_OBS_DTEXT', history_str='dtext(obs_dtext(quoted_pair(back_slash, vchar_wsp)))'),
@@ -1228,7 +1211,7 @@ class TestEmailParser(unittest.TestCase):
     def test_obs_dtext(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='obs_dtext',
+            method=obs_dtext,
             tests=[
                 MyTestData(1, 'test', 4, codes='RFC5322_DOM_LIT_OBS_DTEXT', history_str='obs_dtext'),
                 MyTestData(2, '\\rtest', 6, codes='RFC5322_DOM_LIT_OBS_DTEXT', history_str='obs_dtext(quoted_pair(back_slash, vchar_wsp))'),
@@ -1242,7 +1225,7 @@ class TestEmailParser(unittest.TestCase):
     def test_obs_domain(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='obs_domain',
+            method=obs_domain,
             tests=[
                 MyTestData(1, 'thisisanatom$%^.this_is_another_one', 35, codes=['RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='obs_domain(atom(atext), single_dot, atom(atext))'),
                 MyTestData(2, '(this is a comment) atom (this is a comment).this_is_atom', 57, codes=['CFWS_FWS', 'CFWS_COMMENT',  'RFC5322_DOMAIN', 'RFC5322_LIMITED_DOMAIN'], history_str='obs_domain(atom(cfws(comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis), fws(wsp)), atext, cfws(fws(wsp), comment(open_parenthesis, ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), fws(wsp), ccontent(ctext), close_parenthesis))), single_dot, atom(atext))'),
@@ -1260,7 +1243,7 @@ class TestEmailParser(unittest.TestCase):
             limit_to=-1,
             # trace_filter=2,
             history_level=2,
-            method_name='address_literal',
+            method=address_literal,
             tests=[
 
                 # ipv6 full  - PASS
@@ -1359,7 +1342,7 @@ class TestEmailParser(unittest.TestCase):
     def test_general_address_literal(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='general_address_literal',
+            method=general_address_literal,
             tests=[
                 MyTestData(1, 'abcd:abcdeg',0, history_str=''),
                 MyTestData(2, 'http:foobar', 11, codes='RFC5322_GENERAL_LITERAL', history_str='general_address_literal(standardized_tag, colon, dcontent)'),
@@ -1374,7 +1357,7 @@ class TestEmailParser(unittest.TestCase):
 
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ldh_str',
+            method=ldh_str,
             tests=[
                 MyTestData(1, 'abc-123', 7, history_str='ldh_str'),
                 MyTestData(2, 'abc--123', 8, history_str='ldh_str'),
@@ -1400,7 +1383,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv4_address_literal(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv4_address_literal',
+            method=ipv4_address_literal,
             tests=[
                 MyTestData(1, '1.1.1.1', 7, codes='RFC5322_IPV4_ADDR', history_str='ipv4_address_literal(snum, single_dot, snum, single_dot, snum, single_dot, snum)'),
                 MyTestData(2, '123.123.123.123', 15, codes='RFC5322_IPV4_ADDR', history_str='ipv4_address_literal(snum, single_dot, snum, single_dot, snum, single_dot, snum)'),
@@ -1419,7 +1402,7 @@ class TestEmailParser(unittest.TestCase):
     def test_snum(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='snum',
+            method=snum,
             tests=[
                 MyTestData(1, '1', 1, history_str='snum'),
                 MyTestData(2, '12', 2, history_str='snum'),
@@ -1440,9 +1423,9 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6_address_literal(self):
         td = MyTestDefs(
             limit_to=-1,
-            trace_filter=4,
+            # trace_filter=4,
             history_level=3,
-            method_name='ipv6_address_literal',
+            method=ipv6_address_literal,
             tests=[
 
                 # ipv6 full  - PASS
@@ -1507,7 +1490,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6_hex(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv6_hex',
+            method=ipv6_hex,
             tests=[
                 MyTestData(1, '1', 1, history_str='ipv6_hex'),
                 MyTestData(2, '12', 2, history_str='ipv6_hex'),
@@ -1526,7 +1509,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6_full(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv6_full',
+            method=ipv6_full,
             tests=[
                 # ipv6 full  - PASS
                 MyTestData(1, '0:0:0:0:0:0:0:0', 15, codes='RFC5322_IPV6_FULL_ADDR', history_str='ipv6_full(ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex)'),
@@ -1544,7 +1527,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6_comp(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv6_comp',
+            method=ipv6_comp,
             tests=[
                 MyTestData(1, '0::0:0:0:0:0', 12, codes='RFC5322_IPV6_COMP_ADDR', history_str='ipv6_comp(ipv6_hex, double_colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex)'),
                 MyTestData(2, '0::0:0:0:0', 10, codes='RFC5322_IPV6_COMP_ADDR', history_str='ipv6_comp(ipv6_hex, double_colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex, colon, ipv6_hex)'),
@@ -1579,7 +1562,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6v4_full(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv6v4_full',
+            method=ipv6v4_full,
             tests=[
 
                 # ipv6-4 - PASS
@@ -1606,7 +1589,7 @@ class TestEmailParser(unittest.TestCase):
     def test_ipv6v4_comp(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ipv6v4_comp',
+            method=ipv6v4_comp,
             tests=[
                 # ipv6-4 comp - PASS
 
@@ -1629,7 +1612,7 @@ class TestEmailParser(unittest.TestCase):
         FF = make_char_str(12)
         td = MyTestDefs(
             limit_to=-1,
-            method_name='cfws',
+            method=cfws,
             tests=[
 
                 # normal comment
@@ -1678,8 +1661,8 @@ class TestEmailParser(unittest.TestCase):
     def test_comment(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='comment',
-            trace_filter=2,
+            method=comment,
+            # trace_level=2,
             tests=[
 
                 # normal comment
@@ -1718,7 +1701,7 @@ class TestEmailParser(unittest.TestCase):
         FF = make_char_str(12)
         td = MyTestDefs(
             limit_to=-1,
-            method_name='ctext',
+            method=ctext,
             tests=[
 
                 # qtext
@@ -1739,7 +1722,7 @@ class TestEmailParser(unittest.TestCase):
 
         td = MyTestDefs(
             limit_to=-1,
-            method_name='fws_sub',
+            method=fws_sub,
             tests=[
                 # good tries
                 MyTestData(2, '\t\r\n\t', 4, history_str='fws_sub(wsp, crlf, one_wsp)'),
@@ -1781,7 +1764,7 @@ class TestEmailParser(unittest.TestCase):
 
         td = MyTestDefs(
             limit_to=-1,
-            method_name='obs_fws',
+            method=obs_fws,
             tests=[
                 MyTestData(1, '\t', 1, codes='DEPREC_FWS', history_str='obs_fws(wsp)'),
                 MyTestData(2, '\n\t', 0),
@@ -1795,7 +1778,7 @@ class TestEmailParser(unittest.TestCase):
     def test_quoted_string(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='quoted_string',
+            method=quoted_string,
             tests=[
 
                 # normal qs
@@ -1859,7 +1842,7 @@ class TestEmailParser(unittest.TestCase):
         FF = make_char_str(12)
         td = MyTestDefs(
             limit_to=-1,
-            method_name='qcontent',
+            method=qcontent,
             tests=[
 
                 MyTestData(1, '\\', 0, codes='ERR_EXPECTING_QPAIR', error=True, history_str=''),
@@ -1891,7 +1874,7 @@ class TestEmailParser(unittest.TestCase):
 
         td = MyTestDefs(
             limit_to=-1,
-            method_name='quoted_pair',
+            method=quoted_pair,
             tests=[
                 MyTestData(1, '\\', 0, codes='ERR_EXPECTING_QPAIR', error=True, history_str=''),
                 MyTestData(2, '\\\t', 2, history_str='quoted_pair(back_slash, vchar_wsp)'),
@@ -1913,7 +1896,7 @@ class TestEmailParser(unittest.TestCase):
     def test_crlf(self):
         td = MyTestDefs(
             limit_to=-1,
-            method_name='crlf',
+            method=crlf,
             tests=[
                 MyTestData(1, '\r', 0, codes='ERR_CR_NO_LF', error=True, history_str=''),
                 MyTestData(2, '\n', 0, history_str=''),
@@ -1926,9 +1909,9 @@ class TestEmailParser(unittest.TestCase):
         )
         self.run_test_data(td)
 
-
+'''
 class TestParseNames(unittest.TestCase):
-    tep = EmailParser(trace_filter=9999, verbose=3)
+    # tep = EmailParser(trace_filter=9999, verbose=3)
 
     def test_parse_names(self):
 
@@ -2040,9 +2023,11 @@ class TestDomainLookup(unittest.TestCase):
             with self.subTest(test_name):
                 if LIMIT_TO == -1 or LIMIT_TO == test[0]:
                     if len(test) > 5:
-                        emv = EmailParser(verbose=2, **test[5])
+                        # emv = EmailParser(verbose=2, **test[5])
+                        pass
                     else:
-                        emv = EmailParser(verbose=2)
+                        # emv = EmailParser(verbose=2)
+                        pass
 
                     if len(test) > 4 and test[4] is not None:
                         with self.subTest(test_name + ' - Exception'):
@@ -2062,4 +2047,4 @@ class TestDomainLookup(unittest.TestCase):
                                                               '%s IS in the responses (and should not be' % resp)
                                     self.assertFalse(tmp_check, msg=tmp_msg)
 
-
+'''

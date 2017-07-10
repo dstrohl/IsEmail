@@ -1,0 +1,490 @@
+    "CFWS-near-at": dict(
+        key = "CFWS-near-at",
+        blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
+        blockquote=''
+            'Comments and folding white space'
+            'SHOULD NOT be used around the "@" in the addr-spec.',
+        cite='RFC 5322 section 3.4.1'),
+
+    "SHOULD-NOT": dict(
+        key = "SHOULD-NOT",
+        blockquote_cite="http://tools.ietf.org/html/rfc2119",
+        blockquote=''
+            '4. SHOULD NOT   This phrase, or the phrase "NOT RECOMMENDED" mean that'
+            '   there may exist valid reasons in particular circumstances when the'
+            '   particular behavior is acceptable or even useful, but the full'
+            '   implications should be understood and the case carefully weighed'
+            '   before implementing any behavior described with this label.',
+
+        cite='RFC 2119 section 4'),
+
+
+    "domain-RFC5322": dict(
+        key = "domain-RFC5322",
+        blockquote_cite="http://tools.ietf.org/html/rfc5322#section-3.4.1",
+        blockquote=''
+            'domain          =   dot-atom / domain-literal / obs-domain'
+            ''
+            'dot-atom        =   [CFWS] dot-atom-text [CFWS]'
+            ''
+            'dot-atom-text   =   1*atext *("." 1*atext)',
+        cite='RFC 5322 section 3.4.1'),
+
+
+    "domain-RFC5321": dict(
+        key = "domain-RFC5321",
+        blockquote_cite="http://tools.ietf.org/html/rfc5321#section-4.1.2",
+        blockquote=''
+            '   Domain         = sub-domain *("." sub-domain)',
+        cite='RFC 5321 section 4.1.2'),
+
+
+    "TLD": dict(
+        key = "TLD",
+        blockquote_cite="http://tools.ietf.org/html/rfc5321#section-2.3.5",
+        blockquote=''
+            'In the case'
+            'of a top-level domain used by itself in an email address, a single'
+            'string is used without any dots.  This makes the requirement,'
+            'described in more detail below, that only fully-qualified domain'
+            'names appear in SMTP transactions on the public Internet,'
+            'particularly important where top-level domains are involved.',
+        cite='RFC 5321 section 2.3.5'),
+
+    "TLD-format": dict(
+        key = "TLD-format",
+        blockquote_cite="http://www.rfc-editor.org/errata_search.php?eid=1353",
+        blockquote=''
+            'Errata ID 1081, reported 2007-11-20, identifies a problem with the'
+            'evolution of naming of top-level domains and the text of RFC 1123.'
+            'It reads:'
+            ''
+            'Section 2.1 says:'
+            ''
+            '                       However, a valid host name can never'
+            'have the dotted-decimal form #.#.#.#, since at least the'
+            'highest-level component label will be alphabetic.'
+            ''
+            'It should say:'
+            ''
+            '                       However, a valid host name can never'
+            'have the dotted-decimal form #.#.#.#, since at least the'
+            'highest-level component label will be not all-numeric.'
+            ''
+            'Notes:'
+            ''
+            'RFC 3696 section 2 states: "There is an additional rule that'
+            'essentially requires that top-level domain names not be'
+            'all-numeric." The eleven IDN test TLDs created in'
+            'September 2007 contain hyphen-minus as specified in the'
+            'IDNA RFCs.'
+            'It should say:'
+            ''
+            'However, a valid host name can never have the dotted-decimal'
+            'form #.#.#.#, since this change does not permit the highest-level'
+            'component label to start with a digit even if it is not all-numeric.'
+            'Notes:'
+            ''
+            'This is a correct identification of the problem, but the wrong fix.'
+            'RFC 3696, which ID 1081 cites, is an informational document that is'
+            'deliberately relaxed about the fine details and says so. It is not'
+            'relevant to determination of the text that should have been (with'
+            'perfect knowledge of the future) in 1123.'
+            ''
+            'Based on discussions when we were doing RFC 1591 and subsequently,'
+            'the expectation then (and presumably when 1123 was written) was'
+            'that the name of any new TLD would follow the rules for the'
+            'existing ones, i.e., that they would be exactly two or three'
+            'characters long and be all-alphabetic (which is exactly what 1123'
+            'says). The slightly-odd "will be" language in 1123 was, I believe,'
+            'because that restriction was expected to be enforced by IANA,'
+            'rather than being a protocol issue. ICANN, with a different set of'
+            'assignment policies, effectively eliminated the length rule with'
+            'the TLDs allocated in 2000. IDNA (RFC 3490) uses a syntax for IDNs'
+            'that requires embedded hyphens in TLDs if there were ever to be an'
+            'actual IDN TLD (hence the comment in ID 1081 about the IANA IDN'
+            'testbed).'
+            ''
+            'While the proposed correction in Errata ID 1081 would fix the'
+            'problem by imposing the narrowest possible restriction ("not'
+            'all-numeric"), the original host name rule and the original'
+            'statement in 1123 both assume the possibility of a minimal check'
+            'to differentiate between domain names and IP addresses, i.e.,'
+            'checking the first digit only. Because I believe that there are'
+            'probably implementations that depend on such minimal parsing --some'
+            'probably ancient and embedded-- it would appear to be wise to relax'
+            'the rule as little as possible and, in particular, to restrict the'
+            '"leading digit" exception to domains below the top-level, as 1123'
+            'effectively does.'
+            ''
+            'The suggested text above reflects that reasoning. Because of the'
+            'possible consequences of this issue, I would hope that it would be'
+            'discussed with the relevant DNS-related WGs, the Root Server Advisory'
+            'Committee (RSAC), and with IANA for comment and as a heads-up. This'
+            'issue is substantive enough that it should probably be dealt with by'
+            'a document that explicitly updates 1123 and that is processed on the'
+            'Standards Track, but an accurate statement in the errata is the'
+            'next-best option until that can be done. In the interim and while'
+            'this suggestion is being discussed, Errata ID 1081 should probably'
+            'be taken out of "validated" status.'
+            '',
+        cite='John Klensin, RFC 1123 erratum 1353'),
+
+
+    "liberal_domain": dict(
+        key="liberal_domain",
+        blockquote_cite=" http://tools.ietf.org/html/rfc5322#section-3.4.1",
+        blockquote='domain          =   dot-atom / domain-literal / address_literal /obs-domain'
+            '---------------------------------------------------------------------------------------------'
+            '; NB For SMTP mail, the domain-literal is restricted by RFC5321 as follows:'
+            'Mailbox        = Local-part "@" ( domain-addr / address-literal )'
+            '-----------------------------------------------------------------------------------------'
+
+            '// http://tools.ietf.org/html/rfc5322#section-3.4.1'
+            '//      Note: A liberal syntax for the domain portion of addr-spec is'
+            '//      given here.  However, the domain portion contains addressing'
+            '//      information specified by and used in other protocols (e.g.,'
+            '//      [RFC1034], [RFC1035], [RFC1123], [RFC5321]).  It is therefore'
+            '//      incumbent upon implementations to conform to the syntax of'
+            '//      addresses for the context in which they are used.'
+            '// is_email() authors note: its not clear how to interpret this in'
+            '// the context of a general email address validator. The conclusion I'
+            '// have reached is this: "addressing information" must comply with'
+            '// RFC 5321 (and in turn RFC 1035), anything that is "semantically'
+            '// invisible" must comply only with RFC 5322.',
+
+        cite='RFC 5322 section 3.4.1'),
+
+
+    {'name':  "address-literal-IPv4",
+        'citation_url': "http://tools.ietf.org/html/rfc5321#section-4.1.3",
+        'citation_text': ''
+            'IPv4-address-literal  = Snum 3("."  Snum}'
+            ''
+            'Snum           = 1*3DIGIT'
+            '              ; representing a decimal integer'
+            '              ; value in the range 0 through 255',
+        'citation_name': 'RFC 5321 section 4.1.3'},
+
+    {'name':  "address-literal-IPv6",
+        'citation_url': "http://tools.ietf.org/html/rfc5321#section-4.1.3",
+        'citation_text': ''
+            'IPv6-address-literal  = "IPv6:" IPv6-addr'
+            ''
+            'IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp'
+            ''
+            'IPv6-hex       = 1*4HEXDIG'
+            ''
+            'IPv6-full      = IPv6-hex 7(":" IPv6-hex}'
+            ''
+            'IPv6-comp      = [IPv6-hex *5(":" IPv6-hex}] "::"'
+            '              [IPv6-hex *5(":" IPv6-hex}]'
+            '              ; The "::" represents at least 2 16-bit groups of'
+            '              ; zeros.  No more than 6 groups in addition to the'
+            '              ; "::" may be present.'
+            ''
+            'IPv6v4-full    = IPv6-hex 5(":" IPv6-hex} ":" IPv4-address-literal'
+            ''
+            'IPv6v4-comp    = [IPv6-hex *3(":" IPv6-hex}] "::"'
+            '              [IPv6-hex *3(":" IPv6-hex} ":"]'
+            '              IPv4-address-literal'
+            '              ; The "::" represents at least 2 16-bit groups of'
+            '              ; zeros.  No more than 4 groups in addition to the'
+            '              ; "::" and IPv4-address-literal may be present.',
+        'citation_name': 'RFC 5321 section 4.1.3'},
+
+}
+# </editor-fold>
+
+# ------------------------------------------------------------------------
+# Diagnoses
+# ------------------------------------------------------------------------
+# <editor-fold "Diagnoses">
+
+ISEMAIL_DIAG_RESPONSES = dict(
+
+
+    RFC5321_IPV6_DEPRECATED=dict(
+        value=1013,
+        category='ISEMAIL_DEPREC',
+        description="Address is valid but contains a :: that only elides one zero group. All implementations must accept"
+                    " and be able to handle any legitimate RFC 4291 format.",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+
+
+
+
+    RFC5322_IPV6_GRP_COUNT=dict(
+        value=1072,
+        category='ISEMAIL_RFC5322',
+        description="The IPv6 literal address contains the wrong number of groups",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_2X2X_COLON=dict(
+        value=1073,
+        category='ISEMAIL_RFC5322',
+        description="The IPv6 literal address contains too many :: sequences",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_BAD_CHAR=dict(
+        value=1074,
+        category='ISEMAIL_RFC5322',
+        description="The IPv6 address contains an illegal group of characters",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_MAX_GRPS=dict(
+        value=1075,
+        category='ISEMAIL_RFC5322',
+        description="The IPv6 address has too many groups",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+    RFC5322_IPV6_COLON_STRT=dict(
+        value=1076,
+        category='ISEMAIL_RFC5322',
+        description="IPv6 address starts with a single colon",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+
+
+
+
+
+
+    RFC5322_IPV6_COLON_END=dict(
+        value=1077,
+        category='ISEMAIL_RFC5322',
+        description="IPv6 address ends with a single colon",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-IPv6'],
+    ),
+
+
+    DEPREC_COMMENT=dict(
+        value=1037,
+        category='ISEMAIL_DEPREC',
+        description="Address contains a comment in a position that is deprecated",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=(ISEMAIL_META_REFERENCES['obs-local-part'], ISEMAIL_META_REFERENCES['obs-domain'])
+    ),
+
+
+    DEPREC_CFWS_NEAR_AT=dict(
+        value=1049,
+        category='ISEMAIL_DEPREC',
+        description="Address contains a comment or Folding White Space around the @ sign",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=(ISEMAIL_META_REFERENCES['CFWS-near-at'], ISEMAIL_META_REFERENCES['SHOULD-NOT'])
+    ),
+
+
+
+
+
+
+
+    RFC5322_GENERAL_LITERAL=dict(
+        value=1084,
+        category='ISEMAIL_RFC5322',
+        description="The address literal is a general address",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['address-literal-general'],
+    ),
+    RFC5322_LIMITED_DOMAIN=dict(
+        value=1085,
+        category='ISEMAIL_RFC5322',
+        description="The address is valid for RFC5322, but not RFC5321",
+        smtp=ISEMAIL_META_SMTP_RESP['2.1.5'],
+        reference=ISEMAIL_META_REFERENCES['liberal_domain'],
+    ),
+    ERR_INVALID_ADDR_LITERAL=dict(
+        value=1128,
+        category='ISEMAIL_ERR',
+        description="The address literal is not a valid address",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['address-literal'],
+    ),
+
+    ERR_EXPECTING_DTEXT=dict(
+        value=1129,
+        category='ISEMAIL_ERR',
+        description="A domain literal contains a character that is not allowed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['dtext'],
+    ),
+    ERR_NO_LOCAL_PART=dict(
+        value=1130,
+        category='ISEMAIL_ERR',
+        description="Address has no local part",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['local-part'],
+    ),
+    ERR_NO_DOMAIN_PART=dict(
+        value=1131,
+        category='ISEMAIL_ERR',
+        description="Address has no domain part",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=(ISEMAIL_META_REFERENCES['addr-spec'], ISEMAIL_META_REFERENCES['mailbox'])
+    ),
+    ERR_CONSECUTIVE_DOTS=dict(
+        value=1132,
+        category='ISEMAIL_ERR',
+        description="The address may not contain consecutive dots",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=(
+            ISEMAIL_META_REFERENCES['local-part'],
+            ISEMAIL_META_REFERENCES['domain-RFC5322'],
+            ISEMAIL_META_REFERENCES['domain-RFC5321'])
+    ),
+    ERR_ATEXT_AFTER_CFWS=dict(
+        value=1133,
+        category='ISEMAIL_ERR',
+        description="Address contains text after a comment or Folding White Space",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=(ISEMAIL_META_REFERENCES['local-part'], ISEMAIL_META_REFERENCES['domain-RFC5322'])
+    ),
+    ERR_ATEXT_AFTER_QS=dict(
+        value=1134,
+        category='ISEMAIL_ERR',
+        description="Address contains text after a quoted string",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['local-part'],
+    ),
+    ERR_ATEXT_AFTER_DOMLIT=dict(
+        value=1135,
+        category='ISEMAIL_ERR',
+        description="Extra characters were found after the end of the domain literal",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5322'],
+    ),
+    ERR_EXPECTING_QPAIR=dict(
+        value=1136,
+        category='ISEMAIL_ERR',
+        description="The address contains a character that is not allowed in a quoted pair",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['quoted-pair'],
+    ),
+    ERR_EXPECTING_ATEXT=dict(
+        value=1137,
+        category='ISEMAIL_ERR',
+        description="Address contains a character that is not allowed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['atext'],
+    ),
+    ERR_EXPECTING_QTEXT=dict(
+        value=1138,
+        category='ISEMAIL_ERR',
+        description="A quoted string contains a character that is not allowed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['qtext'],
+    ),
+    ERR_EXPECTING_CTEXT=dict(
+        value=1139,
+        category='ISEMAIL_ERR',
+        description="A comment contains a character that is not allowed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=ISEMAIL_META_REFERENCES['qtext'],
+    ),
+    ERR_BACKSLASH_END=dict(
+        value=1140,
+        category='ISEMAIL_ERR',
+        description="The address can't end with a backslash",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=(
+            ISEMAIL_META_REFERENCES['domain-RFC5322'],
+            ISEMAIL_META_REFERENCES['domain-RFC5321'],
+            ISEMAIL_META_REFERENCES['quoted-pair'])
+    ),
+    ERR_DOT_START=dict(
+        value=1141,
+        category='ISEMAIL_ERR',
+        description="Neither part of the address may begin with a dot",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=(
+            ISEMAIL_META_REFERENCES['local-part'],
+            ISEMAIL_META_REFERENCES['domain-RFC5322'],
+            ISEMAIL_META_REFERENCES['domain-RFC5321'])
+    ),
+    ERR_DOT_END=dict(
+        value=1142,
+        category='ISEMAIL_ERR',
+        description="Neither part of the address may end with a dot",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.1'],
+        reference=(
+            ISEMAIL_META_REFERENCES['local-part'],
+            ISEMAIL_META_REFERENCES['domain-RFC5322'],
+            ISEMAIL_META_REFERENCES['domain-RFC5321'])
+    ),
+    ERR_DOMAIN_HYPHEN_START=dict(
+        value=1143,
+        category='ISEMAIL_ERR',
+        description="A domain or subdomain cannot begin with a hyphen",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['sub-domain'],
+    ),
+    ERR_DOMAIN_HYPHEN_END=dict(
+        value=1144,
+        category='ISEMAIL_ERR',
+        description="A domain or subdomain cannot end with a hyphen",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.2'],
+        reference=ISEMAIL_META_REFERENCES['sub-domain'],
+    ),
+
+
+
+    ERR_FWS_CRLF_X2=dict(
+        value=1148,
+        category='ISEMAIL_ERR',
+        description="Folding White Space contains consecutive CRLF sequences",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['CFWS'],
+    ),
+    ERR_FWS_CRLF_END=dict(
+        value=1149,
+        category='ISEMAIL_ERR',
+        description="Folding White Space ends with a CRLF sequence",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['CFWS'],
+    ),
+    ERR_CR_NO_LF=dict(
+        value=1150,
+        category='ISEMAIL_ERR',
+        description="Address contains a carriage return that is not followed by a line feed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=(ISEMAIL_META_REFERENCES['CFWS'], ISEMAIL_META_REFERENCES['CRLF'])
+    ),
+    ERR_NO_DOMAIN_SEP=dict(
+        value=1151,
+        category='ISEMAIL_ERR',
+        description="Address does not contain a domain seperator (@ sign)",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+    ERR_MULT_FWS_IN_COMMENT=dict(
+        value=1152,
+        category='ISEMAIL_ERR',
+        description="Address contains multiple FWS in a comment",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+    ERR_EMPTY_ADDRESS=dict(
+        value=1255,
+        category='ISEMAIL_ERR',
+        description="Empty Address Passed",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+        reference=ISEMAIL_META_REFERENCES['domain-RFC5321']
+    ),
+    ERR_UNKNOWN=dict(
+        value=1256,
+        category='ISEMAIL_ERR',
+        description="Unknown Error parsing email",
+        smtp=ISEMAIL_META_SMTP_RESP['5.1.3'],
+    ),
+
+)

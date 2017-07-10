@@ -2,7 +2,7 @@ import unittest
 
 from helpers.meta_data import META_LOOKUP
 from helpers.exceptions import ParsingError
-from helpers.footballs.footballs import ParseResultFootball, EmailInfo
+from helpers.footballs.footballs import ParseResultFootball, ParsingObj
 from helpers.test_helpers import *
 
 
@@ -23,7 +23,7 @@ def _test_name(l1, l2=None, l3=None, suffix=None):
 class TestEmailInfo(unittest.TestCase):
 
     def make_ei(self, email_in='abcde"fghi"jk(lm)nop', **kwargs):
-        return EmailInfo(email_in=email_in, **kwargs)
+        return ParsingObj(email_in=email_in, **kwargs)
 
     def test_init(self):
         ei = self.make_ei()
@@ -121,7 +121,7 @@ class TestEmailInfo(unittest.TestCase):
 class TestParseFootball(unittest.TestCase):
 
     def fb(self, email_in='abcdefghijklmnop', stage='test', begin=0, length=0, **kwargs):
-        ei = EmailInfo(email_in, **kwargs)
+        ei = ParsingObj(email_in, **kwargs)
         fb = ParseResultFootball(ei, stage, begin)
         if length:
             fb.set_length(length)

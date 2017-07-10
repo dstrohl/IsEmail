@@ -98,121 +98,12 @@ PRE_CFWS = make_char_str(WSP, OPENPARENTHESIS, CR)
 # **********************************************************************************
 
 
-# **********************************************************************************
-# <editor-fold desc="  WRAPPERS  ">
-# **********************************************************************************
-
-
-def email_parser(is_history_item=True, name=None, pass_diags=None, fail_diags=None, is_comment=False,
-                 extra_text_error=None, full_domain_part=False, full_local_part=False):
-    def func_decorator(func):
-        @wraps(func)
-        def func_wrapper(email_info, position, *args, is_history=is_history_item, pass_d=pass_diags,
-                         fail_d=fail_diags, is_comment_flag=is_comment, func_name=name, full_domain=full_domain_part,
-                         full_local=full_local_part, extra_text_err=extra_text_error, **kwargs):
-            tmp_err = None
-            position = int(position)
-            func_name = func_name or func.__name__
-            # stage_name = kwargs.get('name', name or func.__name__)
-            # is_history_item = kwargs.get('is_history_item', is_history_item)
-
-            email_info.begin_stage(func_name, position=position)
-
-            tmp_near_at_flag = email_info.flags('near_at')
-            raise_error = False
-
-            if not email_info.at_end(position):
-                try:
-                    tmp_ret = func(email_info, position, *args, **kwargs)
-                except ParsingError as err:
-                    tmp_err = err
-                    raise_error = True
-                    tmp_ret = err.results
-            else:
-                tmp_ret = email_info.fb(position)
-
-            if tmp_ret:
-                if is_history:
-                    tmp_ret.set_history(func_name)
-                if pass_d:
-                    if isinstance(pass_d, str):
-                        pass_d = [pass_d]
-                    tmp_ret(*pass_d)
-                if is_comment_flag:
-                    email_info.add_comment(tmp_ret)
-
-                if full_domain:
-
-                    tmp_char = email_info.this_char(position)
-                    if tmp_char == HYPHEN:
-                        return tmp_ret('ERR_DOMAIN_HYPHEN_START')
-                    elif tmp_char == DOT:
-                        return tmp_ret('ERR_DOT_START')
-
-                    if not email_info.at_end(position + tmp_ret):
-                        tmp_ret(extra_text_err)
-                    else:
-                        if tmp_ret > 255:
-                            tmp_ret('RFC5322_DOMAIN_TOO_LONG')
-
-                        last_char = email_info.this_char(-1)
-
-                        if last_char == HYPHEN:
-                            tmp_ret('ERR_DOMAIN_HYPHEN_END')
-                        elif last_char == BACKSLASH:
-                            tmp_ret('ERR_BACKSLASH_END')
-                        elif last_char == DOT:
-                            tmp_ret('ERR_DOT_END')
-
-                if full_local:
-
-                    if email_info.this_char(position) == DOT:
-                        return tmp_ret('ERR_DOT_START')
-
-                    if email_info.flags.at_in_cfws:
-                        tmp_ret('DEPREC_CFWS_NEAR_AT')
-
-                    if email_info.this_char(position + tmp_ret) != AT:
-                        tmp_ret(extra_text_err)
-
-                        if not email_info.find(position + tmp_ret, AT, skip_quoted_str=True):
-                            tmp_ret('ERR_NO_DOMAIN_SEP')
-
-                    else:
-                        if tmp_ret > 64:
-                            tmp_ret('RFC5322_LOCAL_TOO_LONG')
-
-                        last_char = email_info.this_char(-1)
-
-                        if last_char == BACKSLASH:
-                            tmp_ret('ERR_BACKSLASH_END')
-                        elif last_char == DOT:
-                            tmp_ret('ERR_DOT_END')
-
-            elif fail_d:
-                if isinstance(fail_d, str):
-                    fail_d = [fail_d]
-                tmp_ret(*fail_d)
-
-            email_info.flags.near_at_flag = tmp_near_at_flag
-            email_info.end_stage(tmp_ret, raise_error=raise_error)
-
-            if raise_error:
-                raise tmp_err
-
-            return tmp_ret
-
-        return func_wrapper
-
-    return func_decorator
-
-
 def wrapped_parser(str_wrapper=None, cfws_wrapper=False, no_end_error=''):  # , bad_text_error=''):
     def func_decorator(func):
         @wraps(func)
         def func_wrapper(email_info, position, *args, stw=str_wrapper, cfwsw=cfws_wrapper,
                          init_cfws=None, init_start=None, **kwargs):
-            
+
             wrapped_stage = []
 
             if stw is None:
@@ -230,11 +121,11 @@ def wrapped_parser(str_wrapper=None, cfws_wrapper=False, no_end_error=''):  # , 
             if cfwsw:
                 wrapped_stage.append('cfws')
 
-            wrapped_stage_name = 'wrapping in %s' % '/'.join(wrapped_stage)
+            wrapped_stage_name = 'wrapping in >%s<' % '/'.join(wrapped_stage)
             email_info.begin_stage(wrapped_stage_name, position)
 
             tmp_ret = email_info.fb(position)
-            
+
             if cfwsw:
                 if init_cfws is None:
                     init_cfws = cfws(email_info, position)
@@ -244,7 +135,7 @@ def wrapped_parser(str_wrapper=None, cfws_wrapper=False, no_end_error=''):  # , 
 
             if start_wrapper is not None:
                 if init_start is None:
-                    init_start = single_char(email_info, position + tmp_ret, start_wrapper)                    
+                    init_start = single_char(email_info, position + tmp_ret, start_wrapper)
                 if init_start:
                     tmp_ret += init_start
                 else:
@@ -252,6 +143,7 @@ def wrapped_parser(str_wrapper=None, cfws_wrapper=False, no_end_error=''):  # , 
 
             tmp_ret_2 = func(email_info, position + tmp_ret, *args, **kwargs)
             tmp_ret += tmp_ret_2
+
             if not tmp_ret_2:
                 return tmp_ret(0)
 
@@ -263,156 +155,14 @@ def wrapped_parser(str_wrapper=None, cfws_wrapper=False, no_end_error=''):  # , 
                     tmp_ret(no_end_error)
 
             if cfwsw:
-                tmp_cfws = cfws(email_info, position + tmp_ret)
-                tmp_ret += tmp_cfws
+                tmp_ret += cfws(email_info, position + tmp_ret)
+
+            return tmp_ret
 
         return func_wrapper
 
     return func_decorator
 
-
-# **********************************************************************************
-# </editor-fold>
-# **********************************************************************************
-
-
-# **********************************************************************************
-# <editor-fold desc="  HELPERS  ">
-# **********************************************************************************
-
-
-def simple_char(email_info, position, parse_for, min_count=-1, max_count=99999, parse_until=None):
-    tmp_ret = email_info.fb(position)
-    tmp_count = 0
-
-    if parse_until is None:
-        looper = email_info.remaining_complex(begin=position, count=max_count)
-    else:
-        looper = email_info.remaining_complex(begin=position, count=max_count, until_char=parse_until)
-
-    for i in looper:
-        if i in parse_for:
-            tmp_count += 1
-        else:
-            if tmp_count >= min_count:
-                return tmp_ret(tmp_count)
-            else:
-                return tmp_ret
-
-    if tmp_count >= min_count:
-        return tmp_ret(tmp_count)
-    return tmp_ret
-
-
-def single_char(email_info, position, parse_for):
-    tmp_ret = email_info.fb(position)
-    if email_info[position] == parse_for:
-        return tmp_ret(1)
-    else:
-        return tmp_ret
-
-
-def simple_str(email_info, position, parse_for, caps_sensitive=True):
-    tmp_ret = email_info.fb(position)
-    tmp_len = len(parse_for)
-
-    tmp_check = email_info.mid(position, tmp_len)
-
-    if not caps_sensitive:
-        tmp_check = tmp_check.lower()
-        parse_for = parse_for.lower()
-
-    if tmp_check == parse_for:
-        tmp_ret += tmp_len
-
-    return tmp_ret
-
-
-def _make_ret(email_info, position, parser, *args, **kwargs):
-    if isinstance(parser, ParseResultFootball):
-        return parser
-    elif isinstance(parser, str):
-        if len(parser) > 1 and parser[0] == '"' and parser[-1] == '"':
-            return simple_str(email_info, position, parser[1:-1])
-        else:
-            return simple_char(email_info, position, parser)
-    else:
-        return parser(email_info, position, *args, **kwargs)
-
-
-def parse_or(email_info, position, *parsers, **kwargs):
-    email_info.begin_stage('OR', position)
-    for p in parsers:
-        tmp_ret = _make_ret(email_info, position, p, **kwargs)
-        if tmp_ret:
-            email_info.end_stage(results=tmp_ret)
-            return tmp_ret
-    email_info.end_stage(results=email_info.fb(position))
-    return email_info.fb(position)
-
-
-def parse_and(email_info, position, *parsers, **kwargs):
-    email_info.begin_stage('OR', position)
-    tmp_ret = email_info.fb(position)
-    for p in parsers:
-        tmp_ret_2 = _make_ret(email_info, position + tmp_ret, p, **kwargs)
-        if not tmp_ret_2:
-            email_info.end_stage(results=tmp_ret)
-            return email_info.fb(position)
-        tmp_ret += tmp_ret_2
-    email_info.end_stage(results=tmp_ret)
-    return tmp_ret
-
-
-def parse_loop(email_info, position, parser, *args, min_loop=1, max_loop=256, ret_count=False, **kwargs):
-    email_info.begin_stage('LOOP', position)
-    tmp_ret = email_info.fb(position)
-    loop_count = 0
-
-    while loop_count in range(max_loop):
-        email_info.begin_stage('Loop #%s, @ %s' % (loop_count, position + tmp_ret), position + tmp_ret)
-
-        tmp_loop_ret = parser(email_info, position + tmp_ret, *args, **kwargs)
-        email_info.end_stage(results=tmp_loop_ret)
-
-        if tmp_loop_ret:
-            tmp_ret += tmp_loop_ret
-        else:
-            break
-
-        loop_count += 1
-
-    email_info.end_stage(results=tmp_ret)
-
-    if loop_count >= min_loop:
-        if ret_count:
-            return loop_count, tmp_ret
-        else:
-            return tmp_ret
-    else:
-        if ret_count:
-            return 0, email_info.fb(position)
-        else:
-            return email_info.fb(position)
-
-
-def parse_best(email_info, position, *parsers, try_all=False):
-    email_info.begin_stage('BEST', position)
-    tmp_ret = email_info.fb(position)
-
-    for p in parsers:
-        if not try_all and p and email_info.at_end(position + p):
-            tmp_ret = p
-            break
-
-        tmp_ret = tmp_ret.max(p)
-    email_info.end_stage(results=tmp_ret)
-    return tmp_ret
-
-
-# **********************************************************************************
-# </editor-fold>
-# **********************************************************************************
 
 
 # **********************************************************************************
@@ -539,7 +289,7 @@ def obs_local_part(email_info, position):
     """
     obs-local-part = word *("." word)
     """
-    tmp_word = email_info.word(position)
+    tmp_word = word(email_info, position)
     tmp_ret = email_info.fb(position)
 
     if not tmp_word:
@@ -872,7 +622,7 @@ def domain_addr(email_info, position):
     else:
         tmp_ret('RFC5321_TLD')
 
-    if email_info.this_char(last_dom_pos) in DIGIT:
+    if email_info[last_dom_pos] in DIGIT:
         tmp_ret('RFC5321_TLD_NUMERIC')
         tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.OTHER_NON_DNS
     else:
@@ -917,7 +667,7 @@ def domain_literal(email_info, position):
 
 @email_parser(pass_diags='RFC5321_ADDRESS_LITERAL', full_domain_part=True, extra_text_error='')
 @wrapped_parser('[]', no_end_error='ERR_UNCLOSED_DOM_LIT')  # , bad_text_error='ERR_INVALID_ADDR_LITERAL')
-def address_literal(email_info, position, init_start):
+def address_literal(email_info, position):
     """
     address-literal  = "[" ( IPv4-address-literal /
                     IPv6-address-literal /
@@ -931,18 +681,18 @@ def address_literal(email_info, position, init_start):
 
     tmp_ret = email_info.fb(position)
 
-    tmp_ipv6 = ipv6_address_literal(email_info, position + tmp_ret + init_start)
+    tmp_ipv6 = ipv6_address_literal(email_info, position + tmp_ret)
     if tmp_ipv6 and email_info.at_end(position + tmp_ipv6):
-        return tmp_ret(init_start, tmp_ipv6)
+        return tmp_ret(tmp_ipv6)
 
-    tmp_ipv4 = ipv4_address_literal(email_info, position + tmp_ret + init_start)
+    tmp_ipv4 = ipv4_address_literal(email_info, position + tmp_ret)
     if tmp_ipv4 and email_info.at_end(position + tmp_ipv4):
-        return tmp_ret(init_start, tmp_ipv4)
+        return tmp_ret(tmp_ipv4)
 
-    tmp_gen_lit = general_address_literal(email_info, position + tmp_ret + init_start)
+    tmp_gen_lit = general_address_literal(email_info, position + tmp_ret)
     if tmp_gen_lit and email_info.at_end(position + tmp_gen_lit):
         tmp_ret('RFC5322_LIMITED_DOMAIN', 'RFC5322_DOMAIN')
-        return tmp_ret(init_start, tmp_gen_lit)
+        return tmp_ret(tmp_gen_lit)
 
     # tmp_ret = email_info.football_max(tmp_ipv4, tmp_ipv6, tmp_gen_lit, names=['ipv4', 'ipv6', 'gen_lit'])
 
@@ -1016,75 +766,6 @@ def standardized_tag(email_info, position):
     else:
         return email_info.fb(position)
 
-
-def ipv6_segment(email_info, position, min_count=1, max_count=7):
-    tmp_ret = email_info.fb(position)
-    tmp_ret += ipv6_hex(email_info, position)
-
-    if tmp_ret:
-        if max_count == 1:
-            return 1, tmp_ret
-
-        if not email_info.at_end(position + tmp_ret.l + 1) and \
-                email_info.this_char(position + tmp_ret.l) == ':' and \
-                email_info.this_char(position + tmp_ret.l + 1) == ':' and \
-                min_count <= 1:
-            # email_info.add_note_trace('Double Colons found, exiting')
-            return 1, tmp_ret
-
-        # tmp_colon_str = {'string_in': COLON, 'min_count': 1, 'max_count': 1}
-        tmp_count, tmp_ret_2 = parse_loop(
-            email_info,
-            position + tmp_ret,
-            parse_and,
-            colon,
-            ipv6_hex,
-            min_loop=min_count - 1,
-            max_loop=max_count - 1,
-            ret_count=True)
-    else:
-        return 0, email_info.fb(position)
-
-    if tmp_ret_2:
-        return tmp_count + 1, tmp_ret(tmp_ret_2)
-    else:
-        return 0, email_info.fb(position)
-
-
-@email_parser(pass_diags='RFC5322_IPV4_ADDR')
-def ipv4_address_literal(email_info, position):
-    """
-    IPv4-address-literal  = Snum 3("."  Snum)
-
-    RFC5322_IPV4_ADDR
-
-    """
-    tmp_ret = email_info.fb(position)
-    tmp_ret += parse_and(email_info, position, snum, single_dot, snum, single_dot, snum, single_dot, snum)
-
-    if tmp_ret:
-        tmp_ret.domain_type = ISEMAIL_DOMAIN_TYPE.IPv4
-    return tmp_ret
-
-
-@email_parser()
-def snum(email_info, position):
-    """
-            Snum           = 1*3DIGIT
-                          ; representing a decimal integer
-                          ; value in the range 0 through 255
-    """
-    tmp_ret = three_digit(email_info, position)
-    if tmp_ret:
-        tmp_str = email_info.mid(position, tmp_ret.l)
-
-        tmp_digit = int(tmp_str)
-        if tmp_digit > 255:
-            return email_info.fb(position)
-
-    return tmp_ret
-
-
 @email_parser(pass_diags='RFC5322_IPV6_ADDR')
 def ipv6_address_literal(email_info, position):
     """
@@ -1115,180 +796,6 @@ def ipv6_address_literal(email_info, position):
     return email_info.fb(position)
 
 
-@email_parser()
-def ipv6_addr(email_info, position):
-    """
-            IPv6-addr      = IPv6-full / IPv6-comp / IPv6v4-full / IPv6v4-comp
-    """
-    tmp_ret = email_info.fb(position)
-
-    dot_count = email_info.count(position, email_info.DOT, stop_for=email_info.CLOSESQBRACKET)
-
-    # email_info.add_note_trace('Dot count = ' + str(dot_count))
-    if dot_count:
-        tmp_ret += ipv6v4_full(position) or ipv6v4_comp(position)
-    else:
-        tmp_ret += ipv6_full(position) or ipv6_comp(position)
-
-    return tmp_ret
-
-
-@email_parser()
-def ipv6_hex(email_info, position):
-    """
-    IPv6-hex       = 1*4HEXDIG
-    """
-    return hexdigit(email_info, position)
-
-
-@email_parser(pass_diags='RFC5322_IPV6_FULL_ADDR')
-def ipv6_full(email_info, position):
-    """
-    IPv6-full = IPv6-hex 7(":" IPv6-hex)
-    RFC5322_IPV6_FULL_ADDR
-
-    """
-    tmp_ret = email_info.fb(position)
-    tmp_count, tmp_ret_2 = ipv6_segment(email_info, position, max_count=8, min_count=8)
-    if tmp_ret_2:
-        return tmp_ret(tmp_ret_2)
-    else:
-        return email_info.fb(position)
-
-
-@email_parser(pass_diags='RFC5322_IPV6_COMP_ADDR')
-def ipv6_comp(email_info, position):
-    """
-            IPv6-comp      = [IPv6-hex *5(":" IPv6-hex)] "::"
-                          [IPv6-hex *5(":" IPv6-hex)]
-                          ; The "::" represents at least 2 16-bit groups of
-                          ; zeros.  No more than 6 groups in addition to the
-                          ; "::" may be present.
-          RFC5322_IPV6_COMP_ADDR
-
-    """
-    tmp_ret = email_info.fb(position)
-    tmp_pre_count, tmp_ret_2 = ipv6_segment(email_info, position, min_count=1, max_count=6)
-
-    if not tmp_ret_2:
-        return email_info.fb(position)
-    tmp_ret += tmp_ret_2
-
-    tmp_ret_2 = double_colon(email_info, position + tmp_ret)
-
-    if not tmp_ret_2:
-        return email_info.fb(position)
-
-    tmp_ret += tmp_ret_2
-
-    tmp_post_count, tmp_ret_2 = ipv6_segment(email_info, position + tmp_ret.l, min_count=1, max_count=6)
-
-    if not tmp_ret_2:
-        tmp_ret_2 = ipv6_hex(email_info, position + tmp_ret.l)
-        if not tmp_ret_2:
-            return email_info.fb(position)
-        tmp_post_count = 1
-
-    tmp_ret += tmp_ret_2
-    if (tmp_pre_count + tmp_post_count) > 6:
-        # email_info.add_note_trace('Segment count: %s + %s, exceeds 6, failing' % (tmp_pre_count, tmp_post_count))
-        return email_info.fb(position)
-
-    else:
-        # email_info.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count))
-        return tmp_ret
-
-
-@email_parser(pass_diags='RFC5322_IPV6_IPV4_ADDR')
-def ipv6v4_full(email_info, position):
-    """
-    IPv6v4-full  = IPv6-hex 5(":" IPv6-hex) ":" IPv4-address-literal
-
-    RFC5322_IPV6_IPV4_ADDR
-
-    """
-    tmp_ret = email_info.fb(position)
-    tmp_count, tmp_ret_2 = ipv6_segment(email_info, position, min_count=6, max_count=6)
-    tmp_ret += tmp_ret_2
-
-    if tmp_ret_2:
-        tmp_ret_2 = colon(email_info, position + tmp_ret)
-    else:
-        return email_info.fb(position)
-
-    if tmp_ret_2:
-        tmp_ret += tmp_ret_2
-        tmp_ret_2 = ipv4_address_literal(email_info, position + tmp_ret.l)
-    else:
-        return email_info.fb(position)
-
-    if tmp_ret_2:
-        tmp_ret += tmp_ret_2
-    else:
-        return email_info.fb(position)
-
-    tmp_ret.remove('RFC5322_IPV4_ADDR')
-    return tmp_ret
-
-
-@email_parser(pass_diags='RFC5322_IPV6_IPV4_COMP_ADDR')
-def ipv6v4_comp(email_info, position):
-    """
-            IPv6v4-comp    = [IPv6-hex *3(":" IPv6-hex)] "::"
-                          [IPv6-hex *3(":" IPv6-hex) ":"]
-                          IPv4-address-literal
-                          ; The "::" represents at least 2 16-bit groups of
-                          ; zeros.  No more than 4 groups in addition to the
-                          ; "::" and IPv4-address-literal may be present.
-            RFC5322_IPV6_IPV4_COMP_ADDR
-    """
-    tmp_ret = email_info.fb(position)
-    tmp_pre_count, tmp_ret_2 = ipv6_segment(email_info, position, min_count=1, max_count=3)
-    tmp_ret += tmp_ret_2
-
-    if not tmp_ret:
-        return email_info.fb(position)
-
-    tmp_ret_2 = double_colon(email_info, position + tmp_ret)
-
-    if not tmp_ret_2:
-        return email_info.fb(position)
-
-    tmp_ret += tmp_ret_2
-
-    colon_count = email_info.count(position + tmp_ret, COLON, stop_for=CLOSESQBRACKET)
-    if colon_count > 3:
-        return email_info.fb(position)
-
-    tmp_post_count, tmp_ret_2 = ipv6_segment(email_info, position + tmp_ret.l,
-                                             min_count=colon_count, max_count=colon_count)
-
-    # email_info.add_note_trace('should be start of IPv4 segment')
-
-    tmp_ret += tmp_ret_2
-    tmp_ret_2 = colon(email_info, position + tmp_ret)
-
-    if not tmp_ret_2:
-        return email_info.fb(position)
-
-    tmp_ret += tmp_ret_2
-    tmp_ret_2 = ipv4_address_literal(email_info, position + tmp_ret.l)
-
-    if not tmp_ret_2:
-        return email_info.fb(position)
-
-    tmp_ret += tmp_ret_2
-
-    if tmp_pre_count + tmp_post_count > 4:
-        # email_info.add_note_trace('Segment count: %s + %s, exceeds 4, failing' % (tmp_pre_count, tmp_post_count))
-        return email_info.fb(position)
-
-    else:
-        # email_info.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count))
-        tmp_ret.remove('RFC5322_IPV4_ADDR')
-        return tmp_ret
-
-
 # **********************************************************************************
 # </editor-fold>
 # **********************************************************************************
@@ -1305,7 +812,7 @@ def ldh_str(email_info, position):
     """
     tmp_ret = sub_ldh_str(email_info, position)
 
-    while email_info.this_char(position + tmp_ret - 1) == "-":
+    while email_info[position + tmp_ret - 1] == "-":
         tmp_ret -= 1
         if tmp_ret == 0:
             return tmp_ret
@@ -1455,7 +962,7 @@ def dot_atom_text(email_info, position):
     dot-atom-text   =   1*atext *("." 1*atext)
     """
     tmp_ret = email_info.fb(position)
-    tmp_ret += email_info.atext(position)
+    tmp_ret += atext(email_info, position)
 
     if email_info.at_end(position + tmp_ret) or not tmp_ret:
         return tmp_ret
@@ -1486,11 +993,11 @@ def cfws(email_info, position):
         tmp_ret += tmp_ret_comment
         tmp_ret += fws(email_info, position + tmp_ret)
 
-    if 'CFWS_LAST' in tmp_ret.flags and AT in email_info.mid(position, tmp_ret.l):
+    if 'CFWS_LAST' in email_info.flags and AT in email_info.mid(position, tmp_ret.l):
         tmp_ret('DEPREC_CFWS_NEAR_AT')
 
     if tmp_ret:
-        tmp_ret.flags += 'CFWS_LAST'
+        email_info.flags += 'CFWS_LAST'
 
     return tmp_ret
 
@@ -1682,7 +1189,7 @@ def obs_fws(email_info, position):
                                         (ISEMAIL_DEPREC)
     """
     tmp_ret = email_info.fb(position)
-    tmp_ret += crlf(position)
+    tmp_ret += crlf(email_info, position)
 
     if tmp_ret.error:
         return tmp_ret
@@ -1726,7 +1233,7 @@ def quoted_string(email_info, position):
     # has_qtext = False
     while True:
 
-        tmp_loop_1 = email_info.fws(email_info, position + tmp_ret)
+        tmp_loop_1 = fws(email_info, position + tmp_ret)
 
         if tmp_loop_1:
             tmp_loop_1.remove('CFWS_FWS')
@@ -1736,7 +1243,7 @@ def quoted_string(email_info, position):
             else:
                 last_was_fws = False
 
-        tmp_loop_2 = email_info.qcontent(email_info, position + tmp_ret + tmp_loop_1)
+        tmp_loop_2 = qcontent(email_info, position + tmp_ret + tmp_loop_1)
 
         if tmp_loop_2:
             tmp_ret += tmp_loop_1
@@ -1767,7 +1274,7 @@ def qtext(email_info, position):
                            obs-qtext
     """
     tmp_ret = email_info.fb(position)
-    tmp_ret += email_info.simple_char(email_info, position, QTEXT) or obs_qtext(email_info, position)
+    tmp_ret += simple_char(email_info, position, QTEXT) or obs_qtext(email_info, position)
     return tmp_ret
 
 
@@ -1779,7 +1286,7 @@ def obs_qtext(email_info, position):
     [1035]              DEPREC_QTEXT  A quoted string contains a deprecated character (ISEMAIL_DEPREC)
 
     """
-    return email_info.simple_char(email_info, position, OBS_QTEXT)
+    return simple_char(email_info, position, OBS_QTEXT)
 
 
 @email_parser()
@@ -1840,7 +1347,7 @@ def vchar_wsp(email_info, position):
             // To do: check whether the character needs to be quoted (escaped) in this context
             // The maximum sizes specified by RFC 5321 are octet counts, so we must include the backslash
     """
-    return email_info.simple_char(position, VCHAR_WSP, max_count=1)
+    return simple_char(email_info, position, VCHAR_WSP, max_count=1)
 
 
 @email_parser(pass_diags='DEPREC_QP')
@@ -1864,8 +1371,8 @@ def crlf(email_info, position, in_crlf=False):
     if email_info.at_end(position):
         return tmp_ret
 
-    if email_info.this_char(position) == '\r':
-        if not email_info.at_end(position + 1) and email_info.this_char(position + 1) == '\n':
+    if email_info[position] == '\r':
+        if not email_info.at_end(position + 1) and email_info[position + 1] == '\n':
             tmp_ret += 2
 
             if not in_crlf:
@@ -1945,11 +1452,11 @@ def close_sq_bracket(email_info, position):
 def obs_dtext_sub(email_info, position):
     return simple_char(email_info, position, OBS_DTEXT)
 
-
+"""
 @email_parser()
 def colon(email_info, position):
     return single_char(email_info, position, COLON)
-
+"""
 
 @email_parser()
 def double_colon(email_info, position):
@@ -1970,7 +1477,7 @@ def pre_cfws(email_info, position):
 def ipv6(email_info, position):
     return simple_str(email_info, position, "IPv6:", caps_sensitive=False)
 
-
+"""
 @email_parser()
 def three_digit(email_info, position):
     return simple_char(email_info, position, DIGIT, max_count=3)
@@ -1979,7 +1486,7 @@ def three_digit(email_info, position):
 @email_parser(is_history_item=False)
 def hexdigit(email_info, position):
     return simple_char(email_info, position, HEXDIG, min_count=-1, max_count=4)
-
+"""
 
 @email_parser()
 def open_parenthesis(email_info, position):

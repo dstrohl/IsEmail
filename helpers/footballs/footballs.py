@@ -1,4 +1,5 @@
 
+
 from helpers.flag_manager import FlagHelper
 from helpers.meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
 from helpers.hisatory import HistoryHelper
@@ -6,7 +7,7 @@ from helpers.exceptions import *
 from helpers.tracer import TraceHelper, TraceFormatManager
 
 
-class EmailTracerFormatter(TraceFormatManager):
+class ParsingTracerFormatter(TraceFormatManager):
 
     def begin(self, stage_name, position, **kwargs):
         if self:
@@ -14,7 +15,7 @@ class EmailTracerFormatter(TraceFormatManager):
                 stage_name=stage_name,
                 position=position,
                 parser=self._begin_parse,
-                remaining=self.tracer.email.mid(position),
+                remaining=self.tracer.parse_obj.mid(position),
                 **kwargs)
         return self.tracer
 
@@ -40,7 +41,7 @@ class EmailTracerFormatter(TraceFormatManager):
         # *** Trace parsers ***********************************
 
     def _begin_parse(self, *args, format_str='Begin: {stage}', **kwargs):
-        format_str = 'Begin ({position}): {stage}  scanning: ->{remaining}<-'
+        format_str = 'Begin {stage}: scanning from {position}: ->{remaining!r}<-'
         return format_str.format(*args, **kwargs)
     _begin_parse.name = 'Begin'
 
@@ -53,9 +54,9 @@ class EmailTracerFormatter(TraceFormatManager):
         results = kwargs['results']
 
         if results.l == 0 or results.error:
-            format_str = 'End%s: UN-MATCHED : {stage}  -- {results!r}' % tmp_raised
+            format_str = 'End {stage}%s: UN-MATCHED : {results!r}' % tmp_raised
         else:
-            format_str = 'End%s: {stage_text} : {stage}  -- {results!r}' % tmp_raised
+            format_str = 'End {stage}%s: Found {results.l} "{stage_text}" : {results!r}' % tmp_raised
 
         return format_str.format(*args, **kwargs)
 
@@ -72,22 +73,22 @@ class EmailTracerFormatter(TraceFormatManager):
     _note_parse.name = 'Note'
 
 
-class EmailTracer(TraceHelper):
-    _trace_name = 'Email Parsing Trace'
-    _trace_format_manager = EmailTracerFormatter
+class ParsingTracer(TraceHelper):
+    _trace_name = 'Parsing Trace'
+    _trace_format_manager = ParsingTracerFormatter
 
-    def __init__(self, email_helper, trace_level=None, logger=None, max_traces=None, immediate_parse=False,
+    def __init__(self, parse_helper, trace_level=None, logger=None, max_traces=None, immediate_parse=False,
                  name=None, tz='utc', formats=None, **kwargs):
-        self.email = email_helper
+        self.parse_obj = parse_helper
         if name is None:
-            name = self.email.email_in
+            name = self.parse_obj.parse_str_len
         super().__init__(trace_level, logger, max_traces, immediate_parse, name, tz, formats, **kwargs)
 
 
 class ParseResultFootball(object):
 
-    def __init__(self, email_obj, stage, begin):
-        self.email_obj = email_obj
+    def __init__(self, parse_obj, stage, begin):
+        self.parse_obj = parse_obj
         self.results = []
         # self.children = []
         self.begin = begin
@@ -106,7 +107,7 @@ class ParseResultFootball(object):
         self._length = length
 
     def copy(self):
-        tmp_ret = self.__class__(self.email_obj, self.stage, self.begin)
+        tmp_ret = self.__class__(self.parse_obj, self.stage, self.begin)
         tmp_ret._length = self._length
         tmp_ret._max_length = self._max_length
         tmp_ret.results = self.results.copy()
@@ -125,6 +126,9 @@ class ParseResultFootball(object):
             self._history.begin = begin
         if length is not None:
             self._history.length = length
+
+    def get_history(self, depth=-1):
+        return self._history.as_string(depth=depth)
 
     @property
     def history(self):
@@ -151,7 +155,7 @@ class ParseResultFootball(object):
         tmp_diag = self.diags
         if not tmp_diag:
             return None
-        return self.email_obj.meta_data.max_obj(*self.diags)
+        return self.parse_obj.meta_data.max_obj(*self.diags)
 
     @property
     def max_diag_value(self):
@@ -188,7 +192,7 @@ class ParseResultFootball(object):
 
     def _refresh(self):
         for i in self.results:
-            if self.email_obj.meta_data.is_error(i[0]):
+            if self.parse_obj.meta_data.is_error(i[0]):
                 self.status = ISEMAIL_RESULT_CODES.ERROR
 
     def __iadd__(self, other):
@@ -248,9 +252,9 @@ class ParseResultFootball(object):
         self.results.append((diag, begin, length))
 
         try:
-            tmp_error = self.email_obj.meta_data.is_error(diag)
+            tmp_error = self.parse_obj.meta_data.is_error(diag)
         except KeyError:
-            raise AttributeError('Invalid Diagnosis: ' + diag)
+            raise AttributeError('Invalid Diagnosis: %r' % diag)
         self._set_error(tmp_error)
 
         if tmp_error:
@@ -380,7 +384,7 @@ class ParseResultFootball(object):
         return tmp_str
 
     def __str__(self):
-        return self.email_obj.mid(self.begin, self.length)
+        return self.parse_obj.mid(self.begin, self.length)
 
     def __bool__(self):
         if not self.error and self.length > 0:
@@ -394,17 +398,13 @@ class ParseResultFootball(object):
         return len(self.results)
 
 
-class EmailInfo(object):
+class ParsingObj(object):
 
     def __init__(self,
-                 email_in=None,
+                 str_in=None,
                  verbose=0,
                  trace_level=-1,
                  raise_on_error=False,
-                 dns_lookup_level=None,
-                 dns_servers=None,
-                 dns_timeout=None,
-                 tld_list=None,
                  meta_data=None):
         """
         :param email_in:  the email to parse
@@ -414,48 +414,32 @@ class EmailInfo(object):
             * 2 = return all
 
         """
-        self.dns_lookup_level = dns_lookup_level or ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP
-        self.dns_servers = dns_servers
-        self.dns_timeout = dns_timeout
-        self.tld_list = tld_list
         self.verbose = verbose
         self.raise_on_error = raise_on_error
         self.trace_level = trace_level
         self.meta_data = meta_data or META_LOOKUP
+        self.flags = FlagHelper()
 
-        # self._in_local_part = False
-        # self._in_domain_part = False
-        # self._in_crlf = False
-        # self._at_in_cfws = False
-        # self._near_at_flag = False
-
-        self.flags = FlagHelper('in_crlf', 'at_in_cfws', 'near_at_flag')
-
-        self.at_loc = None
-        self.local_comments = {}
-        self.domain_comments = {}
-        self.domain_type = None
         self.results = None
 
-        self.email_in = None
-        self.email_len = None
+        self.parse_str = None
+        self.parse_str_len = None
         self.trace = None
         self.stage = None
         self.full_stage = None
 
-        if email_in is not None:
-            self.setup(email_in)
+        if str_in is not None:
+            self.setup(str_in)
 
-    def setup(self, email_in):
-        self.email_len = len(email_in)
-        self.email_in = email_in
-        self.trace = EmailTracer(self, self.trace_level)
+    def setup(self, str_in):
+        self.parse_str_len = len(str_in)
+        self.parse_str = str_in
+        self.trace = ParsingTracer(self, self.trace_level)
         self.stage = self.trace.get_stage
         self.full_stage = self.trace.get_full_stage
-        self.flags._reset()
 
     def __getitem__(self, item):
-        return self.email_in[item]
+        return self.parse_str[item]
 
     def begin_stage(self, stage_name, position, **kwargs):
         self.trace.add.begin(stage_name=stage_name, position=position, **kwargs)
@@ -467,32 +451,32 @@ class EmailInfo(object):
         self.trace.add.note(note=note, position=position, **kwargs)
 
     def at_end(self, position):
-        return int(position) >= self.email_len
+        return int(position) >= self.parse_str_len
 
     def is_last(self, position):
-        return int(position) == self.email_len
+        return int(position) == self.parse_str_len
 
     def fb(self, position):
         return ParseResultFootball(self, str(self.stage), int(position))
 
     def __len__(self):
-        return self.email_len
+        return self.parse_str_len
 
     def __str__(self):
-        return self.email_in
+        return self.parse_str
 
     def __repr__(self):
-        return 'Parse: "%s", at stage %s' % (self.email_in, self.stage)
+        return 'Parse: "%s", at stage %s' % (self.parse_str, self.stage)
 
     def mid(self, begin: int = 0, length: int = -1):
         length = int(length)
         if length >= 0:
-            return self.email_in[begin:min(int(begin) + length, self.email_len)]
+            return self.parse_str[begin:min(int(begin) + length, self.parse_str_len)]
         else:
-            return self.email_in[int(begin):]
+            return self.parse_str[int(begin):]
 
     def slice(self, begin=0, end=999):
-        return self.email_in[int(begin):int(end)]
+        return self.parse_str[int(begin):int(end)]
 
     def remaining(self, begin, end=999, count=-1, **kwargs):
         if not kwargs:
@@ -531,17 +515,59 @@ class EmailInfo(object):
                 yield c
 
     def count(self, begin, search_for, end=999, count=-1, until_char=None, skip_quoted=False):
-        tmp_ret = 0
-        for c in self.remaining_complex(begin, end, count, until_char, skip_quoted):
-            if c == search_for:
-                tmp_ret += 1
-        return tmp_ret
+        if len(search_for) > 1:
+            tmp_str = list(self.remaining_complex(begin, end, count, until_char, skip_quoted))
+            tmp_str = ''.join(tmp_str)
+            return tmp_str.count(search_for)
+        else:
+            tmp_ret = 0
+            for c in self.remaining_complex(begin, end, count, until_char, skip_quoted):
+                if c == search_for:
+                    tmp_ret += 1
+            return tmp_ret
 
     def find(self, begin, search_for, end=999, count=-1, until_char=None, skip_quoted=False):
         for i, c in self.remaining_complex(begin, end, count, until_char, skip_quoted, ret_offset=True):
             if c == search_for:
                 return i
         return -1
+
+
+class EmailParsingObj(ParsingObj):
+
+    def __init__(self,
+                 str_in=None,
+                 verbose=0,
+                 trace_level=-1,
+                 raise_on_error=False,
+                 dns_lookup_level=None,
+                 dns_servers=None,
+                 dns_timeout=None,
+                 tld_list=None,
+                 meta_data=None):
+        """
+        :param email_in:  the email to parse
+        :param verbose:
+            * 0 = only return true/false
+            * 1 = return t/f + cleaned email + major reason
+            * 2 = return all
+
+        """
+        self.dns_lookup_level = dns_lookup_level or ISEMAIL_DNS_LOOKUP_LEVELS.NO_LOOKUP
+        self.dns_servers = dns_servers
+        self.dns_timeout = dns_timeout
+        self.tld_list = tld_list
+
+        self.at_loc = None
+        self.local_comments = {}
+        self.domain_comments = {}
+        self.domain_type = None
+        self.results = None
+
+        super().__init__(str_in=str_in, verbose=verbose, trace_level=trace_level,
+                         raise_on_error=raise_on_error, meta_data=meta_data)
+
+        self.flags = FlagHelper('in_crlf', 'at_in_cfws', 'near_at_flag')
 
     @property
     def in_domain(self):
