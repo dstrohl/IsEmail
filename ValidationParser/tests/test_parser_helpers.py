@@ -1,8 +1,8 @@
 from unittest import TestCase
-from helpers.parser_helpers_old.parser_helpers import simple_char, simple_str, single_char, parse_and, parse_or, parse_best, parse_loop
-from helpers.parser_helpers_old.parser_wrappers import email_parser, wrapped_parser, is_comment, pass_diags, fail_diags
-from helpers.footballs import ParsingObj
-from helpers.exceptions import ParsingError
+# from helpers.parser_helpers_old.parser_helpers import simple_char, simple_str, single_char, parse_and, parse_or, parse_best, parse_loop
+# from helpers.parser_helpers_old.parser_wrappers import email_parser, wrapped_parser, is_comment, pass_diags, fail_diags
+from ValidationParser.footballs import ParsingObj
+from ValidationParser.exceptions import ParsingError
 
 
 def ei(email='abcdefghijk', **kwargs):

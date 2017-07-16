@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone, timedelta
 from time import sleep
 
-from helpers.tracer.trace_helper import TraceHelper, QueueCounterHelper, CounterHelper
+from ValidationParser.trace_helper import TraceHelper, QueueCounterHelper, CounterHelper
 
 _named_times = {}
 

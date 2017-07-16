@@ -8,7 +8,7 @@ __all__ = ['AT', 'BACKSLASH', 'CLOSESQBRACKET', 'CLOSEPARENTHESIS', 'COLON', 'CO
            ]
 
 # from functools import wraps
-from helpers.exceptions import ParsingError
+from ValidationParser.exceptions import ParsingError
 # from helpers.footballs import ParseResultFootball
 from helpers.footballs import ParsingObj
 from helpers .general.general import make_char_str
@@ -57,7 +57,7 @@ class PHBase(object):
     on_pass_msg = name, 'VALID'
     on_fail_msg = name, 'ERROR'
 
-    parse_object = ParsingObj
+    # parse_object = ParsingObj
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
@@ -73,6 +73,7 @@ class PHBase(object):
         except AttributeError:
             tmp_ret = self._parse(*args, **kwargs)
         return tmp_ret
+
 
     def __call__(self, parse_obj, position=0, **kwargs):
         """

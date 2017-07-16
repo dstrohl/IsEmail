@@ -1,6 +1,9 @@
-from helpers.parser_helpers.parser_messages import *
 from unittest import TestCase
+from ValidationParser.parser_messages import *
 from helpers.general import show_compared_items
+from helpers.general.test_helpers import TestCaseCompare
+from ValidationParser.exceptions import MessageListLocked
+
 
 test_msg_2 = {'key': 'test_msg_2', 'description': 'This is test msg 2', 'status': RESULT_CODES.WARNING, 'references': ['test_ref']}
 test_msg_3 = {'key': 'test_msg_3', 'description': 'tm3_desc', 'status': RESULT_CODES.OK, 'references': 'test_ref_2'}
@@ -54,6 +57,12 @@ class TestMessageLookup(TestCase):
         self.assertEqual(tmp_msg.status, RESULT_CODES.ERROR)
         self.assertEqual(tmp_msg.name, 'Test New Message')
 
+    def test_get_new_msg_locked_raise(self):
+        MESSAGE_LOOKUP.locked = True
+        with self.assertRaises(MessageListLocked):
+            tmp_msg = MESSAGE_LOOKUP.message('test_segment', 'test_new_message')
+        MESSAGE_LOOKUP.locked = False
+
     def test_get_new_msg_with_kwargs(self):
         tmp_msg = MESSAGE_LOOKUP.message('test_segment', 'test_new_message', status=RESULT_CODES.OK, name='test_name')
         self.assertEqual(tmp_msg.key, 'test_new_message')
@@ -74,6 +83,12 @@ class TestMessageLookup(TestCase):
         # self.assertEqual(tmp_seg['status_override'], None)
         self.assertEqual(tmp_seg.name, 'Test Segment')
         self.assertEqual(tmp_seg.description, None)
+
+    def test_get_new_segment_locked_raise(self):
+        MESSAGE_LOOKUP.locked = True
+        with self.assertRaises(MessageListLocked):
+            tmp_seg = MESSAGE_LOOKUP.segment('test_segment')
+        MESSAGE_LOOKUP.locked = False
 
     def test_get_new_segment_with_kwargs(self):
         MESSAGE_LOOKUP.add(segments=TEST_SEGMENTS)
@@ -263,7 +278,7 @@ class TestMesageRecs(TestCase):
         self.assertEqual(pmr2.status, RESULT_CODES.OK)
 
 
-class TestMessageObject(TestCase):
+class TestMessageObject(TestCaseCompare):
     maxDiff = None
 
     ML = MessageLookup(messages=TEST_MESSAGES, references=TEST_REFERENCES, segments=TEST_SEGMENTS)
@@ -314,46 +329,15 @@ class TestMessageObject(TestCase):
 
     def test_compare(self):
 
-        LIMIT_TEST = None
+        TESTS = [
+            ('tm_1', self.ML('test', 'TEST_MSG_1'), 1),  # ERROR     4a
+            ('tm_3', self.ML('test2', 'TEST_MSG_1'), 2),  # ERROR    5a
+            ('tm_4', self.ML('test', 'test_msg_2'), 3),  # WARNING   3a
+            ('tm_5', self.ML('test', 'test_msg_3'), 4),  # OK        1a
+            ('tm_6', self.ML('test', 'VALID'), 5),  # OK             2a
+        ]
 
-        # LIMIT_TEST = 'tm_1.tm_6'
-
-        TEST_DICT = dict(
-            tm_1=(self.ML('test', 'TEST_MSG_1'), '4a'),  # ERROR     4a
-            tm_2=(self.ML('test', 'TEST_MSG_1'), '4a'),  # ERROR     4b
-            tm_3=(self.ML('test2', 'TEST_MSG_1'), '5a'),  # ERROR    5a
-            tm_4=(self.ML('test', 'test_msg_2'), '3a'),  # WARNING   3a
-            tm_5=(self.ML('test', 'test_msg_3'), '1a'),  # OK        1a
-            tm_6=(self.ML('test', 'VALID'), '2a'),  # OK             2a
-        )
-
-        if LIMIT_TEST is not None:
-            with self.subTest('LIMITED TEST'):
-                self.fail()
-
-        for l_key, l_item in TEST_DICT.items():
-            l_test_obj, l_value = l_item
-            for r_key, r_item in TEST_DICT.items():
-                if LIMIT_TEST is not None and LIMIT_TEST != '%s.%s' % (l_key, r_key):
-                    continue
-                r_test_obj, r_value = r_item
-                with self.subTest('%s == %s' % (l_key, r_key)):
-                    self.assertEqual(l_value == r_value, l_test_obj == r_test_obj, '\n\n%r == %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
-
-                with self.subTest('%s != %s' % (l_key, r_key)):
-                    self.assertEqual(l_value != r_value, l_test_obj != r_test_obj, '\n\n%r != %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
-
-                with self.subTest('%s > %s' % (l_key, r_key)):
-                    self.assertEqual(l_value > r_value, l_test_obj > r_test_obj, '\n\n%r > %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
-
-                with self.subTest('%s >= %s' % (l_key, r_key)):
-                    self.assertEqual(l_value >= r_value, l_test_obj >= r_test_obj, '\n\n%r >= %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
-
-                with self.subTest('%s < %s' % (l_key, r_key)):
-                    self.assertEqual(l_value < r_value, l_test_obj < r_test_obj, '\n\n%r < %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
-
-                with self.subTest('%s <= %s' % (l_key, r_key)):
-                    self.assertEqual(l_value <= r_value, l_test_obj <= r_test_obj, '\n\n%r <= %r\nreturns: %r' % (l_test_obj, r_test_obj, str(l_test_obj._compare_(r_test_obj))))
+        self.assertComparisons(TESTS)
 
     def test_sort(self):
         tm_1 = self.ML('test', 'TEST_MSG_1')  # ERROR
@@ -366,7 +350,7 @@ class TestMessageObject(TestCase):
         tmp_list = [tm_2, tm_6, tm_1, tm_3, tm_5, tm_4]
         tmp_list.sort()
 
-        tmp_exp = [tm_5, tm_6, tm_4, tm_1, tm_2, tm_3]
+        tmp_exp = [tm_1, tm_2, tm_3, tm_4, tm_5, tm_6]
 
         tmp_msg = '\n\nReturned: %r\nExpected: %r' % (tmp_list, tmp_exp)
 
@@ -390,7 +374,7 @@ TEST_MH_MSG_2_2_9 = dict(key='test_msg_2', begin=9, length=4, segment__key='test
 TEST_MH_MSG_2_2_10 = dict(key='test_msg_2', begin=10, length=2, segment__key='test_seg_2', text='te')
 
 
-class TestMessageHandler(TestCase):
+class TestMessageHandler(TestCaseCompare):
 
     def setUp(self):
         MESSAGE_LOOKUP.clear()
@@ -969,15 +953,6 @@ class TestMessageHandler(TestCase):
         tmp_ret = pmh.info(combine_like=True, inc_segment_key=False, inc_length=False)
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
 
-    def test_list_objects(self):
-        """
-
-        list_objects:
-            for item in PMH
-        """
-        self.fail()
-
-
     def test_printed_output(self):
         """
 
@@ -989,5 +964,191 @@ class TestMessageHandler(TestCase):
                     length (shortest to longest)
                     alpha (segment_key / msg_key)
         """
-        self.fail()
+
+        pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+        pmh('test_msg_1', 1, 2)
+        pmh('test_msg_1', 10, 2)
+        pmh('test_seg_2.test_msg_1', 4, 2)
+        pmh('test_seg_2.test_msg_2', 10, 2)
+        self.assertEqual(len(pmh), 4)
+
+        exp_ret = 'test_seg_1.test_msg_1\ntest_seg_2.test_msg_1\ntest_seg_1.test_msg_1\ntest_seg_2.test_msg_2'
+        tmp_ret = pmh.get_output('long_key', combine_same=False)
+        self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
+
+        exp_ret = 'test_msg_1\ntest_msg_2'
+        tmp_ret = pmh.get_output('key', combine_same=True)
+        self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
+
+        exp_ret = 'test_seg_1(test_msg_1(2)), test_seg_2(test_msg_1, test_msg_2)'
+        tmp_ret = pmh.get_output('seg_keys', join=', ')
+        self.assertEqual(len(pmh), 4)
+        self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
+
+
+    def test_copy(self):
+        pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+
+        print('step 1, #1', repr(pmh_1))
+
+        pmh_1('WARNING')
+
+        print('step 2, #1', repr(pmh_1))
+
+
+        self.assertEqual(len(pmh_1), 1)
+
+        pmh_2 = pmh_1.copy()
+
+        self.assertTrue(pmh_1)
+        self.assertTrue(pmh_2)
+        print('step 3, #1', repr(pmh_1))
+        print('step 3, #2', repr(pmh_2))
+
+        self.assertEqual(len(pmh_1), 1)
+        self.assertEqual(len(pmh_2), 1)
+
+        pmh_1('VALID')
+
+        self.assertTrue(pmh_1)
+        self.assertTrue(pmh_2)
+
+        print('step 4, #1', repr(pmh_1))
+        print('step 4, #2', repr(pmh_2))
+
+        self.assertEqual(len(pmh_1), 2)
+        self.assertEqual(len(pmh_2), 1)
+
+        pmh_2('ERROR')
+
+        self.assertTrue(pmh_1)
+        self.assertFalse(pmh_2)
+
+        print('step 5, #1', repr(pmh_1))
+        print('step 5, #2', repr(pmh_2))
+
+        self.assertEqual(len(pmh_1), 2)
+        self.assertEqual(len(pmh_2), 2, repr(pmh_2))
+
+    def test_compare(self):
+        pmh_valid = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+        pmh_warn = pmh_valid.copy()
+        pmh_depre = pmh_valid.copy()
+        pmh_too = pmh_valid.copy()
+        pmh_error = pmh_valid.copy()
+
+        pmh_valid('VALID')
+        pmh_warn('WARNING')
+        pmh_depre('DEPRECATED')
+        pmh_too('TOO_LONG')
+        pmh_error('ERROR')
+
+        TESTS = [
+            ('valid', pmh_valid, 99),
+            ('warning', pmh_warn, 50),
+            ('deprecated', pmh_depre, 50),
+            ('too_long', pmh_too, 25),
+            ('error', pmh_error, 25),
+        ]
+
+        self.assertComparisons(TESTS)
+
+    # def test_compare_eq(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('DEPRECATED')
+    #     pmh_4('TOO_LONG')
+    #     pmh_5('ERROR')
+    #
+    #     self.assertTrue(pmh_2 == pmh_3)
+    #
+    #     self.assertFalse(pmh_1 == pmh_2, msg='%r == %r' % (pmh_2, pmh_3))
+    #     self.assertFalse(pmh_1 == pmh_5)
+    #
+    #
+    # def test_compare_ne(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('ERROR')
+    #
+    #     self.assertFalse(pmh_1 != pmh_2)
+    #
+    #     self.assertTrue(pmh_2 != pmh_3)
+    #     self.assertTrue(pmh_1 != pmh_3)
+    #
+    # def test_compare_lt(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('ERROR')
+    #
+    #     self.assertFalse(pmh_1 < pmh_2)
+    #
+    #     self.assertTrue(pmh_2 < pmh_3)
+    #     self.assertTrue(pmh_1 < pmh_3)
+    #
+    #     self.assertFalse(pmh_3 < pmh_2)
+    #     self.assertFalse(pmh_3 < pmh_1)
+    #
+    # def test_compare_le(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('ERROR')
+    #
+    #     self.assertTrue(pmh_1 <= pmh_2)
+    #
+    #     self.assertTrue(pmh_2 <= pmh_3)
+    #     self.assertTrue(pmh_1 <= pmh_3)
+    #
+    #     self.assertFalse(pmh_3 <= pmh_2)
+    #     self.assertFalse(pmh_3 <= pmh_1)
+    #
+    # def test_compare_gt(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('ERROR')
+    #
+    #     self.assertFalse(pmh_1 > pmh_2)
+    #
+    #     self.assertFalse(pmh_2 > pmh_3)
+    #     self.assertFalse(pmh_1 > pmh_3)
+    #
+    #     self.assertTrue(pmh_3 > pmh_2)
+    #     self.assertTrue(pmh_3 > pmh_1)
+    #
+    # def test_compare_ge(self):
+    #     pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
+    #     pmh_2 = pmh_1.copy()
+    #     pmh_3 = pmh_1.copy()
+    #
+    #     pmh_1('VALID')
+    #     pmh_2('WARNING')
+    #     pmh_3('ERROR')
+    #
+    #     self.assertTrue(pmh_1 >= pmh_2)
+    #
+    #     self.assertFalse(pmh_2 >= pmh_3, msg='%r == %r  (%s)' % (pmh_2, pmh_3, str(pmh_2._compare_(pmh_3))))
+    #     self.assertFalse(pmh_1 >= pmh_3)
+    #
+    #     self.assertTrue(pmh_3 >= pmh_2)
+    #     self.assertTrue(pmh_3 >= pmh_1)
 

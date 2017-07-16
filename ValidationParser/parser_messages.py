@@ -1,7 +1,8 @@
 from enum import IntEnum, Enum
 from helpers.general import make_list, adv_format, AutoAddDict, CompareFieldMixin
 from collections import UserDict, namedtuple, UserList
-from copy import deepcopy, copy
+from copy import deepcopy
+from ValidationParser.exceptions import MessageListLocked
 
 
 class OverrideDict(UserDict):
@@ -24,10 +25,10 @@ class OverrideDict(UserDict):
 
 
 class RESULT_CODES(IntEnum):
-    OK = 1
+    OK = 3
     WARNING = 2
-    ERROR = 3
-
+    ERROR = 1
+    UNKNOWN = 99
 
 class TEXT_TYPE(Enum):
     SHORT = 'short'
@@ -152,7 +153,7 @@ def _make_ms_kwargs(segment, message=None, *, msg_kwargs=None, seg_kwargs=None,
     return tmp_ret
 
 
-class ParseMessageHelper(object):
+class ParseMessageHelper(CompareFieldMixin):
     """
     PMH = ParseMessageHelper(message_lookup, parse_string, segment_definition or key)
 
@@ -196,7 +197,8 @@ class ParseMessageHelper(object):
             [('segment_key.msg_key', position, length), (segment_key.msg_key, position, length), ...]
 
         PMH.keys(show_segment_key, show_msg_key, show_position, combine_like=True, show_length)
-            [('segment_key.msg_key', [(position, length), (position, length)]), (segment_key.msg_key, [(position, length)]), ...]
+            [('segment_key.msg_key', [(position, length), (position, length)]),
+             ('segment_key.msg_key', [(position, length)]), ...]
 
 
     list_objects:
@@ -224,20 +226,31 @@ class ParseMessageHelper(object):
     len:
         len(PMH)   #  counts messages
 
+
+    Sort Order =
+
     """
+    _compare_fields = ('max_status',)
 
     def __init__(self, message_lookup, parse_str, segment):
         self.message_lookup = message_lookup
         self.parse_str = parse_str
         self.segments = AutoAddDict(dict)
-        self.message_keys = {}
+        # self.message_keys = {}
         self._caches = {}
         # self.messages = []
         self.current_segment = segment
         # self.parent = None
 
-        self.max_status = RESULT_CODES.OK
+        self.max_status = RESULT_CODES.UNKNOWN
         self.max_length = 0
+
+    def copy(self):
+        tmp_ret = self.__class__(self.message_lookup, self.parse_str, self.current_segment)
+        tmp_ret.segments = deepcopy(self.segments)
+        tmp_ret.max_status = self.max_status
+        tmp_ret.max_length = self.max_length
+        return tmp_ret
 
     def _mid(self, begin, length=None, end=None):
         if length is None and end is None:
@@ -247,51 +260,59 @@ class ParseMessageHelper(object):
         else:
             return self.parse_str[begin:begin+length]
 
-    def add(self, *messages, begin=0, length=0, note=None, **kwargs):
+    def extend(self, *messages, begin=0, length=0, note=None, **kwargs):
         self._caches.clear()
-        tmp_bl = []
-        while len(messages) > 1 and isinstance(messages[-1], int):
-            tmp_bl.append(messages[-1])
-            messages = messages[:-1]
-
-        if len(tmp_bl) > 1:
-            length = length or tmp_bl[0]
-            begin = begin or tmp_bl[1]
-        elif len(tmp_bl) == 1:
-            begin = begin or tmp_bl[0]
 
         self._check_pos(begin)
         self._check_pos(length+begin)
 
         self.max_length = max(self.max_length, length)
+
+        last_item = None
         for m in messages:
-            if isinstance(m, (str, dict)):
-                ms_args = _make_ms_kwargs(m, msg_kwargs=kwargs, default_segment=self.current_segment)
-                try:
-                    tmp_msg = self.segments[ms_args.seg_key][ms_args.msg_key]
-                except KeyError:
-                    tmp_msg = self.message_lookup(ms_args.seg_key, ms_args.msg_key, **ms_args.msg_kwargs)
-                    tmp_msg.message_helper = self
-                    self.segments[ms_args.seg_key][ms_args.msg_key] = tmp_msg
-                    # self.messages.append(tmp_msg)
-                tmp_instance = tmp_msg.instances.add(begin=begin, length=length, note=note)
-                # self.instances.append(tmp_instance)
-
-            elif isinstance(m, self.__class__):
-                for msg in m.messages:
-                    self.add(msg)
-
-            elif isinstance(m, ParseMessage):
-                if m.key not in self.segments[m.segment_key]:
-                    m.message_helper = self
-                    self.segments[m.segment_key][m.key] = m
-                    # self.messages.append(m)
-                for i in m:
-                    # self.instances.append(i)
-                    i.message = m
-
+            if isinstance(m, self.__class__):
+                self._merge(m)
+                last_item = m
             else:
-                raise AttributeError('Unable to determine type of object to add: %r' % m)
+                last_item = self.add(m, begin=begin, length=length, note=note, **kwargs)
+
+        return last_item
+
+    def add(self, message, begin=0, length=0, note=None, **kwargs):
+        self._caches.clear()
+        self._check_pos(begin)
+        self._check_pos(length+begin)
+        self.max_length = max(self.max_length, length)
+
+        if isinstance(message, (str, dict)):
+            ms_args = _make_ms_kwargs(message, msg_kwargs=kwargs, default_segment=self.current_segment)
+            try:
+                tmp_msg = self.segments[ms_args.seg_key][ms_args.msg_key]
+            except KeyError:
+                tmp_msg = self.message_lookup(ms_args.seg_key, ms_args.msg_key, **ms_args.msg_kwargs)
+                tmp_msg.message_helper = self
+                self.segments[ms_args.seg_key][ms_args.msg_key] = tmp_msg
+                # self.messages.append(tmp_msg)
+            tmp_msg.instances.add(begin=begin, length=length, note=note)
+            self.max_status = min(self.max_status, tmp_msg.status)
+            return tmp_msg
+
+        elif isinstance(message, self.__class__):
+            return self.extend(message)
+
+        elif isinstance(message, ParseMessage):
+            if message.key not in self.segments[message.segment_key]:
+                message.message_helper = self
+                self.segments[message.segment_key][message.key] = message
+
+            for i in message:
+                i.message = message
+            self.max_status = min(self.max_status, message.status)
+            return message
+        else:
+            raise AttributeError('Unable to determine type of object to add: %r' % message)
+
+
     __call__ = add
 
     def __bool__(self):
@@ -431,13 +452,29 @@ class ParseMessageHelper(object):
                 tmp_ret.append(tmp_info)
             return tmp_ret
 
-    def get_output(self, template_or_key=None, join=None, header=None, footer=None):
+    def get_output(self, template_or_key=None, join='\n', header=None, footer=None, combine_same=True):
         tmp_ret = []
         if header is not None:
             tmp_ret.append(header)
 
-        for i in self:
-            tmp_ret.append(i.get_str(template_or_key))
+        if template_or_key == 'seg_keys':
+            for seg_key, msgs in self.segments.items():
+                tmp_msgs = list(msgs.values())
+                tmp_msgs.sort()
+                tmp_keys = []
+                for msg in tmp_msgs:
+                    if len(msg) != 1:
+                        tmp_keys.append('%s(%s)' % (msg.key, len(msg)))
+                    else:
+                        tmp_keys.append(msg.key)
+
+                tmp_str = '%s(%s)' % (seg_key, ', '.join(tmp_keys))
+                tmp_ret.append(tmp_str)
+        else:
+            for i in self:
+                tmp_str = i.get_str(template_or_key)
+                if not combine_same or tmp_str not in tmp_ret:
+                    tmp_ret.append(tmp_str)
 
         if footer is not None:
             tmp_ret.append(footer)
@@ -448,16 +485,16 @@ class ParseMessageHelper(object):
         return tmp_ret
 
     def _merge(self, other):
-        self.add(other)
+        for msg in other.messages:
+            self.add(msg)
 
     def __add__(self, other):
-        tmp_ret = self.__class__(self.message_lookup, self.parse_str, self.segments)
-        tmp_ret.add(self)
-        tmp_ret.add(other)
+        tmp_ret = self.copy()
+        tmp_ret._merge(other)
         return tmp_ret
 
     def __iadd__(self, other):
-        self.add(other)
+        self._merge(other)
         return self
 
     def __contains__(self, item):
@@ -465,6 +502,12 @@ class ParseMessageHelper(object):
             if m.key_match(item):
                 return True
         return False
+
+    def __str__(self):
+        return self.get_output('seg_keys', join=', ')
+
+    def __repr__(self):
+        return 'ParseMessageHelper [%s] --> %s' % (self, self.max_status.name)
 
     """
     def get_str(self, recurse=True, single=True, as_str=True, join_str=',', flat=False, text_typ='short'):
@@ -520,12 +563,12 @@ class InstanceList(UserList):
         self.starts[item.begin].append(item)
         self.at.clear()
 
-    def at(self, position):
-        if not self.at:
-            for i in self.data:
-                for p in range(i.begin, i.end):
-                    self.at[p] = None
-        return position in self.at
+    # def at(self, position):
+    #     if not self.at:
+    #         for i in self.data:
+    #             for p in range(i.begin, i.end):
+    #                 self.at[p] = None
+    #     return position in self.at
 
     def copy(self, new_message=None):
         if new_message is None:
@@ -536,10 +579,10 @@ class InstanceList(UserList):
             tmp_ret.append(item.copy(new_message))
         return tmp_ret
 
-    def clear(self):
-        self.data.clear()
-        self.at.clear()
-        self.starts.clear()
+    # def clear(self):
+    #     self.data.clear()
+    #     self.at.clear()
+    #     self.starts.clear()
 
     def remove(self, position):
         tmp_kill = []
@@ -550,8 +593,8 @@ class InstanceList(UserList):
         for index in tmp_kill:
             self.data.pop(index)
 
-    def __contains__(self, item):
-        return self.at(item)
+    # def __contains__(self, item):
+    #     return self.at(item)
 
     def __iter__(self):
         self.sort()
@@ -693,9 +736,6 @@ class ParseMessage(CompareFieldMixin):
 
     def copy(self, **kwargs):
         tmp_ret = self.__class__(self.message_lookup, self.message)
-        # tmp_ret.note = self.note
-        # tmp_ret.begin = self.begin
-        # tmp_ret.length = self.length
         tmp_ret.status = self.status
         tmp_ret._field_cache = deepcopy(self._field_cache)
         tmp_ret.instances = self.instances.copy(tmp_ret)
@@ -704,6 +744,11 @@ class ParseMessage(CompareFieldMixin):
                 setattr(tmp_ret, k, i)
             except AttributeError:
                 raise AttributeError('Cant set attribute %s to %r' % (k, i))
+        return tmp_ret
+
+    def __deepcopy__(self, memodict):
+        tmp_ret = self.copy()
+        memodict[id(self)] = tmp_ret
         return tmp_ret
 
     # def _compare_(self, other):
@@ -993,6 +1038,12 @@ class ParseSegmentRec(ParseBaseRec):
         if 'messages' not in self._data:
             self._data['messages'] = {}
 
+    def copy(self):
+        tmp_kwargs = self._data.copy()
+        if 'segment' in tmp_kwargs:
+            del tmp_kwargs['segment']
+        return self.__class__(self.lookup, **tmp_kwargs)
+
     def message(self, msg_key, msg_data=None):
         if isinstance(msg_key, MsKwargs):
             msg_data = msg_key.msg_kwargs
@@ -1012,6 +1063,8 @@ class ParseSegmentRec(ParseBaseRec):
             tmp_msg = self.lookup.segments['*'].messages[msg_key].copy()
 
         else:
+            if self.lookup.locked:
+                raise MessageListLocked(msg_key)
             tmp_msg = ParseMessageRec(msg_key, segment=self)
 
         tmp_msg.update(msg_data, segment=self)
@@ -1052,16 +1105,17 @@ class MessageLookup(object):
                  references=None,
                  segments=None,
                  error_on_warning=False,
-                 error_on_message=None):
+                 error_on_message=None,
+                 locked=False):
 
+        self.locked = False
         self._defaults = dict(
             error_on_warning=error_on_warning,
             error_on_message=error_on_message or [],
-            messages=messages or [],
+            messages=messages or BASE_PARSING_MESSAGES,
             segments=segments or [],
             references=references or [],
         )
-
         self.message_cache = {}
         self.error_on_warning = error_on_warning
         self.override_status = {}
@@ -1075,6 +1129,8 @@ class MessageLookup(object):
 
         self.clear()
 
+        self.locked = locked
+
     def clear_overrides(self):
         self.set_error_on_warning(self._defaults['error_on_warning'])
         self.override_status = {'*': OverrideDict()}
@@ -1084,6 +1140,8 @@ class MessageLookup(object):
     def clear(self):
         # self.message_keys.clear()
         # self.sm_cache.clear()
+        tmp_locked = self.locked
+        self.locked = False
         self.references.clear()
         self.segments.clear()
         self.segment('*')
@@ -1092,8 +1150,11 @@ class MessageLookup(object):
             messages=deepcopy(self._defaults['messages']),
             segments=deepcopy(self._defaults['segments']))
         self.clear_overrides()
+        self.locked = tmp_locked
 
     def add(self, messages=None, segments=None, references=None):
+        tmp_lock = self.locked
+        self.locked = False
         if segments is not None:
             for item in make_list(segments, deepcopy_first=True):
                 self.segment(item)
@@ -1108,91 +1169,7 @@ class MessageLookup(object):
         
         self.message_cache.clear()
 
-    # def _split_sm(self, item, default_segment=False):
-    #     if isinstance(item, (list, tuple)):
-    #         segment, message = item
-    #     elif isinstance(item, str):
-    #         # if item in self.sm_cache:
-    #         #     return self.sm_cache[item]
-    #         if '.' in item:
-    #             segment, message = item.split('.')
-    #         else:
-    #             if item in self.segments:
-    #                 segment = item
-    #                 message = '*'
-    #             elif item in self.segments['*'].messages:
-    #                 segment = '*'
-    #                 message = item
-    #             else:
-    #                 if default_segment:
-    #                     segment = item
-    #                     message = '*'
-    #                 else:
-    #                     message = item
-    #                     segment = '*'
-    #     else:
-    #         raise AttributeError('Cannot split segment/message from %r' % item)
-    #     return segment, message
-    #
-    # def _parse_msg_args_old(self, segment, message=None):
-    #     if message is None:
-    #         if isinstance(segment, dict):
-    #             message = segment
-    #             tmp_segment, tmp_message = self._split_sm(message.pop('key'))
-    #             message['key'] = tmp_message
-    #             segment = tmp_segment
-    #         else:
-    #             segment, message = self._split_sm(segment)
-    #     return segment, message
-    #
-    # def _parse_msg_args(self, segment, message=None, seg_kwargs=None, msg_kwargs=None):
-    #     seg_kwargs = seg_kwargs or {}
-    #     msg_kwargs = msg_kwargs or {}
-    #
-    #     if message is None:
-    #         msg_key, msg_kwargs = self._split_key(segment, msg_kwargs)
-    #         seg_key, msg_key = self._split_sm(msg_key)
-    #         seg_key = msg_kwargs.get('segment', seg_key)
-    #         seg_kwargs = seg_kwargs
-    #     else:
-    #         msg_key, msg_kwargs = self._split_key(message, msg_kwargs)
-    #         seg_key, seg_kwargs = self._split_key(segment, seg_kwargs)
-    #
-    #     tmp_ret = self.ms_kwargs(
-    #         msg_key=msg_key,
-    #         msg_kwargs=msg_kwargs,
-    #         seg_key=seg_key,
-    #         seg_kwargs=seg_kwargs,
-    #     )
-    #
-    #     return tmp_ret
-    #
-    # @staticmethod
-    # def _get_key(item):
-    #     if isinstance(item, dict):
-    #         return item['key']
-    #     else:
-    #         return item
-    #
-    # @staticmethod
-    # def _make_kwargs(item):
-    #     if isinstance(item, str):
-    #         return {'key': item}
-    #     else:
-    #         return item
-    #
-    # @staticmethod
-    # def _split_key(item, kwargs=None):
-    #     if isinstance(item, dict):
-    #         try:
-    #             key = item.pop('key')
-    #         except KeyError:
-    #             raise KeyError('Error, no "key" in %r' % item)
-    #         if kwargs is not None:
-    #             item.update(kwargs)
-    #         return key, item
-    #     else:
-    #         return item, kwargs or {}
+        self.locked = tmp_lock
 
     def message(self, segment, message=None, seg_kwargs=None, **msg_kwargs):
         if isinstance(segment, self.ms_kwargs):
@@ -1208,9 +1185,12 @@ class MessageLookup(object):
             ms_kwargs = _make_ms_kwargs(segment, message='*', seg_kwargs=kwargs)
         else:
             ms_kwargs = segment
+
         try:
             tmp_ret = self.segments[ms_kwargs.seg_key]
         except KeyError:
+            if self.locked:
+                raise MessageListLocked(ms_kwargs.seg_key)
             tmp_seg = ParseSegmentRec(self, ms_kwargs)
             self.segments[ms_kwargs.seg_key] = tmp_seg
             return tmp_seg
@@ -1274,7 +1254,7 @@ class MessageLookup(object):
         # if kwargs:
         #     tmp_ret = tmp_ret.copy(**kwargs)
 
-        return tmp_ret
+        return tmp_ret.copy()
 
     def get_reference(self, ref_key):
         try:

@@ -10,10 +10,14 @@ def adv_getattr(obj, attr):
     #  getattr or getitem as needed
     if first:
         obj = getattr(obj, first)
+        #if callable(obj):
+        #    obj = obj()
 
     for is_attr, i in rest:
         if is_attr:
             obj = getattr(obj, i)
+            # if callable(obj):
+            #     obj = obj()
         else:
             obj = obj[i]
 
@@ -25,26 +29,34 @@ class CompareFieldMixin(object):
     _compare_caps_sensitive = True
     _compare_convert_to = None
 
-    def _compare_(self, other):
+    def _compare_(self, other, compare_fields=None):
+        if compare_fields is None:
+            compare_fields = self._compare_fields
+
         if self._compare_convert_to is not None:
             other = self._compare_convert_to(other)
 
-        if not isinstance(other, self.__class__):
-            raise AttributeError('Cannot compare ParsingMessages with %r' % other)
-
-        for field in self._compare_fields:
+        for field in compare_fields:
             self_field = adv_getattr(self, field)
             if isinstance(self_field, str) and not self._compare_caps_sensitive:
                 self_field = self_field.lower()
 
-            other_field = adv_getattr(other, field)
+            if isinstance(other, self.__class__):
+                other_field = adv_getattr(other, field)
+            else:
+                other_field = other
+
             if isinstance(other_field, str) and not self._compare_caps_sensitive:
                 other_field = other_field.lower()
 
-            if self_field > other_field:
-                return 1
-            elif self_field < other_field:
-                return -1
+            try:
+
+                if self_field > other_field:
+                    return 1
+                elif self_field < other_field:
+                    return -1
+            except TypeError:
+                raise TypeError('Error comparing %r with %r' % (self_field, other_field))
         return 0
 
     def __eq__(self, other):

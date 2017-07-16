@@ -1,4 +1,4 @@
-from helpers.parser_helpers import *
+from ValidationParser.parser_objects import *
 from unittest import TestCase
 
 class TestSimpleParsers(TestCase):
