@@ -1,5 +1,5 @@
 from unittest import TestCase
-from helpers.general.test_helpers import make_param_matrix, make_msg
+from helpers.general.test_helpers import make_param_matrix, make_msg, TestCaseApproxString
 
 
 class TestMakeParams(TestCase):
@@ -57,4 +57,48 @@ class MakeParams(TestCase):
 
         tmp_ret = make_param_matrix(param_list, param_format)
 
-        print(tmp_ret)
+        # print(tmp_ret)
+
+
+class TestAppproxString(TestCaseApproxString):
+    def test_good_str(self):
+        tmp_begin = 'this is'
+        tmp_end = 'of the emergency snafu'
+        tmp_test = 'this is a test of the emergency snafu'
+
+        self.assertApproxString(tmp_test, tmp_begin, tmp_end, max_skip=10, min_skip=3)
+
+    def test_bad_str(self):
+        tmp_begin = 'this is'
+        tmp_end = 'of the emergency snafu'
+        tmp_test = 'not this is a test of the emergency snafu'
+
+        with self.assertRaises(AssertionError):
+            self.assertApproxString(tmp_test, tmp_begin, tmp_end)
+
+    def test_overlap(self):
+        tmp_begin = 'this is a test of '
+        tmp_end = 'of the emergency snafu'
+        tmp_test = 'this is a test of the emergency snafu'
+
+        with self.assertRaises(AssertionError):
+            self.assertApproxString(tmp_test, tmp_begin, tmp_end)
+
+
+    def test_skip_too_long(self):
+        tmp_begin = 'this is a test of '
+        tmp_end = 'of the emergency snafu'
+        tmp_test = 'this is a test of the emergency snafu'
+
+        with self.assertRaises(AssertionError):
+            self.assertApproxString(tmp_test, tmp_begin, tmp_end, max_skip=4)
+
+    def test_skip_too_short(self):
+
+        tmp_begin = 'this is a test of '
+        tmp_end = 'of the emergency snafu'
+        tmp_test = 'this is a test of the emergency snafu'
+
+        with self.assertRaises(AssertionError):
+            self.assertApproxString(tmp_test, tmp_begin, tmp_end, min_skip=4)
+

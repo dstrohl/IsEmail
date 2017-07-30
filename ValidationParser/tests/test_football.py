@@ -2,23 +2,8 @@ import unittest
 
 from ValidationParser.exceptions import ParsingError, MessageListLocked
 from ValidationParser.footballs import ParseResultFootball, ParsingObj
-# from helpers.test_helpers import *
 from ValidationParser.parser_messages import MESSAGE_LOOKUP
 from helpers.general.test_helpers import TestCaseCompare
-
-#
-# def _test_name(l1, l2=None, l3=None, suffix=None):
-#     tmp_ret = l1
-#     if l2 is not None:
-#         tmp_ret += '-'
-#         tmp_ret += RETURN_OBJ_L2[l2][0]
-#     if l3 is not None:
-#         tmp_ret += '-'
-#         tmp_ret += RETURN_OBJ_L3[l3][0]
-#     if suffix is not None:
-#         tmp_ret += '-'
-#         tmp_ret += suffix
-#     return tmp_ret
 
 
 class TestParsingObj(unittest.TestCase):
@@ -62,7 +47,7 @@ class TestParsingObj(unittest.TestCase):
     def test_slice(self):
         ei = self.make_ei()
         self.assertEqual(ei.slice(0, 2), 'ab')
-        self.assertEqual(ei.slice(0,10), 'abcde"fghi')
+        self.assertEqual(ei.slice(0, 10), 'abcde"fghi')
         self.assertEqual(ei.slice(19), 'p')
         self.assertEqual(ei.slice(13, -2), '(lm)n')
 
@@ -146,17 +131,17 @@ class TestParsingObj(unittest.TestCase):
             ('in_1-x-bad', 'abcghi', {'begin': 3, 'look_for': 'd'}, 0),
             ('in_1-x-good', 'abcdddefghi', {'begin': 3, 'look_for': 'd'}, 3),
             ('in_m-max-good', 'abcdddefghi', {'begin': 3, 'look_for': 'def', 'max_count': 2}, 2),
-            ('in_m-max-nocaps-good', 'abcDDeDfghi', {'begin': 3, 'look_for': 'def', 'max_count': 2, 'caps_sensitive': False}, 5),
+            ('in_m-max-nocaps-good', 'abcDDeDfghi', {'begin': 3, 'look_for': 'def', 'max_count': 2, 'caps_sensitive': False}, 2),
             ('in_m-min-good', 'abcdddefghi', {'begin': 3, 'look_for': 'def', 'min_count': 2}, 5),
             ('in_m-min-under', 'abdfeghi', {'begin': 3, 'look_for': 'def', 'min_count': 3}, 0),
-            ('in_m-mm-good', 'abcdddefghi', {'begin': 3, 'look_for': 'def', 'min_count': 2, 'max_count': 3}, 5),
+            ('in_m-mm-good', 'abcdddefghi', {'begin': 3, 'look_for': 'def', 'min_count': 2, 'max_count': 3}, 3),
             ('in_m-mm-under', 'abcdefdghi', {'begin': 3, 'look_for': 'def', 'min_count': 5, 'max_count': 10}, 0),
             ('in_m-x-bad', 'abdghijkl', {'begin': 3, 'look_for': 'def'}, 0),
             ('in_m-x-good', 'abcdddefghi', {'begin': 3, 'look_for': 'def'}, 5),
         ]
 
         LIMIT_TO = None
-        # LIMIT_TO = 'ex_m-max-good'
+        # LIMIT_TO = 'ex_1-min-good'
 
         if LIMIT_TO is not None:
             with self.subTest('LIMITED TEST'):
@@ -198,10 +183,10 @@ class TestParseFootball(TestCaseCompare):
         fb = ParseResultFootball(po, segment, begin)
         if max_length:
             fb._max_length = max_length
-        if length:
-            fb.set_length(length)
         if msgs:
             fb(*msgs)
+        if length:
+            fb.set_length(length)
         return fb
 
     @staticmethod
@@ -213,53 +198,53 @@ class TestParseFootball(TestCaseCompare):
 
     def test_init_options(self):
         f = self.fb()
-        self.assertEquals(f.length, 0)
+        self.assertEqual(f.length, 0)
 
         f += 10
-        self.assertEquals(f.length, 10)
+        self.assertEqual(f.length, 10)
 
         f -= 5
-        self.assertEquals(f.length, 5)
+        self.assertEqual(f.length, 5)
 
     def test_math(self):
         f = self.fb()
         f2 = self.fb()
 
-        self.assertEquals(f.length, 0)
+        self.assertEqual(f.length, 0)
 
         f += 10
-        self.assertEquals(f.length, 10)
+        self.assertEqual(f.length, 10)
 
         f2 += 10
         f2 += f
-        self.assertEquals(f2.length, 20)
+        self.assertEqual(f2.length, 20)
 
     def test_math_2(self):
         f = self.fb()
 
-        self.assertEquals(f + 2, 2)
-        self.assertEquals(2 + f, 2)
+        self.assertEqual(f + 2, 2)
+        self.assertEqual(2 + f, 2)
 
         f += 10
-        self.assertEquals(f + 2, 12)
-        self.assertEquals(2 + f, 12)
+        self.assertEqual(f + 2, 12)
+        self.assertEqual(2 + f, 12)
 
         f2 = self.fb()
         f2 += 5
 
-        self.assertEquals(f + f2, 15)
-        self.assertEquals(f2 + f, 15)
+        self.assertEqual(f + f2, 15)
+        self.assertEqual(f2 + f, 15)
 
     def test_init_length(self):
         f = self.fb(length=10)
 
-        self.assertEquals(f.length, 10)
+        self.assertEqual(f.length, 10)
 
     def test_init_length_full(self):
 
         f = self.fb(length=13, begin=20, segment='hello')
 
-        self.assertEquals(f.length, 13)
+        self.assertEqual(f.length, 13)
 
     def test_compare(self):
 
@@ -320,7 +305,7 @@ class TestParseFootball(TestCaseCompare):
             ('O-20-10-1', self.fb('VALID', length=10, max_length=20), 320101),
         ]
 
-        # self.assertComparisons(TESTS)  # , limit='E-0-0-0 > E-0-0-2')
+        self.assertComparisons(TESTS)  # , limit='E-0-0-0 > E-0-0-2')
 
     def test_comp_with_int(self):
         f = self.fb(length=10)
@@ -375,10 +360,10 @@ class TestParseFootball(TestCaseCompare):
     def test_add_length_set(self):
         per = self.fb()
         per += 3
-        self.assertEquals(per.l, 3)
+        self.assertEqual(per.l, 3)
         per.add('VALID').set_length(1)
 
-        self.assertEquals(per.l, 1)
+        self.assertEqual(per.l, 1)
 
     def test_add_football(self):
         per = self.fb()
@@ -389,15 +374,15 @@ class TestParseFootball(TestCaseCompare):
 
         per.add(per2)
 
-        self.assertEquals(per.l, 4)
+        self.assertEqual(per.l, 4)
 
     def test_add_length_add(self):
         per = self.fb()
         per += 1
-        self.assertEquals(per.l, 1)
+        self.assertEqual(per.l, 1)
         per.add('VALID', 1, msg_length=1)
 
-        self.assertEquals(per.l, 2)
+        self.assertEqual(per.l, 2)
 
     def test_add_ok_result(self):
         per = self.fb(parse_str='test_email_in', begin=1)
@@ -426,15 +411,15 @@ class TestParseFootball(TestCaseCompare):
         per = self.fb(parse_str='test_email_in')
 
         # self.assertTrue(per)
-        # self.assertEquals(len(per), 0)
+        # self.assertEqual(len(per), 0)
 
         per.add('VALID', 1, msg_begin=1, msg_length=1)
-        self.assertEquals(len(per), 1)
+        self.assertEqual(len(per), 1)
         self.assertFalse(per.error)
 
         per.add('WARNING', msg_begin=1, msg_length=1)
         # self.assertTrue(per)
-        self.assertEquals(len(per), 2)
+        self.assertEqual(len(per), 2)
         self.assertFalse(per.error)
 
         per.add('ERROR', msg_begin=1, msg_length=1)
@@ -480,7 +465,7 @@ class TestParseFootball(TestCaseCompare):
     # def test_clear(self):
     #     per = self.fb('test_email_in')
     #
-    #     self.assertEquals(len(per), 0)
+    #     self.assertEqual(len(per), 0)
     #     per += 10
     #
     #     per.add(msg=('VALID', 1, 1))
@@ -488,12 +473,12 @@ class TestParseFootball(TestCaseCompare):
     #     per.add(msg='DEPREC_QTEXT', raise_on_error=False)
     #     per.add(msg='DNSWARN_NO_MX_RECORD')
     #
-    #     self.assertEquals(len(per), 4)
-    #     self.assertEquals(per.l, 10)
+    #     self.assertEqual(len(per), 4)
+    #     self.assertEqual(per.l, 10)
     #     per.clear()
     #
-    #     self.assertEquals(len(per), 0)
-    #     self.assertEquals(per.l, 0)
+    #     self.assertEqual(len(per), 0)
+    #     self.assertEqual(per.l, 0)
 
     def test_remove(self):
         per = self.fb()
@@ -505,239 +490,47 @@ class TestParseFootball(TestCaseCompare):
         per.add('DEPRECATED', raise_on_error=False)
         per.add('WARNING')
 
-        self.assertEquals(len(per), 4, repr(per))
-        self.assertEquals(per.l, 10)
+        self.assertEqual(len(per), 4, repr(per))
+        self.assertEqual(per.l, 10)
 
         per.remove('VALID')
-        self.assertEquals(len(per), 3)
+        self.assertEqual(len(per), 3)
 
         per.remove('*.WARNING')
-        self.assertEquals(len(per), 1)
+        self.assertEqual(len(per), 1)
 
         per.add('VALID', msg_begin=1, msg_length=1)
         per.add({'key': 'WARNING'}, msg_begin=1, msg_length=1)
         per.add('DEPRECATED', raise_on_error=False)
         per.add('TOO_LONG')
 
-        self.assertEquals(len(per), 5, repr(per))
+        self.assertEqual(len(per), 5, repr(per))
 
         per.remove('WARNING')
-        self.assertEquals(len(per), 4)
+        self.assertEqual(len(per), 4)
 
     def test_max(self):
         per_ok = self.fb('VALID', length=10)
         per_warn = self.fb('WARNING', length=10)
         per_error = self.fb('ERROR', length=10)
 
-        self.assertEqual(per_ok, per_ok.max(per_ok))
-        self.assertEqual(per_warn, per_ok.max(per_warn))
-        self.assertEqual(per_error, per_ok.max(per_error))
+        with self.subTest('1'):
+            self.assertEqual(per_ok, per_ok.max(per_ok))
+        with self.subTest('2'):
+            self.assertEqual(per_ok, per_ok.max(per_warn))
+        with self.subTest('3'):
+            self.assertEqual(per_ok, per_ok.max(per_error))
 
-        self.assertEqual(per_warn, per_warn.max(per_ok))
-        self.assertEqual(per_warn, per_warn.max(per_warn))
-        self.assertEqual(per_error, per_warn.max(per_error))
+        with self.subTest('4'):
+            self.assertEqual(per_ok, per_warn.max(per_ok))
+        with self.subTest('5'):
+            self.assertEqual(per_warn, per_warn.max(per_warn))
+        with self.subTest('6'):
+            self.assertEqual(per_warn, per_warn.max(per_error))
 
-        self.assertEqual(per_error, per_error.max(per_ok))
-        self.assertEqual(per_error, per_error.max(per_warn))
-        self.assertEqual(per_error, per_error.max(per_error))
-
-
-    # def test_max_first_good_second_bad(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_1 += 10
-    #
-    #     self.assertEqual(per_1.l, 10)
-    #     self.assertEqual(per_2.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p1')
-    #
-    # def test_max_second_good_first_bad(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #
-    #     self.assertEqual(per_2.l, 10)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p2')
-    #
-    # def test_max_both_good_equal(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #
-    #     self.assertEqual(per_2.l, 10)
-    #     self.assertEqual(per_1.l, 10)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p1')
-    #
-    # def test_max_both_good_one_longer(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 5
-    #
-    #     self.assertEqual(per_2.l, 10)
-    #     self.assertEqual(per_1.l, 5)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p2')
-    #
-    # def test_max_both_good_equal_different_codes(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #     per_1('WARNING')
-    #     per_2('DEPRECATED')
-    #
-    #     self.assertEqual(per_2.l, 10)
-    #     self.assertEqual(per_1.l, 10)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p2')
-    #
-    # def test_max_both_good_equal_different_codes_2(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #     per_2('ERROR')
-    #     per_1('TOO_SHORT')
-    #
-    #     self.assertEqual(per_2.l, 10)
-    #     self.assertEqual(per_1.l, 10)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 10)
-    #     self.assertEqual(per_ret.history, 'p1')
-    #
-    # def test_max_both_bad_different_codes(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #     per_2('ERROR')
-    #     per_1('TOO_SHORT')
-    #
-    #     self.assertEqual(per_2.l, 0)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 0)
-    #     self.assertEqual(per_ret.history, 'p1')
-    #
-    #
-    # def test_max_both_bad_different_codes_2(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #     per_1('ERROR')
-    #     per_2('TOO_LONG')
-    #
-    #     self.assertEqual(per_2.l, 0)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 0)
-    #     self.assertEqual(per_ret.history, 'p2')
-    #
-    # def test_max_both_bad_different_max_lengths(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 5
-    #     per_1('ERROR')
-    #     per_2('ERROR')
-    #
-    #     self.assertEqual(per_2.l, 0)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 0)
-    #     self.assertEqual(per_ret.history, 'p2')
-    #
-    # def test_max_both_bad_different_max_lengths_2(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_1 += 10
-    #     per_2 += 5
-    #     per_1('ERROR')
-    #     per_2('ERROR')
-    #
-    #     self.assertEqual(per_2.l, 0)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 0)
-    #     self.assertEqual(per_ret.history, 'p1')
-    #
-    # def test_max_both_equal(self):
-    #     per_1 = self.fb('test_email_in')
-    #     per_1.set_history('p1', 0)
-    #     per_2 = self.fb('test_email_in')
-    #     per_2.set_history('p2', 0)
-    #
-    #     per_2 += 10
-    #     per_1 += 10
-    #     per_1('ERROR')
-    #     per_2('ERROR')
-    #
-    #     self.assertEqual(per_2.l, 0)
-    #     self.assertEqual(per_1.l, 0)
-    #
-    #     per_ret = per_1.max(per_2)
-    #
-    #     self.assertEqual(per_ret.l, 0)
-    #     self.assertEqual(per_ret.history, 'p1')
+        with self.subTest('7'):
+            self.assertEqual(per_ok, per_error.max(per_ok))
+        with self.subTest('8'):
+            self.assertEqual(per_warn, per_error.max(per_warn))
+        with self.subTest('9'):
+            self.assertEqual(per_error, per_error.max(per_error))

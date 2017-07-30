@@ -53,6 +53,7 @@ BASE_PARSING_MESSAGES = [
     'ABOVE_RANGE',
     'BELOW_RANGE',
     'ERROR',
+    {'key': 'UNPARSED_CONTENT', 'name': 'Un-parsed content remaining'},
     {'key': 'DEPRECATED', 'name': 'Deprecated Content', 'status': RESULT_CODES.WARNING},
     {'key': 'POTENTIAL_PROBLEM', 'status': RESULT_CODES.WARNING},
     {'key': 'WARNING', 'status': RESULT_CODES.WARNING},
@@ -153,6 +154,7 @@ def _make_ms_kwargs(segment, message=None, *, msg_kwargs=None, seg_kwargs=None,
     return tmp_ret
 
 
+# Helper object used in football
 class ParseMessageHelper(CompareFieldMixin):
     """
     PMH = ParseMessageHelper(message_lookup, parse_string, segment_definition or key)
@@ -243,6 +245,7 @@ class ParseMessageHelper(CompareFieldMixin):
         # self.parent = None
 
         self.max_status = RESULT_CODES.UNKNOWN
+        self.max_msg = None
         self.max_length = 0
 
     def copy(self):
@@ -295,6 +298,10 @@ class ParseMessageHelper(CompareFieldMixin):
                 # self.messages.append(tmp_msg)
             tmp_msg.instances.add(begin=begin, length=length, note=note)
             self.max_status = min(self.max_status, tmp_msg.status)
+            if self.max_msg is None:
+                self.max_msg = tmp_msg
+            else:
+                self.max_msg = max(self.max_msg, tmp_msg)
             return tmp_msg
 
         elif isinstance(message, self.__class__):
@@ -543,6 +550,7 @@ class ParseMessageHelper(CompareFieldMixin):
     """
 
 
+# List of instance Objects, used by ParseMessage
 class InstanceList(UserList):
     def __init__(self, message, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -602,6 +610,7 @@ class InstanceList(UserList):
             yield i
 
 
+# Message object returned by lookup, passed to MessageHelper
 class ParseMessage(CompareFieldMixin):
     """
     DEFAULT_MESSAGE = {
@@ -799,6 +808,7 @@ class ParseMessage(CompareFieldMixin):
             yield i
 
 
+# An instance of a message, used by ParseMessage
 class ParseInstance(CompareFieldMixin):
     _string_formats = {
         'name': '{message.name}',
@@ -909,6 +919,7 @@ class ParseInstance(CompareFieldMixin):
         return self.message.status != RESULT_CODES.ERROR
 
 
+# Base record class used by lookup objects
 class ParseBaseRec(object):
     # rw_fields = ()
     _default_data = {}
@@ -944,7 +955,20 @@ class ParseBaseRec(object):
             return
 
         if key == 'references':
-            value = make_list(value, deepcopy_first=True)
+            if 'references' not in self._data:
+                self._data['references'] = []
+            if self.lookup is None:
+                self._ref_cache = value
+            else:
+                self.lookup.add(references=value)
+            for ref in  make_list(value, deepcopy_first=True):
+                if isinstance(ref, str):
+                    self._data['references'].append(ref)
+                elif isinstance(ref, dict):
+                    self._data['references'].append(ref['key'])
+                else:
+                    raise TypeError('References item is not of a valid type: %r' % ref)
+            return
 
         elif key == 'messages':
             value = deepcopy(value)
@@ -989,6 +1013,7 @@ class ParseBaseRec(object):
         return self.key
 
 
+# Message Record used by MessageLookup
 class ParseMessageRec(ParseBaseRec):
     # rw_fields = ('status',)
     _default_data = {
@@ -1004,6 +1029,8 @@ class ParseMessageRec(ParseBaseRec):
         if isinstance(key, MsKwargs):
             kwargs = kwargs or key.msg_kwargs
             key = key.msg_key
+        self.lookup = None
+        self._ref_cache = None
         super().__init__(key, **kwargs)
         if 'references' not in self._data:
             self._data['references'] = []
@@ -1011,11 +1038,15 @@ class ParseMessageRec(ParseBaseRec):
     def _set(self, key, value, force=False):
         if key == 'segment':
             self._data['segment'] = value
+            self.lookup = value.lookup
             value.messages[self._data['key']] = self
+            if self._ref_cache is not None:
+                self.lookup.add(references=self._ref_cache)
         else:
             super(ParseMessageRec, self)._set(key, value, force=force)
 
 
+# Segment Record used by MessageLookup
 class ParseSegmentRec(ParseBaseRec):
     # rw_fields = ('status', )
     _default_data = {
@@ -1072,6 +1103,7 @@ class ParseSegmentRec(ParseBaseRec):
         return tmp_msg
 
 
+# Reference Record used by MessageLookup
 class ParseRefRec(object):
     def __init__(self, key, **kwargs):
         self.key = key
@@ -1082,6 +1114,10 @@ class ParseRefRec(object):
 
     def __repr__(self):
         return self.name
+
+    def update(self, **kwargs):
+        for k, i in kwargs.items():
+            setattr(self, k, i)
 
     def reference_str(self, detailed=False):
         if detailed:
@@ -1097,17 +1133,19 @@ class ParseRefRec(object):
                               description=self.description)
 
 
+# Stores all messages, used for lookups
 class MessageLookup(object):
     ms_kwargs = namedtuple('ms_kwargs', ('msg_key', 'msg_kwargs', 'seg_key', 'seg_kwargs'))
 
     def __init__(self,
+                 name,
                  messages=None,
                  references=None,
                  segments=None,
                  error_on_warning=False,
                  error_on_message=None,
                  locked=False):
-
+        self.name = name
         self.locked = False
         self._defaults = dict(
             error_on_warning=error_on_warning,
@@ -1201,8 +1239,12 @@ class MessageLookup(object):
             return tmp_ret
 
     def add_reference(self, key, **kwargs):
-        tmp_ret = ParseRefRec(key, **kwargs)
-        self.references[key] = tmp_ret
+        if key in self.references:
+            tmp_ret = self.references[key]
+            tmp_ret.update(**kwargs)
+        else:
+            tmp_ret = ParseRefRec(key, **kwargs)
+            self.references[key] = tmp_ret
         return tmp_ret
 
     def add_error_on_message(self, *overrides, set_to=RESULT_CODES.ERROR):
@@ -1290,4 +1332,5 @@ class MessageLookup(object):
         return len(list(self.iter_messages()))
     __len__ = len
 
-MESSAGE_LOOKUP = MessageLookup(messages=BASE_PARSING_MESSAGES)
+
+MESSAGE_LOOKUP = MessageLookup('base', messages=BASE_PARSING_MESSAGES)

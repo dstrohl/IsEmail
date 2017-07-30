@@ -1,6 +1,46 @@
 from unittest import TestCase
 
 
+class TestCaseApproxString(TestCase):
+    def assertApproxString(self, returned, begin, end, max_skip=None, min_skip=None, msg=None):
+        returned = str(returned)
+        begin = str(begin)
+        end = str(end)
+        len_begin = len(begin)
+        len_end = len(end)
+        len_exp = len(returned)
+        len_skipped = len_exp - len_begin - len_end
+        if len_begin + len_end > len_exp:
+            tmp_msg = 'overlapping begin and end string'
+            if msg:
+                tmp_msg += '\n' + str(msg)
+            self.fail(tmp_msg)
+
+        # print('Skipped: %r' % returned[len_begin:-len_end])
+
+        if max_skip is not None and len_exp - len_begin - len_end > max_skip:
+            tmp_msg = 'Too many skip chars: %r' % returned[len_begin:-len_end]
+            if msg:
+                tmp_msg += '\n' + str(msg)
+            self.fail(tmp_msg)
+
+        if min_skip is not None and len_exp - len_begin - len_end < min_skip:
+            tmp_msg = 'Too few skip chars: %r' % returned[len_begin:-len_end]
+            if msg:
+                tmp_msg += '\n' + str(msg)
+            self.fail(tmp_msg)
+
+        has_begin = returned.startswith(begin)
+        has_end = returned.endswith(end)
+
+        if not (has_begin and has_end):
+            print(str(len_skipped))
+            tmp_exp = '%s%s%s' % (begin, ''.ljust(len_skipped, '*'), end)
+            tmp_msg = '\n\nExpected: %r\nReturned: %r' % (tmp_exp, returned)
+            if msg:
+                tmp_msg += '\n\n' + str(msg)
+            self.fail(tmp_msg)
+
 
 def make_msg(expected, returned):
     tmp_ret = ['','']

@@ -116,7 +116,7 @@ def make_char_str(*chars_in):
     return ''.join(tmp_ret)
 
 
-def make_list(obj_in, copy_first=False, deepcopy_first=False):
+def make_list(obj_in, copy_first=False, deepcopy_first=False, force_list=False):
     if obj_in is None:
         return []
     if isinstance(obj_in, str):
@@ -126,12 +126,24 @@ def make_list(obj_in, copy_first=False, deepcopy_first=False):
         obj_in = copy(obj_in)
     elif deepcopy_first:
         obj_in = deepcopy(obj_in)
+    if force_list:
+        if isinstance(obj_in, list):
+            return obj_in
+        if hasattr(obj_in, '__iter__'):
+            return list(obj_in)
+        return [obj_in]
+    else:
+        if isinstance(obj_in, (list, tuple)):
+            return obj_in
+        if hasattr(obj_in, '__iter__'):
+            return obj_in
+        return [obj_in]
 
-    if isinstance(obj_in, (list, tuple)):
+
+def copy_none(obj_in):
+    if obj_in is None:
         return obj_in
-    if hasattr(obj_in, '__iter__'):
-        return obj_in
-    return [obj_in]
+    return copy(obj_in)
 
 
 class UnSet(object):

@@ -1,57 +1,3 @@
-from helpers.parser_helpers import *
-
-
-# **********************************************************************************
-# <editor-fold desc="  STRING CONSTANTS  ">
-# **********************************************************************************
-
-"""
-TWO_DIGIT = '12'
-ADDR_LIT_IPV4 = '0123456789.'
-ADDR_LIT_IPV6 = make_char_str(HEXDIG, ADDR_LIT_IPV4, COLON)
-"""
-
-
-# **********************************************************************************
-# </editor-fold>
-# **********************************************************************************
-
-
-class three_digit(PHBaseChar):
-    look_for = DIGIT
-    max_char_count = 3
-
-
-class snum(PHBase):
-    def _parse(self, parse_obj, position, **kwargs):
-        tmp_ret = three_digit(parse_obj, position)
-        if tmp_ret:
-            tmp_str = parse_obj.mid(position, tmp_ret.l)
-
-            tmp_digit = int(tmp_str)
-            if tmp_digit > 255:
-                return parse_obj.fb(position)
-
-        return tmp_ret
-
-
-@email_parser(error_text=SNUM_ERRORS)
-def snum(email_info, position):
-    """
-            Snum           = 1*3DIGIT
-                          ; representing a decimal integer
-                          ; value in the range 0 through 255
-    """
-    tmp_ret = three_digit(email_info, position)
-    if tmp_ret:
-        tmp_str = email_info.mid(position, tmp_ret.l)
-
-        tmp_digit = int(tmp_str)
-        if tmp_digit > 255:
-            return email_info.fb(position)
-
-    return tmp_ret
-
 
 '''
 
@@ -309,3 +255,5 @@ def ipv6v4_comp(email_info, position):
         # email_info.add_note_trace('Segment count: %s + %s, passing' % (tmp_pre_count, tmp_post_count))
         tmp_ret.remove('RFC5322_IPV4_ADDR')
         return tmp_ret
+
+'''

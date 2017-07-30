@@ -281,7 +281,7 @@ class TestMesageRecs(TestCase):
 class TestMessageObject(TestCaseCompare):
     maxDiff = None
 
-    ML = MessageLookup(messages=TEST_MESSAGES, references=TEST_REFERENCES, segments=TEST_SEGMENTS)
+    ML = MessageLookup('test', messages=TEST_MESSAGES, references=TEST_REFERENCES, segments=TEST_SEGMENTS)
     ML.add(messages=BASE_PARSING_MESSAGES)
 
     def test_strings(self):
@@ -652,7 +652,6 @@ class TestMessageHandler(TestCaseCompare):
         with self.subTest():
             self.assertFalse(pmh.at('test_msg_2', 8))
 
-
     def test_combine_helpers(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
         pmh('test_msg_1', 9, 2)
@@ -701,7 +700,6 @@ class TestMessageHandler(TestCaseCompare):
         tmp_ret = pmh_3.keys()
         self.assertEqual(exp_ret, tmp_ret)
 
-
     def test_remove_by_long_key(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
         pmh('test_msg_1', 9, 2)
@@ -724,7 +722,6 @@ class TestMessageHandler(TestCaseCompare):
         tmp_ret = pmh.keys()
 
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
-
 
     def test_remove_by_short_key(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
@@ -749,7 +746,6 @@ class TestMessageHandler(TestCaseCompare):
 
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
 
-
     def test_remove_by_star_msg(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
         pmh('test_msg_1', 9, 2)
@@ -772,7 +768,6 @@ class TestMessageHandler(TestCaseCompare):
         tmp_ret = pmh.keys()
 
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
-
 
     def test_remove_by_seg_star(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
@@ -799,7 +794,6 @@ class TestMessageHandler(TestCaseCompare):
 
         with self.assertRaises(KeyError):
             pmh.remove('test_seg_2.*')
-
 
     def test_remove_by_msg_pos(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
@@ -848,7 +842,6 @@ class TestMessageHandler(TestCaseCompare):
         exp_ret = ['test_msg_1', 'test_msg_2']
         tmp_ret = pmh.keys(inc_segment_key=False)
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
-
 
     def test_show_info_normal(self):
         pmh = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
@@ -985,16 +978,10 @@ class TestMessageHandler(TestCaseCompare):
         self.assertEqual(len(pmh), 4)
         self.assertEqual(exp_ret, tmp_ret, make_msg(exp_ret, tmp_ret))
 
-
     def test_copy(self):
         pmh_1 = ParseMessageHelper(MESSAGE_LOOKUP, 'this_is_a_test', 'test_seg_1')
 
-        print('step 1, #1', repr(pmh_1))
-
         pmh_1('WARNING')
-
-        print('step 2, #1', repr(pmh_1))
-
 
         self.assertEqual(len(pmh_1), 1)
 
@@ -1002,8 +989,6 @@ class TestMessageHandler(TestCaseCompare):
 
         self.assertTrue(pmh_1)
         self.assertTrue(pmh_2)
-        print('step 3, #1', repr(pmh_1))
-        print('step 3, #2', repr(pmh_2))
 
         self.assertEqual(len(pmh_1), 1)
         self.assertEqual(len(pmh_2), 1)
@@ -1013,9 +998,6 @@ class TestMessageHandler(TestCaseCompare):
         self.assertTrue(pmh_1)
         self.assertTrue(pmh_2)
 
-        print('step 4, #1', repr(pmh_1))
-        print('step 4, #2', repr(pmh_2))
-
         self.assertEqual(len(pmh_1), 2)
         self.assertEqual(len(pmh_2), 1)
 
@@ -1023,9 +1005,6 @@ class TestMessageHandler(TestCaseCompare):
 
         self.assertTrue(pmh_1)
         self.assertFalse(pmh_2)
-
-        print('step 5, #1', repr(pmh_1))
-        print('step 5, #2', repr(pmh_2))
 
         self.assertEqual(len(pmh_1), 2)
         self.assertEqual(len(pmh_2), 2, repr(pmh_2))

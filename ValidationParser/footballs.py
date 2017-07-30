@@ -94,7 +94,7 @@ class ParseResultFootball(CompareFieldMixin):
 
     _compare_fields = ('max_status', '_max_length', '_length', '_len_')
 
-    def __init__(self, parse_obj, segment, begin):
+    def __init__(self, parse_obj, segment, begin, is_history=False):
         """
         :param parse_obj:
         :param stage:
@@ -106,10 +106,14 @@ class ParseResultFootball(CompareFieldMixin):
         self._max_length = 0
         self._length = 0
         self.segment = segment
-        self._history = HistoryHelper(segment, begin=begin, from_string=parse_obj.parse_str)
+        if is_history:
+            self._history = HistoryHelper(segment, begin=begin, from_string=parse_obj.parse_str)
+        else:
+            self._history = None
         self._messages = ParseMessageHelper(parse_obj.message_lookup, parse_obj.parse_str, segment)
         self._raise_on_error = self.parse_obj.raise_on_error
         self.error = False
+        self.data = {}
 
     def set_length(self, length):
         self._max_length = max(length, self._max_length)
@@ -120,7 +124,10 @@ class ParseResultFootball(CompareFieldMixin):
         tmp_ret._length = self._length
         tmp_ret._max_length = self._max_length
         tmp_ret._messages = self._messages.copy()
-        tmp_ret._history = self._history.copy()
+        if self._history is not None:
+            tmp_ret._history = self._history.copy()
+        else:
+            tmp_ret._history = None
         tmp_ret.error = self.error
         # tmp_ret._history = self._history.clean(str(self.email_obj))
         return tmp_ret
@@ -129,20 +136,25 @@ class ParseResultFootball(CompareFieldMixin):
     # def set_as_element(self):
     #     self._history.name = self.stage
 
-    def set_history(self, stage=None, begin=None, length=None):
-        if stage is not None:
-            self._history.name = stage or self.segment
-        if begin is not None:
-            self._history.begin = begin
-        if length is not None:
-            self._history.length = length
+    def set_done(self, set_history=False, pass_msg=None, fail_msg=None):
+        if set_history:
+            self._history.name = self.segment
+            self._history.begin = self.begin
+            self._history.length = self.length
+        if pass_msg and self:
+            self(pass_msg)
+        if fail_msg and not self:
+            self(fail_msg)
 
     def get_history(self, depth=-1):
         return self._history.as_string(depth=depth)
 
     @property
     def history(self):
-        return str(self._history)
+        if self._history is not None:
+            return str(self._history)
+        else:
+            return 'No History'
 
     @property
     def l(self):
@@ -221,7 +233,11 @@ class ParseResultFootball(CompareFieldMixin):
             # self._max_length = max(self._max_length, other._max_length)
             self._messages(other._messages)
             # self._set_error(other.error)
-            self._history.append(other._history)
+            if self._history is None and other._history is not None:
+                    self._history = HistoryHelper('', begin=self.begin, from_string=self.parse_obj.parse_str)
+                    self._history.append(other._history)
+            elif other._history is not None:
+                self._history.append(other._history)
             self.error = not bool(self._messages)
         else:
             raise AttributeError('Cannot Merge, Not Football instance')
@@ -235,10 +251,14 @@ class ParseResultFootball(CompareFieldMixin):
             length = self.length
         # self.is_finished = False
         tmp_msg = self._messages(msg, begin=begin, length=length)
+        if self.max_status == RESULT_CODES.ERROR:
+            self.set_length(0)
+
         if not tmp_msg:
             self.error = True
             if raise_on_error:
                 raise ParsingError(results=self)
+
         return self
 
     def __call__(self, *args,
@@ -275,47 +295,17 @@ class ParseResultFootball(CompareFieldMixin):
         return self
     add = __call__
 
-    def _compare_(self, other):
+    def _compare_(self, other, compare_fields=None):
         if isinstance(other, int):
             return super()._compare_(other, ('_max_length',))
         else:
             return super()._compare_(other)
 
     def max(self, other):
-        if self <= other:
+        if self >= other:
             return self
         else:
             return other
-        # elif self > other:
-        #     return
-        #     return other
-        # if self and not other:
-        #     return self
-        #
-        # elif other and not self:
-        #     return other
-        #
-        # elif self and other:
-        #     if self > other:
-        #         return self
-        #     elif other > self:
-        #         return other
-        #     else:
-        #         if self.max_diag_value >= other.max_diag_value:
-        #             return self
-        #         else:
-        #             return other
-        #
-        # else:  # neither self nor other
-        #     if self._max_length > other._max_length:
-        #         return self
-        #     elif other._max_length > self._max_length:
-        #         return other
-        #     else:
-        #         if self.max_diag_value >= other.max_diag_value:
-        #             return self
-        #         else:
-        #             return other
 
     def __contains__(self, item):
         return item in self._messages
@@ -373,7 +363,7 @@ class ParsingObj(object):
         if message_lookup is not None:
             self.message_lookup = message_lookup
         elif msg_lookup_kwargs:
-            self.message_lookup = MessageLookup(**msg_lookup_kwargs)
+            self.message_lookup = MessageLookup(parse_str, **msg_lookup_kwargs)
         else:
             self.message_lookup = MESSAGE_LOOKUP
         self.flags = FlagHelper()
@@ -383,7 +373,6 @@ class ParsingObj(object):
         self.parse_str = None
         self.parse_str_len = None
         self.trace = None
-        self.stage = None
         self.full_stage = None
 
         if parse_str is not None:
@@ -393,11 +382,18 @@ class ParsingObj(object):
         self.parse_str_len = len(parse_str)
         self.parse_str = parse_str
         self.trace = ParsingTracer(self, self.trace_level)
-        self.stage = self.trace.get_stage
         self.full_stage = self.trace.get_full_stage
+
+    @property
+    def stage(self):
+        return self.trace.get_stage
 
     def __getitem__(self, item):
         return self.parse_str[item]
+
+    @property
+    def trace_str(self):
+        return str(self.trace)
 
     def begin_stage(self, stage_name, position, **kwargs):
         self.trace.add.begin(stage_name=stage_name, position=position, **kwargs)
@@ -414,8 +410,8 @@ class ParsingObj(object):
     def is_last(self, position):
         return int(position) == self.parse_str_len
 
-    def fb(self, position):
-        return ParseResultFootball(self, str(self.stage), int(position))
+    def fb(self, position, is_history=False):
+        return ParseResultFootball(self, str(self.stage), int(position), is_history=is_history)
 
     def __len__(self):
         return self.parse_str_len
@@ -431,14 +427,11 @@ class ParsingObj(object):
             begin = int(begin)
         except TypeError:
             begin = 0
-        try:
-            length = int(length)
-        except TypeError:
-            length = 0
-        if length > 0:
-            return self.parse_str[begin:min(begin + length, self.parse_str_len)]
-        else:
+
+        if length is None:
             return self.parse_str[begin:]
+        else:
+            return self.parse_str[begin:min(begin + length, self.parse_str_len)]
 
     def slice(self, begin=0, end=None):
         try:
@@ -508,7 +501,7 @@ class ParsingObj(object):
                 return i
         return -1
 
-    def next(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, **kwargs):
+    def next(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, min_error_msg=None, **kwargs):
         tmp_ret = self.fb(begin)
         lf_len = len(look_for)
         exact = False
@@ -553,7 +546,7 @@ class ParsingObj(object):
         ret_count = 0
         if exact:
             while len(looper) >= lf_len:
-                if loop_count > max_count:
+                if loop_count == max_count:
                     break
                 if looper[:lf_len] != look_for:
                     break
@@ -562,18 +555,34 @@ class ParsingObj(object):
                 looper = looper[lf_len:]
         else:
             for ch in looper:
-                if loop_count > max_count:
+                if loop_count == max_count:
                     break
                 if ch not in look_for:
                     break
                 loop_count += 1
                 ret_count += 1
 
-        if min_count < loop_count:
+        if min_count > loop_count:
+            if min_error_msg is not None:
+                tmp_ret(min_error_msg)
             return tmp_ret
 
         return tmp_ret(ret_count)
     __call__ = next
+
+    def next_char(self, begin, look_for, caps_sensitive=False):
+        tmp_ret = self.fb(begin)
+        if caps_sensitive:
+            if self[begin] == look_for:
+                return tmp_ret(1)
+            else:
+                return tmp_ret
+        else:
+            if self[begin].lower() == look_for.lower():
+                return tmp_ret(1)
+            else:
+                return tmp_ret
+
     #
     #
     # def in_chars(self, begin, look_for, min_count=None, max_count=None, **kwargs):

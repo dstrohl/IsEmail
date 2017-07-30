@@ -4,7 +4,7 @@ from unittest import TestCase
 from ValidationParser.footballs import ParsingObj
 from ValidationParser.exceptions import ParsingError
 
-
+"""
 def ei(email='abcdefghijk', **kwargs):
     return ParsingObj(email, **kwargs)
 
@@ -324,5 +324,4 @@ class TestWrappers(TestCase):
         tmp_ret = wrapped_paren_parser_fixture(tmp_ei, 0)
         self.assertTrue('ERR_NO_DOMAIN_PART' in tmp_ret)
         self.assertEqual(tmp_ret.l, 0)
-
-
+"""
