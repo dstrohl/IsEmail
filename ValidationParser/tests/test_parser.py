@@ -35,8 +35,9 @@ complex_fixture = ComplexFixture()
 
 
 class TestParse(TestCaseApproxString):
+
     def test_base_parse(self):
-        tmp_ret = parse('abcdef', abc)
+        tmp_ret = parse('abcdef', abc, lookup_reset=True, def_unparsed_content_msg=None)
 
         self.assertTrue(tmp_ret)
         self.assertEqual(len(tmp_ret), 3)
@@ -74,7 +75,7 @@ class TestParse(TestCaseApproxString):
             self.assertEqual(tmp_ret.max_message.key, 'VALID')
 
     def test_ret_short_errors(self):
-        tmp_ret = parse('(abc.abc.abc.', complex_fixture)
+        tmp_ret = parse('(abc.abc.abc.', complex_fixture, def_unparsed_content_msg=None)
 
         self.assertIsInstance(tmp_ret, ParseShortResult)
 
@@ -89,7 +90,7 @@ class TestParse(TestCaseApproxString):
             self.assertEqual(tmp_ret.history_str, exp_str, repr(tmp_ret.history_str))
 
         with self.subTest('max_message'):
-            self.assertEqual(tmp_ret.max_message.key, 'INVALID_CHAR')
+            self.assertEqual(tmp_ret.max_message.key, 'UNPARSED_CONTENT')
 
     def test_ret_long(self):
         tmp_ret = parse('(abc.abc.)', complex_fixture, return_type=RETURN_TYPES.long)
@@ -137,7 +138,7 @@ class TestParse(TestCaseApproxString):
             # self.assertEqual(tmp_ret.trace, '', tmp_ret.trace)
 
         with self.subTest('data'):
-            self.assertEqual(tmp_ret.data['loops'], 2)
+            self.assertEqual(tmp_ret.data['loop_count'], 2)
 
     def test_ret_bool(self):
         tmp_full = parse('(abc.abc.foobar)', complex_fixture, return_type=RETURN_TYPES.long)
@@ -166,16 +167,18 @@ class TestParserTestsHelper(TestCase):
         tmp_tests = ParserTests(
             parse_script_parser=complex_fixture,  # required
             parse_return_type='all',  # [bool, short, long]
+            # skip=True,
             tests=[
                 dict(
+                    skip=False,
                     test_id='good_ret',  # required
                     parse_string='(abc.abc.)',
                     contains_parsers=['abc_str'],
                     status=RESULT_CODES.OK,
                     history_str='complex(abc_str, DOT, abc_str, DOT)',
                     history_level=None,
-                    max_message='VALID',
-                    messages='complex.VALID',
+                    max_message=None,
+                    messages=[],
                     data={'loop_count': 2}),
                 dict(
                     test_id='bad_ret',  # required
@@ -184,28 +187,25 @@ class TestParserTestsHelper(TestCase):
                     contains_parsers=['abc_str'],
                     history_str='complex(abc_str, DOT, abc_str, DOT, abc_str, DOT)',
                     history_level=None,
-                    max_message='INVALID_CHAR',
-                    messages=[('complex', 'INVALID_CHAR')],
+                    max_message='UNPARSED_CONTENT',
+                    messages=[('complex', 'UNPARSED_CONTENT')],
                     data={'loop_count': 3}),
                 ('test_list_1', '(abc.abc.)'),
                 ('test_list_2', '(abc.abc.)', 10),
                 ('test_list_3', '(abc.abc.', 0),
                 ('test_list_4', '(abc.abc.)', 10, 'complex(abc_str, DOT, abc_str, DOT)'),
-                ('test_list_5', '(abc.abc.)', 10, 'complex(abc_str, DOT, abc_str, DOT)', ['complex.VALID']),
-                ('test_list_6', '(abc.abc.)', 10, 'complex(abc_str, DOT, abc_str, DOT)', ['complex.VALID'], {'data': {'loop_count': 2}}),
+                ('test_list_5', '(abc.abc.)', 10, 'complex(abc_str, DOT, abc_str, DOT)', []),
+                ('test_list_6', '(abc.abc.)', 10, 'complex(abc_str, DOT, abc_str, DOT)', [], {'data': {'loop_count': 2}}),
             ]
         )
 
         LIMIT_TO = None
-        # LIMIT_TO = 'test_list_3'
+        # LIMIT_TO = 'good_ret'
 
-        if LIMIT_TO is not None:
-            with self.subTest('LIMITED TEST'):
-                self.fail('LIMITED_TEST')
+        LIMIT_RET_TYPE = None
+        # LIMIT_RET_TYPE = 'long'
 
-        for test in tmp_tests:
-            if LIMIT_TO is None or LIMIT_TO == test.test_id:
-                with self.subTest(str(test)):
-                    tmp_ret, tmp_msg = test()
-                    self.assertTrue(tmp_ret, tmp_msg)
+        for test in tmp_tests.items(limit_to=LIMIT_TO, limit_ret_type=LIMIT_RET_TYPE):
+            with self.subTest(str(test)):
+                self.assertTrue(*test())
 

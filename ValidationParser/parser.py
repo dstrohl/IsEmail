@@ -30,24 +30,30 @@ def parse(parse_item, init_parser,
           def_pass_msg='VALID',
           def_fail_msg='ERROR',
           def_empty_msg='EMPTY_PARSE_STRING',
-          def_unparsed_content='UNPARSED_CONTENT',
+          def_unparsed_content_msg='UNPARSED_CONTENT',
+          lookup_reset=False,
           **kwargs):
     if isinstance(parse_item, str):
         parse_item = ParsingObj(parse_item, **kwargs)
 
+    if lookup_reset:
+        parse_item.message_lookup.clear()
+
     if len(parse_item) == 0:
         tmp_ret = parse_item.fb(position=begin)
-        tmp_ret(def_empty_msg)
+        if def_empty_msg is not None:
+            tmp_ret(def_empty_msg)
     else:
         tmp_ret = init_parser(parse_item, begin)
 
+        if tmp_ret and def_unparsed_content_msg is not None and tmp_ret.l != len(parse_item):
+            tmp_ret(def_unparsed_content_msg)
+
         if len(tmp_ret._messages) == 0:
-            if tmp_ret:
+            if tmp_ret and def_pass_msg is not None:
                 tmp_ret(def_pass_msg)
-            else:
+            elif def_fail_msg is not None:
                 tmp_ret(def_fail_msg)
-    if def_unparsed_content is not None and tmp_ret.l != len(parse_item):
-        tmp_ret(def_unparsed_content)
 
     try:
         tmp_ret_type = RETURN_TYPE_LOOKUP[return_type]

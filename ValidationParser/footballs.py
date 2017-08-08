@@ -228,17 +228,15 @@ class ParseResultFootball(CompareFieldMixin):
 
     def merge(self, other):
         if isinstance(other, ParseResultFootball):
-            # self.is_finished = False
             self.set_length(self.length + other.length)
-            # self._max_length = max(self._max_length, other._max_length)
             self._messages(other._messages)
-            # self._set_error(other.error)
             if self._history is None and other._history is not None:
                     self._history = HistoryHelper('', begin=self.begin, from_string=self.parse_obj.parse_str)
                     self._history.append(other._history)
             elif other._history is not None:
                 self._history.append(other._history)
             self.error = not bool(self._messages)
+            self.data.update(other.data)
         else:
             raise AttributeError('Cannot Merge, Not Football instance')
 

@@ -24,17 +24,39 @@ def adv_getattr(obj, attr):
     return obj
 
 
+def none_to_empty_dict(item) -> dict:
+    if item is None:
+        return {}
+    return item
+
+
+def none_to_emtpy_tuple(item) -> tuple:
+    if item is None:
+        return tuple()
+    return item
+
+
 class CompareFieldMixin(object):
     _compare_fields = None
     _compare_caps_sensitive = True
     _compare_convert_to = None
+    _compare_convert_args = None
+    _compare_convert_kwargs = None
 
     def _compare_(self, other, compare_fields=None):
         if compare_fields is None:
             compare_fields = self._compare_fields
 
         if self._compare_convert_to is not None:
-            other = self._compare_convert_to(other)
+            if isinstance(self._compare_convert_to, str) and self._compare_convert_to == 'self':
+                if not isinstance(other, self.__class__):
+                    other = self.__class__(other,
+                                           *none_to_emtpy_tuple(self._compare_convert_args),
+                                           **none_to_empty_dict(self._compare_convert_kwargs))
+                else:
+                    other = self._compare_convert_to(other,
+                                           *none_to_emtpy_tuple(self._compare_convert_args),
+                                           **none_to_empty_dict(self._compare_convert_kwargs))
 
         for field in compare_fields:
             self_field = adv_getattr(self, field)

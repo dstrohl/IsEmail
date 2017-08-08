@@ -486,7 +486,7 @@ class TestParseFootball(TestCaseCompare):
         per += 10
 
         per.add('VALID', msg_begin=1, msg_length=1)
-        per.add({'key': 'WARNING', 'begin': 1, 'length': 1})
+        per.add({'key': 'WARNING'}, msg_begin=1, msg_length=1)
         per.add('DEPRECATED', raise_on_error=False)
         per.add('WARNING')
 

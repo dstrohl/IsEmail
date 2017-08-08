@@ -42,16 +42,20 @@ class TestCaseApproxString(TestCase):
             self.fail(tmp_msg)
 
 
-def make_msg(expected, returned):
-    tmp_ret = ['','']
-    tmp_ret.append('Expected: %r' % expected)
-    tmp_ret.append('Returned: %r' % returned)
-
-    if isinstance(expected, str) and isinstance(returned, str):
+def make_msg(expected, returned, header=None, extra_top_lines=1, line_padding=4):
+    tmp_ret = []
+    line_padding = ''.ljust(line_padding)
+    for i in range(extra_top_lines):
         tmp_ret.append('')
-        tmp_ret.append('Strings:')
-        tmp_ret.append('Expected:\n%s' % expected)
-        tmp_ret.append('Returned:\n%s' % returned)
+    if header is not None:
+        tmp_ret.append('%s:' % header)
+    tmp_ret.append('%sExpected: %r' % (line_padding, expected))
+    tmp_ret.append('%sReturned: %r' % (line_padding, returned))
+
+    if isinstance(expected, str) and isinstance(returned, str) and max(len(expected), len(returned)) >60:
+        tmp_ret.append('%s--------' % line_padding)
+        tmp_ret.append('%sExpected:\n%s%s' % (line_padding, line_padding, expected))
+        tmp_ret.append('%sReturned:\n%s%s' % (line_padding, line_padding, returned))
 
     return '\n'.join(tmp_ret)
 
@@ -70,19 +74,22 @@ def _compare_(l_obj, r_obj, comp_str):
         return l_obj <= r_obj
 
 
-def _make_actual_compare_str(l_obj, r_obj):
+def _make_actual_compare_str(l_key, l_value, l_obj, r_key, r_value, r_obj):
+    tmp_ret = 'UNKNOWN'
     try:
         if l_obj == r_obj:
-            return 'EQ'
+            tmp_ret = 'EQ'
     except TypeError:
-        return 'UNCOMPARABLE'
+        tmp_ret = 'UNCOMPARABLE'
     try:
         if l_obj < r_obj:
-            return 'LT'
+            tmp_ret = 'LT'
         else:
-            return 'GT'
+            tmp_ret = 'GT'
     except TypeError:
-        return 'NE'
+        tmp_ret = 'NE'
+
+    return '%s (%r) %s %s (%r)' % (l_key, l_value, tmp_ret, r_key, r_value)
 
 
 def _fix_limit_str(l_key, r_key, comp_str, limit_str):
@@ -143,7 +150,9 @@ class TestCaseCompare(TestCase):
 
                     tmp_exp = _compare_(l_value, r_value, test)
                     tmp_ret = _compare_(l_item, r_item, test)
-                    tmp_msg = '\n\n%s:\n%r %s %r\nreturns: %r' % (sub_test_str, l_item, test, r_item, _make_actual_compare_str(l_item, r_item))
+                    tmp_msg = '\n\n%s:\n%r %s %r\nactual: %r' % (sub_test_str, l_item, test, r_item,
+                                                                 _make_actual_compare_str(l_key, l_value, l_item,
+                                                                                          r_key, r_value, r_item))
                     with self.subTest(sub_test_str):
                         self.assertEqual(tmp_exp, tmp_ret, tmp_msg)
                         

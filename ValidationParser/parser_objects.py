@@ -280,7 +280,7 @@ class LoopMixin(object):
         if loop_count < self.min_loop:
             tmp_ret(self.min_loop_fail_msg)
 
-        tmp_ret.data['loops'] = loop_count
+        tmp_ret.data['loop_count'] = loop_count
 
         if tmp_ret:
             for wrapper in reversed(self.wrappers):
@@ -399,47 +399,12 @@ class BaseWrapper(object):
 
 
 class FullLengthWrapper(BaseWrapper):
-    not_full_length_msg = 'INVALID_CHAR'
+    not_full_length_msg = 'UNPARSED_CONTENT'
 
     def post_process(self, tmp_ret, parse_obj, position, **kwargs):
         if parse_obj.at_end(position):
             raise WrapperStop(self, tmp_ret(self.not_full_length_msg))
 
-#
-# class PHLoop(BaseWrapper):
-#     min_loop = None
-#     min_loop_fail_msg = 'TOO_FEW_SEGMENTS'
-#     max_loop = None
-#     max_loop_fail_msg = 'TOO_MANY_SEGMENTS'
-#     max_loop_fail = False
-#
-#     def parse(self, parse_obj, position=0, **kwargs):
-#         loop_count = 0
-#         tmp_ret = parse_obj.fb(position)
-#
-#         min_loop = self.min_loop or 0
-#         max_loop = self.max_loop or sys.maxsize
-#
-#         while True:
-#             tmp_loop = super().parse(parse_obj, position + tmp_ret, **kwargs)
-#             if not tmp_loop:
-#                 break
-#             loop_count += 1
-#             if loop_count > max_loop:
-#                 if self.max_loop_fail:
-#                     tmp_ret(self.max_loop_fail_msg)
-#                 break
-#             else:
-#                 tmp_ret += tmp_loop
-#
-#         if loop_count < min_loop:
-#             tmp_ret(self.min_loop_fail_msg)
-#
-#         tmp_ret.data['loops'] = loop_count
-#         return tmp_ret
-#
-#     def __call__(self, *args, **kwargs):
-#         return self.parse(*args, **kwargs)
 
 
 class InvalidNextWrapper(BaseWrapper):

@@ -2,12 +2,15 @@ from ValidationParser.parser import parse, RETURN_TYPE_LOOKUP
 from ValidationParser.footballs import RESULT_CODES, ParsingObj
 from helpers.general import _UNSET, make_list, copy_none
 
+
 __all__ = ['ParserTestItem', 'ParserTests']
 
 
 PARSER_TEST_ITEM_DEFS = dict(
     test_id=None,  # required
+    skip=False,
     parse_script=parse,
+    parse_all=False,
     parse_script_kwargs={},
     parse_script_parser=None,  # required
     parse_return_type='short',  # [bool, short, long]
@@ -51,9 +54,16 @@ class ParserTestItem(object):
         If parsed_string and parsed_string_len are both empty, we assume a passed test for the full length
 
         """
+        self.skip = False
         self.test_id = None  # required
         self.parse_script = parse
-        self.parse_script_kwargs = {}
+        self.parse_all = False
+        self.parse_script_kwargs = dict(
+            def_pass_msg=None,
+            def_fail_msg=None,
+            def_empty_msg=None,
+            def_unparsed_content_msg=None)
+
         self.parse_script_parser = None  # required
         self.parse_return_type = 'long'  # [bool, short, long]
 
@@ -82,14 +92,20 @@ class ParserTestItem(object):
             self.update(params)
         else:
             params = make_list(params, force_list=True)
-            string_order = ['test_id', 'parse_string', 'history_str']
+            string_order = ['parse_string', 'history_str']
             string_order.reverse()
             param_dict = {}
             for param in params:
-                if isinstance(param, str) and param in ['w', 'e', 'o']:
-                    param_dict['status'] = STATUS_LOOKUP[param]
-                elif isinstance(param, str) and string_order:
-                    param_dict[string_order.pop()] = param
+                if 'test_id' not in param_dict:
+                    param_dict['test_id'] = param
+                elif isinstance(param, str):
+                    if param in ['w', 'e', 'o']:
+                        param_dict['status'] = STATUS_LOOKUP[param]
+                    elif string_order:
+                        if param == '!':
+                            param_dict['skip'] = False
+                        else:
+                            param_dict[string_order.pop()] = param
                 elif isinstance(param, dict):
                     param_dict.update(param)
                 elif isinstance(param, (list, tuple)):
@@ -128,6 +144,8 @@ class ParserTestItem(object):
         tmp_kwargs = dict(
             test_id=self.test_id,  # required
             parse_script=self.parse_script,
+            skip=self.skip,
+            parse_all=self.parse_all,
             parse_script_kwargs=copy_none(self.parse_script_kwargs),
             parse_script_parser=self.parse_script_parser,  # required
             parse_return_type=self.parse_return_type,  # [bool, short, long]
@@ -148,6 +166,9 @@ class ParserTestItem(object):
         for key, value in kwargs.items():
             if key == 'test_id' and self.test_id is not None:
                 self.test_id += value
+            elif key == 'parse_all':
+                if not value:
+                    self.parse_script_kwargs['def_unparsed_content_msg'] = None
             else:
                 if not hasattr(self, key):
                     raise AttributeError('Attribute %s does not exist in ParseTestItem' % key)
@@ -194,9 +215,9 @@ class ParserTestItem(object):
     def football(self):
         if self._football is _UNSET:
             if self.parse_script_parser is None:
-                self._football = self.parse_script(self.parsing_obj, return_type='football', **self.parse_kwargs)
+                self._football = self.parse_script(self.parsing_obj, return_type='football', **self.parse_script_kwargs)
             else:
-                self._football = self.parse_script(self.parsing_obj, self.parse_script_parser, return_type='football', **self.parse_kwargs)
+                self._football = self.parse_script(self.parsing_obj, self.parse_script_parser, return_type='football', **self.parse_script_kwargs)
         return self._football
 
     @property
@@ -219,12 +240,16 @@ class ParserTestItem(object):
     def _test_data_item(self, test_ret, ret_list, old_answ=True):
         if self.data is not None:
             for key, value in self.data.items():
-                old_answ = self._test_item(
-                    'data-'+key,
-                    value,
-                    test_ret.data[key],
-                    ret_list=ret_list,
-                    old_answ=old_answ)
+                if key in test_ret.data:
+                    old_answ = self._test_item(
+                        'data-'+key,
+                        value,
+                        test_ret.data[key],
+                        ret_list=ret_list,
+                        old_answ=old_answ)
+                else:
+                    ret_list.append(self._make_msg('data-'+key, value, '-- KEY NOT PRESENT --'))
+                    old_answ = False
         return old_answ
 
     @staticmethod
@@ -242,8 +267,11 @@ class ParserTestItem(object):
                 if isinstance(expected_item, str) and expected_item == '*':
                     skip_extra = True
                 else:
-                    other_index = returned_list.index(expected_item)
-                    if other_index > -1:
+                    try:
+                        other_index = returned_list.index(expected_item)
+                    except ValueError:
+                        pass
+                    else:
                         returned_list.remove(expected_item)
                         expected_list.remove(expected_item)
 
@@ -282,14 +310,22 @@ class ParserTestItem(object):
 
         passed = self._test_item('Status Check', self.status, test_return.status, ret_list, old_answ=passed)
         passed = self._test_item('History Check', self.history_str, test_return.history_str, ret_list, old_answ=passed)
-        passed = self._test_item('Max Message Check', self.max_message, test_return.max_message.key, ret_list, old_answ=passed)
+        if test_return.max_message is None:
+            test_max_msg = None
+        else:
+            test_max_msg = test_return.max_message.key
+        passed = self._test_item('Max Message Check', self.max_message, test_max_msg, ret_list, old_answ=passed)
         return passed
 
     def _test_long_ret(self, test_return, ret_list, old_answ=True):
         passed = old_answ
         
         passed = self._test_data_item(test_return, ret_list, old_answ=passed)
-        passed = self._test_list_item('Messages Check', self.messages, test_return.messages.keys(), ret_list, old_answ=passed)
+        passed = self._test_list_item('Messages Check',
+                                      self.messages,
+                                      test_return.messages.keys(inc_message_key=False, inc_segment_key=False),
+                                      ret_list,
+                                      old_answ=passed)
 
         return passed
 
@@ -327,8 +363,21 @@ class ParserTestItem(object):
         
     def __str__(self):
         return self.test_name
-    
-    
+
+
+class LimitedTestFail(object):
+    def __init__(self, test_name=None):
+        self.test_name = test_name
+
+    def __call__(self, *args, **kwargs):
+        return False, str(self)
+
+    def __str__(self):
+        if self.test_name is None:
+            return 'Limited Test'
+        else:
+            return 'Test limited to: %s' % self.test_name
+
 class ParserTests(object):
     
     def __init__(self, tests, **default_kwargs):
@@ -347,6 +396,41 @@ class ParserTests(object):
                     self.tests.append(tmp_new_test)
             else:
                 self.tests.append(tmp_test)
+
+    def items(self, limit_to=None, limit_ret_type=None):
+        skipped_items = limit_to
+        tests_ran = 0
+        tests_skipped = 0
+        # if self.default_kwargs.get('skip', False):
+        #     skipped_items = 'Limited by "skip" argument'
+        #     for item in self.tests:
+        #         if item.skip:
+        #             tests_skipped += 1
+        #         else:
+        #             tests_ran += 1
+        #             yield item
+        # else:
+        for item in self.tests:
+            test_ran = False
+            if limit_to is None or item.test_id == limit_to:
+                if not item.skip:
+                    if limit_ret_type is None or item.parse_return_type == limit_ret_type:
+                        tests_ran += 1
+                        test_ran = True
+                        yield item
+            if not test_ran:
+                if skipped_items is None:
+                    skipped_items = 'Limited by "skip" argument'
+                tests_skipped += 1
+
+        if tests_skipped:
+            if limit_ret_type is not None:
+                if skipped_items is None:
+                    skipped_items = '%s' % limit_ret_type
+                else:
+                    skipped_items += ' - %s' % limit_ret_type
+
+            yield LimitedTestFail(str(skipped_items) + ' (%s Ran / %s Skipped)' % (tests_ran, tests_skipped))
 
     def __iter__(self):
         for test in self.tests:

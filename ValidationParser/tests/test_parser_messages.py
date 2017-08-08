@@ -1,14 +1,14 @@
 from unittest import TestCase
 from ValidationParser.parser_messages import *
 from helpers.general import show_compared_items
-from helpers.general.test_helpers import TestCaseCompare
+from helpers.general.test_helpers import TestCaseCompare, make_msg
 from ValidationParser.exceptions import MessageListLocked
-
+from copy import deepcopy
 
 test_msg_2 = {'key': 'test_msg_2', 'description': 'This is test msg 2', 'status': RESULT_CODES.WARNING, 'references': ['test_ref']}
-test_msg_3 = {'key': 'test_msg_3', 'description': 'tm3_desc', 'status': RESULT_CODES.OK, 'references': 'test_ref_2'}
+test_msg_3 = {'key': 'test_segment.test_msg_3', 'description': 'tm3_desc', 'status': RESULT_CODES.OK, 'references': 'test_ref_2'}
 
-TEST_MESSAGES = ['TEST_MSG_1', test_msg_2, test_msg_3]
+TEST_MESSAGES = ['s6.TEST_MSG_1', test_msg_2, test_msg_3]
 
 TEST_SEGMENTS = [
     {'key': 'test_segment', 'status_override': RESULT_CODES.OK, 'description': 'segment description'},
@@ -24,19 +24,6 @@ TEST_REFERENCES = [
 ]
 
 
-def make_msg(expected, returned):
-    tmp_ret = ['','']
-    tmp_ret.append('Expected: %r' % expected)
-    tmp_ret.append('Returned: %r' % returned)
-
-    if isinstance(expected, str) and isinstance(returned, str):
-        tmp_ret.append('')
-        tmp_ret.append('Strings:')
-        tmp_ret.append('Expected:\n%s' % expected)
-        tmp_ret.append('Returned:\n%s' % returned)
-
-    return '\n'.join(tmp_ret)
-
 class TestMessageLookup(TestCase):
 
     def setUp(self):
@@ -44,7 +31,7 @@ class TestMessageLookup(TestCase):
         # print(MESSAGE_LOOKUP.dump())
 
     def test_get_len(self):
-        self.assertEqual(MESSAGE_LOOKUP.len(), 19, MESSAGE_LOOKUP.dump())
+        self.assertEqual(MESSAGE_LOOKUP.len(), 20, MESSAGE_LOOKUP.dump())
 
     def test_get_msg(self):
         tmp_msg = MESSAGE_LOOKUP.message('test_segment.VALID')
@@ -66,7 +53,7 @@ class TestMessageLookup(TestCase):
     def test_get_new_msg_with_kwargs(self):
         tmp_msg = MESSAGE_LOOKUP.message('test_segment', 'test_new_message', status=RESULT_CODES.OK, name='test_name')
         self.assertEqual(tmp_msg.key, 'test_new_message')
-        self.assertEqual(tmp_msg['status'], RESULT_CODES.OK)
+        self.assertEqual(tmp_msg.status, RESULT_CODES.OK)
         self.assertEqual(tmp_msg.name, 'test_name')
 
     def test_get_segment(self):
@@ -208,8 +195,8 @@ class TestMesageRecs(TestCase):
 
     def test_add_field(self):
         pmr = ParseMessageRec('test_key')
-        pmr['name'] = 'New Test'
-        pmr.description = 'test desc'
+        pmr.update(name='New Test')
+        pmr.update(description='test desc')
         self.assertEqual(pmr.key, 'test_key')
         self.assertEqual(pmr.name, 'New Test')
         self.assertEqual(pmr.description, 'test desc')
@@ -217,18 +204,17 @@ class TestMesageRecs(TestCase):
 
     def test_add_existing_field(self):
         pmr = ParseMessageRec('test_key')
-        pmr['name'] = 'New Test'
-        pmr['name'] = 'Another Test'
+        pmr.name = 'New Test'
+        pmr.update(name = 'Another Test')
         pmr.description = 'test desc'
-        pmr.description = 'foobar'
+        pmr.update(description = 'foobar')
         self.assertEqual(pmr.key, 'test_key')
-        self.assertEqual(pmr.name, 'New Test')
+        self.assertEqual(pmr.name, 'Another Test')
         self.assertEqual(pmr.description, 'test desc')
         # self.assertEqual(pmr.status_override, None)
 
     def test_add_bad_field(self):
         pmr = ParseMessageRec('test_key')
-        pmr['name_2'] = 'New Test'
         with self.assertRaises(AttributeError):
             test = pmr.name_2
             self.assertEqual(test, 'foobar')
@@ -241,22 +227,22 @@ class TestMesageRecs(TestCase):
 
     def test_update_dict(self):
         pmr = ParseMessageRec('test_key')
-        pmr['name'] = 'New Test'
-        pmr.update({'name': 'foobar', 'description': 'new desc', 'snafu': 12})
-        self.assertEqual(pmr.name, 'New Test')
+        pmr.name = 'New Test'
+        pmr.update({'name': 'foobar', 'description': 'new desc'})
+        self.assertEqual(pmr.name, 'foobar')
         self.assertEqual(pmr.description, 'new desc')
 
-    def test_update_obj(self):
-        pmr = ParseMessageRec('test_key')
-        pmr['name'] = 'New Test'
-        pmr2 = ParseMessageRec('t2', name='foobar2', description='another desc')
-        pmr.update(pmr2)
-        self.assertEqual(pmr.name, 'New Test')
-        self.assertEqual(pmr.description, 'another desc')
+    # def test_update_obj(self):
+    #     pmr = ParseMessageRec('test_key')
+    #     pmr.name = 'New Test'
+    #     pmr2 = ParseMessageRec('t2', name='foobar2', description='another desc')
+    #     pmr.update(pmr2)
+    #     self.assertEqual(pmr.name, 'New Test')
+    #     self.assertEqual(pmr.description, 'another desc')
 
     def test_copy(self):
         pmr = ParseMessageRec('test_key')
-        pmr['name'] = 'New Test'
+        pmr.name = 'New Test'
         pmr.description = 'test desc'
         pmr.references.append('test')
         pmr.references.append('test2')
@@ -285,32 +271,32 @@ class TestMessageObject(TestCaseCompare):
     ML.add(messages=BASE_PARSING_MESSAGES)
 
     def test_strings(self):
-        tm = self.ML('test_seg_5', 'test_msg_3', note='test_note')
-        self.assertEqual(str(tm), 'test_seg_5.test_msg_3')
+        tm = self.ML('test_segment', 'test_msg_3')
+        self.assertEqual(str(tm), 'test_segment.test_msg_3')
         self.assertEqual(tm.name, 'Test Msg 3')
         self.assertEqual(tm.key, 'test_msg_3')
         self.assertEqual(tm.description, 'tm3_desc')
-        self.assertEqual(tm.segment_name, 'Test Seg 5')
-        self.assertEqual(tm.segment_key, 'test_seg_5')
-        self.assertEqual(tm.segment_description, 'test_desc_5')
-        self.assertEqual(tm.long_name, 'Test Seg 5 / Test Msg 3')
-        self.assertEqual(tm.long_key, 'test_seg_5.test_msg_3')
-        self.assertEqual(tm.long_description, 'test_desc_5\ntm3_desc')
+        self.assertEqual(tm.segment_name, 'Test Segment')
+        self.assertEqual(tm.segment_key, 'test_segment')
+        self.assertEqual(tm.segment_description, 'segment description')
+        self.assertEqual(tm.long_name, 'Test Segment / Test Msg 3')
+        self.assertEqual(tm.long_key, 'test_segment.test_msg_3')
+        self.assertEqual(tm.long_description, 'segment description\ntm3_desc')
         # self.assertEqual(tm.full_name, 'Test Seg 5 / Test Msg 3 (test_note)')
         # self.assertEqual(tm.full_description, 'test_desc_5\ntm3_desc\ntest_note')
 
     def test_references(self):
-        tm = self.ML('test_seg_5', 'test_msg_3', note='test_note')
+        tm = self.ML('test_seg_5', 'test_msg_3')
         self.assertEqual(len(tm.references), 2, '%r' % tm.references)
 
     def test_detailed_reference_string(self):
-        tm = self.ML('test_seg_5', 'test_msg_3', note='test_note')
+        tm = self.ML('test_seg_5', 'test_msg_3')
         test_exp = 'Test Ref 2 (ref_2_desc)\nURL: ref_2_url\nref_2_text\n\ntest reference 3 (ref_3_desc)\nURL: ref_3_url\nref_3_text'
         test_ret = tm.reference_str(detailed=True)
         self.assertEqual(test_exp, test_ret, show_compared_items(test_exp, test_ret))
 
     def test_not_detailed_reference_string(self):
-        tm = self.ML('test_seg_5', 'test_msg_3', note='test_note')
+        tm = self.ML('test_seg_5', 'test_msg_3')
         test_exp = 'Test Ref 2 (ref_2_desc)\ntest reference 3 (ref_3_desc)'
         test_ret = tm.reference_str(detailed=False)
         self.assertEqual(test_exp, test_ret, show_compared_items(test_exp, test_ret))
@@ -324,7 +310,7 @@ class TestMessageObject(TestCaseCompare):
         self.assertTrue(tm)
 
     def test_bool_ok(self):
-        tm = self.ML('test', 'test_msg_3')
+        tm = self.ML('test_segment', 'test_msg_3')
         self.assertTrue(tm)
 
     def test_compare(self):
@@ -333,7 +319,7 @@ class TestMessageObject(TestCaseCompare):
             ('tm_1', self.ML('test', 'TEST_MSG_1'), 1),  # ERROR     4a
             ('tm_3', self.ML('test2', 'TEST_MSG_1'), 2),  # ERROR    5a
             ('tm_4', self.ML('test', 'test_msg_2'), 3),  # WARNING   3a
-            ('tm_5', self.ML('test', 'test_msg_3'), 4),  # OK        1a
+            ('tm_5', self.ML('test', {'key': 'test_msg_3', 'status': RESULT_CODES.OK}), 4),  # OK        1a
             ('tm_6', self.ML('test', 'VALID'), 5),  # OK             2a
         ]
 
@@ -1130,4 +1116,317 @@ class TestMessageHandler(TestCaseCompare):
     #
     #     self.assertTrue(pmh_3 >= pmh_2)
     #     self.assertTrue(pmh_3 >= pmh_1)
+
+KEY_ARGS_OBJ_KWARGS = {
+    'other': {'default_segment': None, 'other_ret': '*'},
+    'normal': {'default_segment': None, 'other_ret': None},
+    'default_other': {'default_segment': 'default', 'other_ret': '*'},
+    'default': {'default_segment': 'default', 'other_ret': None}}
+
+
+class TestKeyArgsObj(TestCaseCompare):
+    def check_return(self, expected_rec, returned_ret, test_name, kwargs):
+        error_list = []
+        passed = True
+        if returned_ret.seg_key != expected_rec.ret_seg:
+            passed = False
+            error_list.append('seg')
+
+        if returned_ret.msg_key != expected_rec.ret_msg:
+            passed = False
+            error_list.append('msg')
+
+        if returned_ret.seg_kwargs != (expected_rec.ret_seg_kwargs or {}):
+            passed = False
+            error_list.append('seg kwargs')
+
+        if returned_ret.msg_kwargs != (expected_rec.ret_msg_kwargs or {}):
+            passed = False
+            error_list.append('msg kwargs')
+
+        tmp_msg = None
+        if not passed:
+            tmp_msg = self._make_msg_text(
+                test_name=test_name,
+                expected=expected_rec,
+                returned=returned_ret,
+                error_list=error_list,
+                kwargs=kwargs)
+
+        return passed, tmp_msg
+
+    def _make_msg_text(self, test_name, expected, returned, error_list=None, kwargs=None):
+        tmp_msg = ['', test_name]
+        if error_list is not None:
+            tmp_msg.append('Errors: %s\n' % ', '.join(error_list))
+        tmp_msg.append('    Sent:')
+        tmp_msg.append('        Args       : %r' % repr(expected.args))
+        tmp_msg.append('        seg kwrags : %r' % expected.seg_kwargs)
+        tmp_msg.append('        msg kwrags : %r' % expected.msg_kwargs)
+        tmp_msg.append('        is_segment : %r' % expected.as_segment)
+        tmp_msg.append('        kwargs     : %r' % kwargs or {})
+        if error_list and 'raise' not in error_list:
+            tmp_msg.append('    Expected')
+            tmp_msg.append('        segment    : %r / %r' % (expected.ret_seg, expected.ret_seg_kwargs))
+            tmp_msg.append('        message    : %r / %r' % (expected.ret_msg, expected.ret_msg_kwargs))
+        tmp_msg.append('    Returned')
+        tmp_msg.append('        segment    : %r / %r' % (returned.seg_key, returned.seg_kwargs))
+        tmp_msg.append('        message    : %r / %r' % (returned.msg_key, returned.msg_kwargs))
+        return '\n'.join(tmp_msg)
+
+    def test_key_args_obj(self):
+        seg = 'seg'
+        msg = 'msg'
+        NA = 'NA'
+        msg_dict = {'a': 'msg_dict'}
+        msg_dict_key = {'key': 'msg', 'a': 'msg_dict'}
+        msg_kwarg_key2 = {'key': 'msg2', 'a': 'msg_dict'}
+        msg_dict_sm_key = {'key': 'seg.msg', 'a': 'msg_dict'}
+        msg_kwarg = {'b': 'msg_dict_b'}
+        msg_kwarg_seg_dict = {'b': 'msg_dict_b', 's': 'seg_dict'}
+        msg_kwarg_dict = {'a': 'msg_dict', 'b': 'msg_dict_b'}
+        seg_dict = {'s': 'seg_dict'}
+        seg_dict_key = {'key': 'seg', 's': 'seg_dict'}
+        seg_kwarg = {'t': 'seg_dict_t'}
+        seg_kwarg_dict = {'t': 'seg_dict_t', 's': 'seg_dict'}
+        seg_kwarg_msg_dict = {'t': 'seg_dict_t', 'a': 'msg_dict'}
+        seg_kwarg_key2 = {'key': 'seg2', 's': 'seg_dict'}
+        seg_dict_sm_key = {'key': 'seg.msg', 's': 'seg_dict'}
+
+        key_obj = KeyObj(seg, msg)
+        key_args_obj = KeyObj(seg, msg, msg_kwargs=msg_kwarg)
+
+        ArgsTestObj = namedtuple('ArgsTestObj', ('index', 'args', 'seg_kwargs', 'msg_kwargs', 'should_raise',
+                                                 'as_segment', 'ret_seg', 'ret_msg', 'ret_seg_kwargs', 'ret_msg_kwargs'))
+
+
+        TESTS = [
+            ArgsTestObj(1, (seg, msg), None, None, False, NA, seg, msg, None, None),
+            ArgsTestObj(2, (seg, msg_dict_key), None, None, False, NA, seg, msg, None, msg_dict),
+            ArgsTestObj(3, (seg_dict_key, msg), None, None, False, NA, seg, msg, seg_dict, None),
+            ArgsTestObj(4, (seg_dict_key, msg_dict_key), None, None, False, NA, seg, msg, seg_dict, msg_dict),
+            ArgsTestObj(5, (seg, msg_dict_sm_key), None, None, False, NA, seg, msg, None, msg_dict),
+            ArgsTestObj(6, (seg_dict_sm_key, msg), None, None, False, NA, seg, msg, seg_dict, None),
+            ArgsTestObj(7, (seg, ), None, None, False, True, seg, None, None, None),
+            ArgsTestObj(8, (msg,), None, None, False, False, None, msg, None, None),
+            ArgsTestObj(9, (msg_dict_key,), None, None, False, False, None, msg, None, msg_dict),
+            ArgsTestObj(10, (msg,), None, None, False, True, msg, None, None, None),
+            ArgsTestObj(11, (msg_dict_key,), None, None, False, False, None, msg, None, msg_dict),
+            ArgsTestObj(12, (seg_dict_key,), None, None, False, True, seg, None, seg_dict, None),
+            ArgsTestObj('13a', (msg_dict_sm_key,), None, None, False, True, seg, msg, msg_dict, None),
+            ArgsTestObj('13b', (msg_dict_sm_key,), None, None, False, False, seg, msg, None, msg_dict),
+            ArgsTestObj(14, (seg, msg), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg, msg_kwarg),
+            ArgsTestObj(15, (seg, msg_dict_key), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg, msg_kwarg_dict),
+            ArgsTestObj(16, (seg_dict_key, msg), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg_dict, msg_kwarg),
+            ArgsTestObj(17, (seg_dict_key, msg_dict_key), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg_dict, msg_kwarg_dict),
+            ArgsTestObj(18, (seg, msg_dict_sm_key), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg, msg_kwarg_dict),
+            ArgsTestObj(19, (msg_dict_sm_key, msg), seg_kwarg, msg_kwarg, False, NA, seg, msg, seg_kwarg_msg_dict, msg_kwarg),
+            ArgsTestObj(20, (seg, msg_dict_sm_key), seg_kwarg_key2, msg_kwarg, True, NA, None, None, None, None),
+            ArgsTestObj(21, (msg_dict_sm_key, msg), seg_kwarg, msg_kwarg_key2, True, NA, None, None, None, None),
+            ArgsTestObj('22a', (seg,), seg_kwarg, msg_kwarg, False, True, seg, None, seg_kwarg, msg_kwarg),
+            ArgsTestObj('22b', (seg,), seg_kwarg, msg_kwarg, False, False, None, seg, seg_kwarg, msg_kwarg),
+            ArgsTestObj(23, (msg,), seg_kwarg, msg_kwarg, False, False, None, msg, seg_kwarg, msg_kwarg),
+            ArgsTestObj('24a', (msg_dict_key,), seg_kwarg, msg_kwarg, False, True, msg, None, seg_kwarg_msg_dict, msg_kwarg),
+            ArgsTestObj('24b', (msg_dict_key,), seg_kwarg, msg_kwarg, False, False, None, msg, seg_kwarg, msg_kwarg_dict),
+            ArgsTestObj('25a', (msg,), seg_kwarg, msg_kwarg, False, True, msg, None, seg_kwarg, msg_kwarg),
+            ArgsTestObj('25b', (msg,), seg_kwarg, msg_kwarg, False, False, None, msg, seg_kwarg, msg_kwarg),
+            ArgsTestObj('26a', (msg_dict_key,), seg_kwarg, msg_kwarg, False, True, msg, None, seg_kwarg_msg_dict, msg_kwarg),
+            ArgsTestObj('26b', (msg_dict_key,), seg_kwarg, msg_kwarg, False, False, None, msg, seg_kwarg, msg_kwarg_dict),
+            ArgsTestObj('27a', (seg_dict_key,), seg_kwarg, msg_kwarg, False, True, seg, None, seg_kwarg_dict, msg_kwarg),
+            ArgsTestObj('27b', (seg_dict_key,), seg_kwarg, msg_kwarg, False, False, None, seg, seg_kwarg, msg_kwarg_seg_dict),
+            ArgsTestObj('28a', (msg_dict_sm_key,), seg_kwarg, msg_kwarg, False, True, seg, msg, seg_kwarg_msg_dict, msg_kwarg),
+            ArgsTestObj('28b', (msg_dict_sm_key,), seg_kwarg, msg_kwarg, False, False, seg, msg, seg_kwarg, msg_kwarg_dict),
+            ArgsTestObj(29, (seg, msg), seg_kwarg, None, False, NA, seg, msg, seg_kwarg, None),
+            ArgsTestObj(30, (seg, msg_dict_key), seg_kwarg, None, False, NA, seg, msg, seg_kwarg, msg_dict),
+            ArgsTestObj(31, (seg_dict_key, msg), seg_kwarg, None, False, NA, seg, msg, seg_kwarg_dict, None),
+            ArgsTestObj(32, (seg_dict_key, msg_dict_key), seg_kwarg, None, False, NA, seg, msg, seg_kwarg_dict, msg_dict),
+            ArgsTestObj(33, (seg, msg_dict_sm_key), seg_kwarg, None, False, NA, seg, msg, seg_kwarg, msg_dict),
+            ArgsTestObj(34, (msg_dict_sm_key, msg), seg_kwarg, None, False, NA, seg, msg, seg_kwarg_msg_dict, None),
+
+            ArgsTestObj('35a', (seg,), seg_kwarg, None, False, True, seg, None, seg_kwarg, None),
+            ArgsTestObj('35b', (seg,), seg_kwarg, None, False, False, None, seg, seg_kwarg, None),
+            ArgsTestObj('36a', (msg,), seg_kwarg, None, False, True, msg, None, seg_kwarg, None),
+            ArgsTestObj('36b', (msg,), seg_kwarg, None, False, False, None, msg, seg_kwarg, None),
+            ArgsTestObj('37a', (msg_dict_key,), seg_kwarg, None, False, True, msg, None, seg_kwarg_msg_dict, None),
+            ArgsTestObj('37b', (msg_dict_key,), seg_kwarg, None, False, False, None, msg, seg_kwarg, msg_dict),
+            ArgsTestObj('38a', (msg,), seg_kwarg, None, False, True, msg, None, seg_kwarg, None),
+            ArgsTestObj('38b', (msg,), seg_kwarg, None, False, False, None, msg, seg_kwarg, None),
+            ArgsTestObj('39a', (msg_dict_key,), seg_kwarg, None, False, True, msg, None, seg_kwarg_msg_dict, None),
+            ArgsTestObj('39b', (msg_dict_key,), seg_kwarg, None, False, False, None, msg, seg_kwarg, msg_dict),
+            ArgsTestObj('40a', (seg_dict_key,), seg_kwarg, None, False, True, seg, None, seg_kwarg_dict, None),
+            ArgsTestObj('40b', (seg_dict_key,), seg_kwarg, None, False, False, None, seg, seg_kwarg, seg_dict),
+            ArgsTestObj('41a', (msg_dict_sm_key,), seg_kwarg, None, False, True, seg, msg, seg_kwarg_msg_dict, None),
+            ArgsTestObj('41b', (msg_dict_sm_key,), seg_kwarg, None, False, False, seg, msg, seg_kwarg, msg_dict),
+
+            ArgsTestObj(42, (seg, msg), None, msg_kwarg, False, NA, seg, msg, None, msg_kwarg),
+            ArgsTestObj(43, (seg, msg_dict_key), None, msg_kwarg, False, NA, seg, msg, None, msg_kwarg_dict),
+            ArgsTestObj(44, (seg_dict_key, msg), None, msg_kwarg, False, NA, seg, msg, seg_dict, msg_kwarg),
+            ArgsTestObj(45, (seg_dict_key, msg_dict_key), None, msg_kwarg, False, NA, seg, msg, seg_dict, msg_kwarg_dict),
+            ArgsTestObj(46, (seg, msg_dict_sm_key), None, msg_kwarg, False, NA, seg, msg, None, msg_kwarg_dict),
+            ArgsTestObj(47, (msg_dict_sm_key, msg), None, msg_kwarg, False, NA, seg, msg, msg_dict, msg_kwarg),
+
+
+            ArgsTestObj('48a', (seg,), None, msg_kwarg, False, True, seg, None, None, msg_kwarg),
+            ArgsTestObj('48b', (seg,), None, msg_kwarg, False, False, None, seg, None, msg_kwarg),
+            ArgsTestObj('49a', (msg,), None, msg_kwarg, False, True, msg, None, None, msg_kwarg),
+            ArgsTestObj('49b', (msg,), None, msg_kwarg, False, False, None, msg, None, msg_kwarg),
+            ArgsTestObj('50a', (msg_dict_key,), None, msg_kwarg, False, True, msg, None, msg_dict, msg_kwarg),
+            ArgsTestObj('50b', (msg_dict_key,), None, msg_kwarg, False, False, None, msg, None, msg_kwarg_dict),
+            ArgsTestObj('51a', (msg,), None, msg_kwarg, False, True, msg, None, None, msg_kwarg),
+            ArgsTestObj('51b', (msg,), None, msg_kwarg, False, False, None, msg, None, msg_kwarg),
+            ArgsTestObj('52a', (msg_dict_key,), None, msg_kwarg, False, True, msg, None, msg_dict, msg_kwarg),
+            ArgsTestObj('52b', (msg_dict_key,), None, msg_kwarg, False, False, None, msg, None, msg_kwarg_dict),
+            ArgsTestObj('53a', (seg_dict_key,), None, msg_kwarg, False, True, seg, None, seg_dict, msg_kwarg),
+            ArgsTestObj('53b', (seg_dict_key,), None, msg_kwarg, False, False, None, seg, None, msg_kwarg_seg_dict),
+            ArgsTestObj('54a', (msg_dict_sm_key,), None, msg_kwarg, False, True, seg, msg, msg_dict, msg_kwarg),
+            ArgsTestObj('54b', (msg_dict_sm_key,), None, msg_kwarg, False, False, seg, msg, None, msg_kwarg_dict),
+
+            ArgsTestObj(55, [], seg_kwarg, None, False, NA, None, None, seg_kwarg, None),
+            ArgsTestObj(56, [], seg_dict_key, None, False, NA, seg, None, seg_dict, None),
+            ArgsTestObj(57, [], msg_dict_sm_key, None, False, NA, seg, msg, msg_dict, None),
+            ArgsTestObj(58, [], None, msg_kwarg, False, NA, None, None, None, msg_kwarg),
+            ArgsTestObj(59, [], None, msg_dict_key, False, NA, None, msg, None, msg_dict),
+            ArgsTestObj(60, [], None, msg_dict_sm_key, False, NA, seg, msg, None, msg_dict),
+            ArgsTestObj(61, [], seg_kwarg, msg_kwarg, False, NA, None, None, seg_kwarg, msg_kwarg),
+            ArgsTestObj(62, [], seg_dict, msg_kwarg, False, NA, None, None, seg_dict, msg_kwarg),
+            ArgsTestObj(63, [], seg_kwarg, msg_dict_key, False, NA, None, msg, seg_kwarg, msg_dict),
+            ArgsTestObj(64, [], seg_kwarg, msg_dict_sm_key, False, NA, seg, msg, seg_kwarg, msg_dict),
+            ArgsTestObj(65, [], seg_dict_sm_key, msg_kwarg, False, NA, seg, msg, seg_dict, msg_kwarg),
+            ArgsTestObj(66, [], seg_dict_sm_key, msg_dict_sm_key, False, NA, seg, msg, seg_dict, msg_dict),
+
+            ArgsTestObj(70, ('.msg',), None, None, False, NA, None, msg, None, None),
+            ArgsTestObj(71, ('*.msg',), None, None, False, NA, '*', msg, None, None),
+            ArgsTestObj(72, ('seg.',), None, None, False, NA, seg, None, None, None),
+            ArgsTestObj(73, ('seg.*',), None, None, False, NA, seg, '*', None, None),
+
+            ArgsTestObj(80, (key_obj,), None, None, False, NA, seg, msg, None, None),
+
+            ArgsTestObj(81, (key_args_obj,), None, None, False, NA, seg, msg, None, msg_kwarg),
+
+        ]
+
+        LIMIT_TO = None
+        # LIMIT_TO = '19_other_as_seg'
+
+        if LIMIT_TO is not None:
+            with self.subTest('LIMITED_TEST'):
+                self.fail('LIMITED_TEST')
+
+        for tmp_test in TESTS:
+            for key, kwargs in KEY_ARGS_OBJ_KWARGS.items():
+                for seg_type in [True, False]:
+                    test = tmp_test
+
+                    tmp_seg = test.ret_seg or kwargs.get('default_segment', None) or kwargs.get('other_ret', None)
+                    tmp_msg = test.ret_msg or kwargs.get('other_ret', None)
+                    tmp_seg_kwargs = test.ret_seg_kwargs or {}
+                    tmp_msg_kwargs = test.ret_msg_kwargs or {}
+
+                    test = test._replace(
+                        ret_seg=tmp_seg,
+                        ret_msg=tmp_msg,
+                        ret_seg_kwargs=tmp_seg_kwargs,
+                        ret_msg_kwargs=tmp_msg_kwargs,
+                        as_segment=seg_type)
+
+                    if tmp_test.as_segment == 'NA' or tmp_test.as_segment == seg_type:
+                        if test.should_raise:
+                            test_name = '%s_%s_RAISE' % (test.index, key)
+                        elif seg_type:
+                            test_name = '%s_%s_as_seg' % (test.index, key)
+                        else:
+                            test_name = '%s_%s_no_as_seg' % (test.index, key)
+
+                        if LIMIT_TO is None or LIMIT_TO == test_name:
+                            with self.subTest(test_name):
+
+                                args = deepcopy(test.args)
+                                msg_kwargs = deepcopy(test.msg_kwargs)
+                                seg_kwargs = deepcopy(test.seg_kwargs)
+
+                                if test.should_raise:
+
+                                    # with self.assertRaises(AttributeError, msg=test_name):
+                                    try:
+                                        tmp_ret = make_message_key(*args, seg_kwargs=seg_kwargs, msg_kwargs=msg_kwargs,
+                                                             as_segment=seg_type, **kwargs)
+                                        self.fail(self._make_msg_text(test_name=test_name,
+                                                                      expected=test,
+                                                                      returned=tmp_ret,
+                                                                      error_list=['raise'],
+                                                                      kwargs=kwargs))
+                                    except AttributeError:
+                                        pass
+                                else:
+                                    tmp_ret = make_message_key(*args, seg_kwargs=seg_kwargs, msg_kwargs=msg_kwargs,
+                                                         as_segment=seg_type, **kwargs)
+
+                                    self.assertTrue(*self.check_return(test, tmp_ret, test_name, kwargs))
+
+                                # with self.subTest(test_name + '-seg_kw'):
+                                #     self.assertEqual(test.ret_seg_kwargs or {}, tmp_ret.seg_kwargs, '\n\n'+test_name)
+                                # with self.subTest(test_name + '-msg_kw'):
+                                #     self.assertEqual(test.ret_msg_kwargs or {}, tmp_ret.msg_kwargs, '\n\n'+test_name)
+                                #
+                                # tmp_exp_msg = test.ret_msg
+                                # if tmp_exp_msg is None and kwargs.get('other_ret', None):
+                                #     tmp_exp_msg = kwargs['other_ret']
+                                #
+                                # tmp_exp_seg = test.ret_seg
+                                # if tmp_exp_seg is None:
+                                #     if kwargs.get('other_ret', None):
+                                #         tmp_exp_seg = kwargs['other_ret']
+                                #
+                                #     if kwargs.get('default_segment', None):
+                                #         tmp_exp_seg = kwargs['default_segment']
+                                #
+                                # with self.subTest(test_name + '-msg_key'):
+                                #     self.assertEqual(tmp_exp_msg, tmp_ret.msg, '\n\n'+test_name)
+                                # with self.subTest(test_name + '-seg_key'):
+                                #     self.assertEqual(tmp_exp_seg, tmp_ret.seg, '\n\n'+test_name)
+
+    # def test_key_args_obj_raise(self):
+    #     TESTS = [
+    #         # (test_id, args, result_type),
+    #
+    #         # extra kwargs
+    #         (1, ('seg_key', 'foo_key', {'foo': 'seg_bar'}, 'msg_key', {'foo': 'msg_bar'})),
+    #
+    #         # three strings
+    #         (2, ('seg_key', 'msg_key', 'test_junk', {'foo': 'msg_bar'})),
+    #
+    #         # three dicts
+    #         (3, ('seg_key.msg_key', {'foo': 'seg_bar'}, {'foo': 'msg_bar'}, {'blah': 'msg_blah'})),
+    #
+    #         # str and dict_key
+    #         (4, ('msg', {'key': 'seg_key', 'foo': 'seg_bar'}, 'msg_key', {'key': 'test', 'foo': 'msg_bar'})),
+    #
+    #         # dict (no_key) first
+    #         (5, ({'foo': 'seg_bar'}, {'foo': 'msg_bar'}, {'blah': 'msg_blah'})),
+    #
+    #         # one key, two dicts (no key)
+    #         (6, ('msg_key', {'foo': 'seg_bar'}, {'foo': 'msg_bar'})),
+    #
+    #         # key.key and string
+    #         (7, ('seg', 'seg_key.msg_key', {'foo': 'seg_bar'}, {'foo': 'msg_bar'})),
+    #
+    #         # (key, key) and string
+    #         (8, ('seg', ('seg_key', 'msg_key'), {'foo': 'seg_bar'}, {'foo': 'msg_bar'})),
+    #     ]
+    #
+    #     for test in TESTS:
+    #         for key, kwargs in KEY_ARGS_OBJ_KWARGS.items():
+    #             test_name = '%s-%s' % (str(test[0]), key)
+    #             tmp_kwargs = kwargs.copy()
+    #             test_args = deepcopy(test[1])
+    #             with self.subTest(test_name + '-no_segment'):
+    #                 with self.assertRaises(AttributeError):
+    #                     tmp_ret = KeyArgsObj(*test_args, **tmp_kwargs)
+    #
+    #             test_args = deepcopy(test[1])
+    #             tmp_kwargs['as_segment'] = True
+    #             with self.subTest(test_name+'-segment'):
+    #                 with self.assertRaises(AttributeError):
+    #                     tmp_ret = KeyArgsObj(*test_args, **tmp_kwargs)
+
 
