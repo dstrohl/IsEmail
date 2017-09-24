@@ -1,0 +1,258 @@
+*****************************************************************'
+Summary:
+*****************************************************************'
+
+    MUST:
+        full domain name <= 255 chars
+        any one label between 1 - 63 octets
+
+    hostname:
+        any chars
+
+    other labels:
+        first char must be non-numeric
+
+    Escaping Unusual DNS Label Octets  (warning)
+        used for 0x00 - 0x20 and 0x7F - 0xFF
+
+        \\ == \
+        \. == .
+        \0 == \0
+        \00 == \00
+        \000 = char(00)
+        \010 = char(10)
+        \123 = char(123)
+        \0924 = .4
+
+
+    email spec:
+
+
+        <domain> ::= <subdomain> | " "
+
+        <subdomain> ::= <label> | <subdomain> "." <label>
+
+        <label> ::= <letter> [ [ <ldh-str> ] <let-dig> ]
+
+        <ldh-str> ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+
+        <let-dig-hyp> ::= <let-dig> | "-"
+
+        <let-dig> ::= <letter> | <digit>
+
+        <letter> ::= any one of the 52 alphabetic characters A through Z in
+        upper case and a through z in lower case
+
+        <digit> ::= any one of the ten digits 0 through 9
+
+        Note that while upper and lower case letters are allowed in domain
+        names, no significance is attached to the case.  That is, two names with
+        the same spelling but different case are to be treated as if identical.
+
+        The labels must follow the rules for ARPANET host names.  They must
+        start with a letter, end with a letter or digit, and have as interior
+        characters only letters, digits, and hyphen.  There are also some
+        restrictions on the length.  Labels must be 63 characters or less.
+
+
+*****************************************************************'
+FROM RFC 1035
+*****************************************************************'
+
+2.3.1. Preferred name syntax
+
+The DNS specifications attempt to be as general as possible in the rules
+for constructing domain names.  The idea is that the name of any
+existing object can be expressed as a domain name with minimal changes.
+
+However, when assigning a domain name for an object, the prudent user
+will select a name which satisfies both the rules of the domain system
+and any existing rules for the object, whether these rules are published
+or implied by existing programs.
+
+For example, when naming a mail domain, the user should satisfy both the
+rules of this memo and those in RFC-822.  When creating a new host name,
+the old rules for HOSTS.TXT should be followed.  This avoids problems
+when old software is converted to use domain names.
+
+The following syntax will result in fewer problems with many
+
+applications that use domain names (e.g., mail, TELNET).
+
+<domain> ::= <subdomain> | " "
+
+<subdomain> ::= <label> | <subdomain> "." <label>
+
+<label> ::= <letter> [ [ <ldh-str> ] <let-dig> ]
+
+<ldh-str> ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
+
+<let-dig-hyp> ::= <let-dig> | "-"
+
+<let-dig> ::= <letter> | <digit>
+
+<letter> ::= any one of the 52 alphabetic characters A through Z in
+upper case and a through z in lower case
+
+<digit> ::= any one of the ten digits 0 through 9
+
+Note that while upper and lower case letters are allowed in domain
+names, no significance is attached to the case.  That is, two names with
+the same spelling but different case are to be treated as if identical.
+
+The labels must follow the rules for ARPANET host names.  They must
+start with a letter, end with a letter or digit, and have as interior
+characters only letters, digits, and hyphen.  There are also some
+restrictions on the length.  Labels must be 63 characters or less.
+
+For example, the following strings identify hosts in the Internet:
+
+A.ISI.EDU XX.LCS.MIT.EDU SRI-NIC.ARPA
+
+
+*****************************************************************'
+FROM RFC 4343
+*****************************************************************'
+
+
+2.1.  Escaping Unusual DNS Label Octets
+
+   In Master Files [STD13] and other human-readable and -writable ASCII
+   contexts, an escape is needed for the byte value for period (0x2E,
+   ".") and all octet values outside of the inclusive range from 0x21
+   ("!") to 0x7E ("~").  That is to say, 0x2E and all octet values in
+   the two inclusive ranges from 0x00 to 0x20 and from 0x7F to 0xFF.
+
+   One typographic convention for octets that do not correspond to an
+   ASCII printing graphic is to use a back-slash followed by the value
+   of the octet as an unsigned integer represented by exactly three
+   decimal digits.
+
+   The same convention can be used for printing ASCII characters so that
+   they will be treated as a normal label character.  This includes the
+   back-slash character used in this convention itself, which can be
+   expressed as \092 or \\, and the special label separator period
+   ("."), which can be expressed as and \046 or \.  It is advisable to
+   avoid using a backslash to quote an immediately following non-
+   printing ASCII character code to avoid implementation difficulties.
+
+   A back-slash followed by only one or two decimal digits is undefined.
+   A back-slash followed by four decimal digits produces two octets, the
+   first octet having the value of the first three digits considered as
+   a decimal number, and the second octet being the character code for
+   the fourth decimal digit.
+
+2.2.  Example Labels with Escapes
+
+   The first example below shows embedded spaces and a period (".")
+   within a label.  The second one shows a 5-octet label where the
+   second octet has all bits zero, the third is a backslash, and the
+   fourth octet has all bits one.
+
+         Donald\032E\.\032Eastlake\0323rd.example.
+   and   a\000\\\255z.example.
+
+
+3 .2.  Extended Label Type Case Insensitivity Considerations
+
+   DNS wasextended by [RFC2671] so that additional label type numbers
+   would be available.  (The only such type defined so far is the BINARY
+   type [RFC2673], which is now Experimental [RFC3363].)
+
+   The ASCII case insensitivity conventions only apply to ASCII labels;
+   that is to say, label type 0x0, whether appearing directly or invoked
+   by indirect labels.
+
+
+
+*****************************************************************'
+FROM RFC 2181
+*****************************************************************'
+
+
+11. Name syntax
+
+   Occasionally it is assumed that the Domain Name System serves only
+   the purpose of mapping Internet host names to data, and mapping
+   Internet addresses to host names.  This is not correct, the DNS is a
+   general (if somewhat limited) hierarchical database, and can store
+   almost any kind of data, for almost any purpose.
+
+   The DNS itself places only one restriction on the particular labels
+   that can be used to identify resource records.  That one restriction
+   relates to the length of the label and the full name.  The length of
+   any one label is limited to between 1 and 63 octets.  A full domain
+   name is limited to 255 octets (including the separators).  The zero
+   length full name is defined as representing the root of the DNS tree,
+   and is typically written and displayed as ".".  Those restrictions
+   aside, any binary string whatever can be used as the label of any
+   resource record.  Similarly, any binary string can serve as the value
+   of any record that includes a domain name as some or all of its value
+   (SOA, NS, MX, PTR, CNAME, and any others that may be added).
+   Implementations of the DNS protocols must not place any restrictions
+   on the labels that can be used.  In particular, DNS servers must not
+   refuse to serve a zone because it contains labels that might not be
+   acceptable to some DNS client programs.  A DNS server may be
+   configurable to issue warnings when loading, or even to refuse to
+   load, a primary zone containing labels that might be considered
+   questionable, however this should not happen by default.
+
+   Note however, that the various applications that make use of DNS data
+   can have restrictions imposed on what particular values are
+   acceptable in their environment.  For example, that any binary label
+   can have an MX record does not imply that any binary name can be used
+   as the host part of an e-mail address.  Clients of the DNS can impose
+   whatever restrictions are appropriate to their circumstances on the
+   values they use as keys for DNS lookup requests, and on the values
+   returned by the DNS.  If the client has such restrictions, it is
+   solely responsible for validating the data from the DNS to ensure
+   that it conforms before it makes any use of that data.
+
+   See also [RFC1123] section 6.1.3.5.
+
+
+*****************************************************************'
+FROM RFC 1123
+*****************************************************************'
+
+
+
+   2.  GENERAL ISSUES
+
+   This section contains general requirements that may be applicable to
+   all application-layer protocols.
+
+   2.1  Host Names and Numbers
+
+      The syntax of a legal Internet host name was specified in RFC-952
+      [DNS:4].  One aspect of host name syntax is hereby changed: the
+      restriction on the first character is relaxed to allow either a
+      letter or a digit.  Host software MUST support this more liberal
+      syntax.
+
+      Host software MUST handle host names of up to 63 characters and
+      SHOULD handle host names of up to 255 characters.
+
+      Whenever a user inputs the identity of an Internet host, it SHOULD
+      be possible to enter either (1) a host domain name or (2) an IP
+      address in dotted-decimal ("#.#.#.#") form.  The host SHOULD check
+      the string syntactically for a dotted-decimal number before
+      looking it up in the Domain Name System.
+
+      DISCUSSION:
+           This last requirement is not intended to specify the complete
+           syntactic form for entering a dotted-decimal host number;
+           that is considered to be a user-interface issue.  For
+           example, a dotted-decimal number must be enclosed within
+           "[ ]" brackets for SMTP mail (see Section 5.2.17).  This
+           notation could be made universal within a host system,
+           simplifying the syntactic checking for a dotted-decimal
+           number.
+
+           If a dotted-decimal number can be entered without such
+           identifying delimiters, then a full syntactic check must be
+           made, because a segment of a host domain name is now allowed
+           to begin with a digit and could legally be entirely numeric
+           (see Section 6.1.2.4).  However, a valid host name can never
+           have the dotted-decimal form #.#.#.#, since at least the
+           highest-level component label will be alphabetic.

@@ -1,136 +1,139 @@
 from enum import IntEnum, Enum
-from helpers.general import make_list, adv_format, AutoAddDict, CompareFieldMixin, make_set, list_get
+from helpers.general import make_list, adv_format, AutoAddDict, CompareFieldMixin
 from collections import UserDict, namedtuple, UserList
 from copy import deepcopy
 from ValidationParser.exceptions import MessageListLocked, MessageNotFoundError, SegmentNotFoundError, \
     ReferenceNotFoundError
 
-from helpers.general.wildcard_dict import KeyObj, WildCardMergeDict
 
-# class OverrideDict(UserDict):
-#     all_items = None
-#
-#     def clear(self):
-#         self.all_items = None
-#         super().clear()
-#
-#     def __setitem__(self, key, value):
-#         if key == '*':
-#             self.all_items = value
-#             return
-#         super().__setitem__(key, value)
-#
-#     def __getitem__(self, item):
-#         if self.all_items is not None:
-#             return self.all_items
-#         return super().__getitem__(item)
-#
-#     def __contains__(self, item):
-#         if item == '*' or self.all_items is not None:
-#             return True
-#         return item in self.data
+class OverrideDict(UserDict):
+    all_items = None
 
+    def clear(self):
+        self.all_items = None
+        super().clear()
 
-# class DictOfList(UserDict):
-#
-#     def __getitem__(self, item):
-#         if item not in self.data:
-#             self.data[item] = []
-#         return self.data[item]
-#
-#     def __setitem__(self, key, value):
-#         if isinstance(value, (list, tuple)):
-#             self[key].extend(value)
-#         else:
-#             self[key].append(value)
-#
-#
-# class DictOfDict(UserDict):
-#     def __init__(self, *args, dict_type=None, **kwargs):
-#         self._dict_type = dict_type or {}
-#         super(DictOfDict, self).__init__(*args, **kwargs)
-#
-#     def __getitem__(self, item):
-#         if item not in self.data:
-#             self.data[item] = self._dict_type()
-#         return self.data[item]
-#
-#     def set(self, key, value):
-#         self.data[key] = value
-#
-#     def __setitem__(self, key, value):
-#         self[key].update(value)
-#
-#
-# class MsgDict(UserDict):
-#
-#     def __getitem__(self, item):
-#         try:
-#             return super().__getitem__(item)
-#         except KeyError:
-#             if '*' in self.data:
-#                 return self.data['*']
-#
-#     def __contains__(self, item):
-#         if item == '*' or '*' in self.data:
-#             return True
-#         return item in self.data
-#
-#
-# class SegmentDict(UserDict):
-#
-#     def __init__(self, *args, **kwargs):
-#         self._dict_type = dict
-#         super(SegmentDict, self).__init__(*args, **kwargs)
-#
-#     def clear(self):
-#         self.data.clear()
-#
-#     def get_seg(self, seg_key):
-#         if seg_key not in self.data:
-#             self.data[seg_key] = self._dict_type()
-#         return self.data[seg_key]
-#
-#     def __setitem__(self, key, value):
-#         if not isinstance(value, RESULT_CODES):
-#             raise TypeError('value (%r) is not a result code type' % value)
-#         else:
-#             key = make_message_key(key)
-#             if key.seg_key == '*' and key.msg_key == '*':
-#                 raise AttributeError('Cannot set *.* override')
-#             self.get_seg(key.seg_key)[key.msg_key] = value
-#
-#     def __getitem__(self, key):
-#         if isinstance(key, RESULT_CODES):
-#             return self.data[key]
-#         else:
-#             # key = make_message_key(key)
-#             try:
-#                 tmp_ret = self.data[key.seg_key][key.msg_key]
-#             except KeyError:
-#                 try:
-#                     tmp_ret = self.data['*'][key.msg_key]
-#                 except KeyError:
-#                     tmp_ret = self.data[key.seg_key]['*']
-#
-#             return self.data.get(tmp_ret, tmp_ret)
-#
-#     def __contains__(self, key):
-#         if isinstance(key, RESULT_CODES):
-#             return key in self.data
-#         else:
-#             key = make_message_key(key)
-#             if key.seg_key in self.data and (key.msg_key == '*' or key.msg_key in self.data[key.seg_key] or '*' in self.data[key.seg_key]):
-#                 return True
-#
-#             if '*' in self.data and key.msg_key in self.data['*']:
-#                 return True
-#
-#             return False
-#
+    def __setitem__(self, key, value):
+        if key == '*':
+            self.all_items = value
+            return
+        super().__setitem__(key, value)
+
+    def __getitem__(self, item):
+        if self.all_items is not None:
+            return self.all_items
+        return super().__getitem__(item)
+
+    def __contains__(self, item):
+        if item == '*' or self.all_items is not None:
+            return True
+        return item in self.data
 
 
-class STATUS_CODES(IntEnum):
+class DictOfList(UserDict):
+
+    def __getitem__(self, item):
+        if item not in self.data:
+            self.data[item] = []
+        return self.data[item]
+
+    def __setitem__(self, key, value):
+        if isinstance(value, (list, tuple)):
+            self[key].extend(value)
+        else:
+            self[key].append(value)
+
+
+class DictOfDict(UserDict):
+    def __init__(self, *args, dict_type=None, **kwargs):
+        self._dict_type = dict_type or {}
+        super(DictOfDict, self).__init__(*args, **kwargs)
+
+    def __getitem__(self, item):
+        if item not in self.data:
+            self.data[item] = self._dict_type()
+        return self.data[item]
+
+    def set(self, key, value):
+        self.data[key] = value
+
+    def __setitem__(self, key, value):
+        self[key].update(value)
+
+
+class MsgDict(UserDict):
+
+    def __getitem__(self, item):
+        try:
+            return super().__getitem__(item)
+        except KeyError:
+            if '*' in self.data:
+                return self.data['*']
+
+    def __contains__(self, item):
+        if item == '*' or '*' in self.data:
+            return True
+        return item in self.data
+
+
+class SegmentDict(UserDict):
+
+    def __init__(self, *args, **kwargs):
+        self._dict_type = dict
+        super(SegmentDict, self).__init__(*args, **kwargs)
+
+    def clear(self):
+        self.data.clear()
+
+    def get_seg(self, seg_key):
+        if seg_key not in self.data:
+            self.data[seg_key] = self._dict_type()
+        return self.data[seg_key]
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, RESULT_CODES):
+            raise TypeError('value (%r) is not a result code type' % value)
+        else:
+            key = make_message_key(key)
+            if key.seg_key == '*' and key.msg_key == '*':
+                raise AttributeError('Cannot set *.* override')
+            self.get_seg(key.seg_key)[key.msg_key] = value
+
+    def __getitem__(self, key):
+        if isinstance(key, RESULT_CODES):
+            return self.data[key]
+        else:
+            # key = make_message_key(key)
+            try:
+                tmp_ret = self.data[key.seg_key][key.msg_key]
+            except KeyError:
+                try:
+                    tmp_ret = self.data['*'][key.msg_key]
+                except KeyError:
+                    tmp_ret = self.data[key.seg_key]['*']
+
+            return self.data.get(tmp_ret, tmp_ret)
+
+    def __contains__(self, key):
+        if isinstance(key, RESULT_CODES):
+            return key in self.data
+        else:
+            key = make_message_key(key)
+            if key.seg_key in self.data and (key.msg_key == '*' or key.msg_key in self.data[key.seg_key] or '*' in self.data[key.seg_key]):
+                return True
+
+            if '*' in self.data and key.msg_key in self.data['*']:
+                return True
+
+            return False
+
+
+
+
+
+
+
+class RESULT_CODES(IntEnum):
     OK = 3
     WARNING = 2
     ERROR = 1
@@ -138,12 +141,12 @@ class STATUS_CODES(IntEnum):
     SKIP = 98
 
 
-STATUS_CODE_DICT = dict(
-    OK=STATUS_CODES.OK,
-    WARNING=STATUS_CODES.WARNING,
-    ERROR=STATUS_CODES.ERROR,
-    UNKNOWN=STATUS_CODES.UNKNOWN,
-    SKIP=STATUS_CODES.SKIP)
+RESULT_CODE_DICT = dict(
+    OK=RESULT_CODES.OK,
+    WARNING=RESULT_CODES.WARNING,
+    ERROR=RESULT_CODES.ERROR,
+    UNKNOWN=RESULT_CODES.UNKNOWN,
+    SKIP=RESULT_CODES.SKIP)
 
 
 class TEXT_TYPE(Enum):
@@ -154,28 +157,28 @@ class TEXT_TYPE(Enum):
 
 
 BASE_PARSING_MESSAGES = [
-    {'key': '*.INVALID_CHAR', 'name': 'Invalid Character'},
-    '*.SEGMENT_TOO_LONG',
-    '*.SEGMENT_TOO_SHORT',
-    '*.TOO_MANY_SEGMENTS',
-    '*.TOO_FEW_SEGMENTS',
-    '*.UNOPENED_ENCLOSURE',
-    '*.UNCLOSED_ENCLOSURE',
-    '*.INVALID_LOCATION',
-    '*.INVALID_NEXT_CHAR',
-    {'key': '*.MISSING_CHAR', 'name': 'Missing Character'},
-    '*.INVALID_END',
-    '*.INVALID_START',
-    '*.MISSING_SEGMENT',
-    '*.ABOVE_RANGE',
-    '*.BELOW_RANGE',
-    '*.END_OF_STRING',
-    '*.ERROR',
-    {'key': '*.UNPARSED_CONTENT', 'name': 'Un-parsed content remaining'},
-    {'key': '*.DEPRECATED', 'name': 'Deprecated Content', 'status': STATUS_CODES.WARNING},
-    {'key': '*.POTENTIAL_PROBLEM', 'status': STATUS_CODES.WARNING},
-    {'key': '*.WARNING', 'status': STATUS_CODES.WARNING},
-    {'key': '*.VALID', 'name': 'Valid Segment', 'status': STATUS_CODES.OK}
+    {'key': 'INVALID_CHAR', 'name': 'Invalid Character'},
+    'SEGMENT_TOO_LONG',
+    'SEGMENT_TOO_SHORT',
+    'TOO_MANY_SEGMENTS',
+    'TOO_FEW_SEGMENTS',
+    'UNOPENED_ENCLOSURE',
+    'UNCLOSED_ENCLOSURE',
+    'INVALID_LOCATION',
+    'INVALID_NEXT_CHAR',
+    {'key': 'MISSING_CHAR', 'name': 'Missing Character'},
+    'INVALID_END',
+    'INVALID_START',
+    'MISSING_SEGMENT',
+    'ABOVE_RANGE',
+    'BELOW_RANGE',
+    'END_OF_STRING',
+    'ERROR',
+    {'key': 'UNPARSED_CONTENT', 'name': 'Un-parsed content remaining'},
+    {'key': 'DEPRECATED', 'name': 'Deprecated Content', 'status': RESULT_CODES.WARNING},
+    {'key': 'POTENTIAL_PROBLEM', 'status': RESULT_CODES.WARNING},
+    {'key': 'WARNING', 'status': RESULT_CODES.WARNING},
+    {'key': 'VALID', 'name': 'Valid Segment', 'status': RESULT_CODES.OK}
 ]
 
 
@@ -186,17 +189,9 @@ DEFAULT_REFERENCE = {
     'url': None,
     'text': None,
 }
-
-DEFAULT_MESSAGE = {
-    'key' : '',
-    'name': '',
-    'description': None,
-    'status': STATUS_CODES.ERROR,
-    'references': [],
-}
 '''
 
-"""
+
 def _make_kwargs(item):
     if isinstance(item, str):
         return {'key': item}
@@ -304,122 +299,99 @@ def make_message_key(*args, seg_kwargs=None, msg_kwargs=None, default_segment=No
     tmp_ret = parse_msg_args(*args, seg_kwargs=seg_kwargs, msg_kwargs=msg_kwargs, as_segment=as_segment)
     return KeyObj(*tmp_ret, default_segment=default_segment, other_ret=other_ret)
 
-"""
 
-
-'''
-class MsgKeyObj(KeyObj):
+def make_reference_key(ref_key):
     """
-    extra kwargs:
-        seg_kwargs
-        msg_kwargs,
-        default_segment,
+    Convert from '[rfc1234]', '[1234]', '[1234#1.2.3]'
+    to:
+    # rfc1234, https://tools.ietf.org/html/rfc3513#section-2.5.5
 
+    :param ref_key:
+    :return:
     """
-    def __init__(self, *keys, **kwargs):
-        self.seg_kwargs = {}
-        self.msg_kwargs = {}
-        super(MsgKeyObj, self).__init__(*keys, **kwargs)
+    base_template = 'https://tools.ietf.org/html/{rfc}{section}'
+    section_template = '#section-{section}'
 
-    def _set_keys(self, keys, kwargs):
-        seg_kwargs = kwargs.get('seg_kwargs', {})
-        msg_kwargs = kwargs.get('msg_kwargs', {})
-        default_segment = kwargs.get('default_segment', None)
+    if ref_key[0] != '[' or ref_key[-1] != ']':
+        return ref_key, None
 
-        no_kwargs = not seg_kwargs and not msg_kwargs
+    ret_key = ref_key[1:-1].lower()
+    if ret_key[:3] != 'rfc':
+        ret_key = 'rfc' + ret_key
 
-        if len(keys) == 1 and isinstance(keys[0], str) and no_kwargs:
-            keys = keys[0]
-            if '.' in keys:
-                self.key1, self.key2 = keys.split('.', maxsplit=1)
-            elif self._default_key == 1:
-                self.key1 = keys
-                self.key2 = '*'
-            else:
-                self.key2 = keys
-                self.key1 = default_segment or '*'
-        elif not keys and no_kwargs:
-            self.key1 = '*'
-            self.key2 = default_segment or '*'
+    if '#' in ret_key:
+        ret_key = ret_key.replace('section-', '')
+        rfc, section_key = ret_key.split('#', maxsplit=1)
+        section = section_template.format(section=section_key)
+    else:
+        section = ''
+        rfc = ret_key
 
-        elif len(keys) > 2:
-            raise AttributeError('Too many key arguments (no more than 2 can be passed)')
-        else:
-            key1 = deepcopy(keys[0])
-            if len(keys) == 2:
-                key2 = deepcopy(keys[1])
-            else:
-                key2 = None
+    return ret_key, base_template.format(rfc=rfc, section=section)
 
-            seg_kwargs = deepcopy(seg_kwargs) or {}
-            msg_kwargs = deepcopy(msg_kwargs) or {}
 
-            if self._default_key == 2 and key2 is None:
-                key2 = key1
-                key1 = None
+class KeyObj(CompareFieldMixin):
+    _compare_fields = ('seg_key', 'msg_key')
 
-            seg_1, msg_1, seg_kwargs_1 = self._breakup_param(key1, as_key2=False)
-            seg_2, msg_2, msg_kwargs_1 = self._breakup_param(key2, as_key2=True)
-            seg_3, msg_3, seg_kwargs = self._breakup_param(seg_kwargs, as_key2=False)
-            seg_4, msg_4, msg_kwargs = self._breakup_param(msg_kwargs, as_key2=True)
+    def __init__(self, seg=None, msg=None, seg_kwargs=None, msg_kwargs=None, default_segment=None, other_ret=None):
+        self._seg_key = seg
+        self._msg_key = msg
+        self.seg_kwargs = seg_kwargs or {}
+        self.msg_kwargs = msg_kwargs or {}
+        self._default_segment = default_segment
+        self._other_ret = other_ret
 
-            self.seg_kwargs.update(seg_kwargs)
-            self.msg_kwargs.update(msg_kwargs)
-            self.seg_kwargs.update(seg_kwargs_1)
-            self.msg_kwargs.update(msg_kwargs_1)
+    def _compare_(self, other, compare_fields=None):
+        compare_fields = compare_fields or self._compare_fields
+        if not isinstance(other, self.__class__):
+            other = make_message_key(other)
+        for field in compare_fields:
+            self_field = getattr(self, field).lower()
+            other_field = getattr(other, field).lower()
 
-            self.key1 = self._combine_keys(seg_1, seg_2, seg_3, seg_4)
-            self.key2 = self._combine_keys(msg_1, msg_2, msg_3, msg_4)
-
-    def _breakup_param(self, key, as_key2):
-        tmp_key2 = None
-        tmp_kwargs = {}
-
-        if isinstance(key, dict):
-            tmp_key1 = key.pop('key', None)
-            tmp_kwargs = key
-
-        elif isinstance(key, KeyObj):
-            tmp_key1 = str(key)
-        else:
-            tmp_key1 = key
-
-        if isinstance(tmp_key1, (list, tuple)):
-            tmp_key1, tmp_key2 = tmp_key1[:2]
-
-        elif isinstance(tmp_key1, str) and '.' in tmp_key1:
-            tmp_key1, tmp_key2 = tmp_key1.split('.', maxsplit=1)
-
-        if tmp_key1 == '':
-            tmp_key1 = None
-
-        if tmp_key2 == '':
-            tmp_key2 = None
-
-        if as_key2 and tmp_key2 is None:
-            tmp_key2 = tmp_key1
-            tmp_key1 = None
-        return tmp_key1, tmp_key2, tmp_kwargs
+            if self_field == '*' or other_field == '*':
+                continue
+            if self_field > other_field:
+                return 1
+            elif self_field < other_field:
+                return -1
+        return 0
 
     @property
     def msg_key(self):
-        return self.key2
+        return self._msg_key or self._other_ret
 
     @property
     def seg_key(self):
-        return self.key1
+        return self._seg_key or self._default_segment or self._other_ret
 
     @property
     def has_msg_key(self):
-        return self.has_key1
+        return self.msg_key is not None and self.msg_key != '*'
 
     @property
     def has_seg_key(self):
-        return self.has_key2
+        return self.seg_key is not None and self.seg_key != '*'
+
+    @property
+    def is_exact(self):
+        return self.has_msg_key and self.has_seg_key
 
     def update(self, *args, **kwargs):
-        msg_key_obj = self.make_key(*args, **kwargs)
-        super(MsgKeyObj, self).update(msg_key_obj)
+        msg_key_obj = make_message_key(*args, **kwargs)
+
+        if msg_key_obj.has_msg_key:
+            if self.has_msg_key and msg_key_obj.msg_key != self.msg_key:
+                raise AttributeError('Unable to update, mis-matched message keys: %s -> %s' % (self.msg_key, msg_key_obj.msg_key))
+            elif not self.has_msg_key:
+                self._msg_key = msg_key_obj._msg_key
+
+        if msg_key_obj.has_seg_key:
+            if self.has_seg_key and msg_key_obj.seg_key != self.seg_key:
+                raise AttributeError('Unable to update, mis-matched message keys: %s -> %s' % (self.seg_key, msg_key_obj.seg_key))
+            elif not self.has_seg_key:
+                self._seg_key = msg_key_obj._seg_key
+
         self.msg_kwargs.update(msg_key_obj.msg_kwargs)
         self.seg_kwargs.update(msg_key_obj.seg_kwargs)
 
@@ -438,9 +410,21 @@ class MsgKeyObj(KeyObj):
     @property
     def any_seg(self):
         return '*.%s' % self.msg_key
-'''
 
-'''
+    def __iadd__(self, other):
+        if not isinstance(other, self.__class__):
+            raise AttributeError('Cannot combine object, is not KeyObj class: %r' % other)
+        self.update(other)
+        return self
+
+    def __str__(self):
+        return '%s.%s' % (self.seg_key, self.msg_key)
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __repr__(self):
+        return self.__str__()
 
 # Helper object used in football
 class ParseSimpleMessageHelper(CompareFieldMixin):
@@ -534,7 +518,7 @@ class ParseSimpleMessageHelper(CompareFieldMixin):
         # self._caches = {}
         self.current_segment = segment
 
-        self.max_status = STATUS_CODES.UNKNOWN
+        self.max_status = RESULT_CODES.UNKNOWN
         self.max_msg = None
         self.max_length = 0
         self.local_overrides = local_overrides
@@ -567,7 +551,7 @@ class ParseSimpleMessageHelper(CompareFieldMixin):
         if message is not None:
             message = make_message_key(message)
             status = status or self.message_lookup.get_status(message, local_overrides=self.local_overrides)
-            if self.max_status == STATUS_CODES.UNKNOWN or\
+            if self.max_status == RESULT_CODES.UNKNOWN or\
                     self.max_status < status or \
                     (self.max_status == status and self.max_msg > message):
                 self.max_status = status
@@ -601,7 +585,7 @@ class ParseSimpleMessageHelper(CompareFieldMixin):
     __call__ = add
 
     def __bool__(self):
-        return self.max_status != STATUS_CODES.ERROR
+        return self.max_status != RESULT_CODES.ERROR
 
     def __len__(self):
         return len(self.instances)
@@ -655,7 +639,7 @@ class ParseSimpleMessageHelper(CompareFieldMixin):
     def remove(self, message_key, position=None):
         if self.items(message_key, position):
             self.max_msg = None
-            self.max_status = STATUS_CODES.UNKNOWN
+            self.max_status = RESULT_CODES.UNKNOWN
         else:
             raise KeyError('Key %r not present in %r' % (message_key, self))
 
@@ -990,8 +974,8 @@ class ParseMessageHelper(ParseSimpleMessageHelper):
 
     def __repr__(self):
         return 'ParseMessageHelper [%s] --> %s' % (self, self.max_status.name)
-'''
-'''
+
+
 # List of instance Objects, used by ParseMessage
 class InstanceList(UserList):
     def __init__(self, message, *args, **kwargs):
@@ -1208,7 +1192,7 @@ class ParseMessage(CompareFieldMixin):
         return 'MessageObject(%s) -> %s' % (self.__str__(), self.status.name)
 
     def __bool__(self):
-        return self.status != STATUS_CODES.ERROR
+        return self.status != RESULT_CODES.ERROR
 
     def __len__(self):
         return len(self.instances)
@@ -1216,8 +1200,8 @@ class ParseMessage(CompareFieldMixin):
     def __iter__(self):
         for i in self.instances:
             yield i
-'''
-'''
+
+
 # An instance of a message, used by ParseMessage
 class ParseInstance(CompareFieldMixin):
     _string_formats = {
@@ -1326,1105 +1310,9 @@ class ParseInstance(CompareFieldMixin):
         return '%s --> %r [%s/%s]' % (self.message.__repr__(), self.text, self.begin, self.end)
 
     def __bool__(self):
-        return self.message.status != STATUS_CODES.ERROR
-'''
+        return self.message.status != RESULT_CODES.ERROR
 
-'''
-# Reference Record used by MessageLookup
-class ParseRefRec(object):
-    def __init__(self, key, **kwargs):
-        self.key = key
-        self.name = kwargs.get('name', key.replace('-', ' ').replace('_', ' ').title())
-        self.description = kwargs.get('description', '')
-        self.url = kwargs.get('url', '')
-        self.text = kwargs.get('text', '')
 
-    def __repr__(self):
-        return self.name
-
-    def update(self, **kwargs):
-        for k, i in kwargs.items():
-            setattr(self, k, i)
-
-    def reference_str(self, detailed=False):
-        if detailed:
-            return adv_format('{name}{? (<description>)?}{?\nURL&coln; <url>?}{?\n<text>?}',
-                              name=self.name,
-                              description=self.description,
-                              url=self.url,
-                              text=self.text,
-                              colon=':')
-        else:
-            return adv_format('{name}{? (<description>)?}',
-                              name=self.name,
-                              description=self.description)
-'''
-
-
-class PositionObject(CompareFieldMixin):
-
-    def __init__(self, begin=0, length=0, note=''):
-        self.begin = begin
-        self.length = length
-        self.end = begin + length
-        self.note = note
-
-    def at(self, position):
-        return self.begin <= position <= self.end
-
-    def __str__(self):
-        return '%s / %s' % (self.begin, self.length)
-
-    @property
-    def get_slice(self):
-        return slice(self.begin, self.end)
-
-    @property
-    def get_range(self):
-        return range(self.begin, self.end)
-
-    def __iter__(self):
-        for i in self.get_range:
-            yield i
-
-    @property
-    def get_set(self):
-        return set(self.get_range)
-
-    @property
-    def items(self):
-        return self.begin, self.length
-
-    @staticmethod
-    def _compare_eng_(self_items, other_items):
-        for a, b in zip(make_list(self_items), make_list(other_items)):
-            if a < b:
-                return -1
-            elif a > b:
-                return 1
-        return 0
-
-    def _compare_(self, other, compare_fields=None):
-        if isinstance(other, int):
-            return self._compare_eng_(self.begin, other)
-        if isinstance(other, (list, tuple)):
-            return self._compare_eng_((self.begin, self.length), other)
-        if isinstance(other, self.__class__):
-            return self._compare_eng_((self.begin, self.length), (other.begin, other.length))
-
-    def output(self, template='', **msg_template_kwargs):
-        """
-        printed output:
-            instance_template keywords:
-                begin
-                length
-                end
-                note
-                (+ msg template keywords)
-        """
-        return template.format(
-            begin=self.begin,
-            length=self.length,
-            end=self.end,
-            note=self.note,
-            **msg_template_kwargs)
-
-
-class MessageObject(CompareFieldMixin):
-    _compare_fields = ('status', 'key', 'max_pos')
-
-    def __init__(self, key=None, name=None, description='', status=None, references=None, begin=0, length=0, note='',
-                 msg_lookup=None, positions=None):
-        self.msg_lookup = msg_lookup
-        self.positions = []
-        self.position_index = set()
-        self.max_position = None
-        self.key = key
-        self.name = name
-        self.status = status or STATUS_CODES.ERROR
-        self.description = description
-        self._references = references or set()
-        self._ref_cache = None
-        if positions:
-            for p in positions:
-                self.add_pos(*p)
-        else:
-            self.add_pos(begin, length, note)
-
-    def references(self):
-        if not self._ref_cache:
-            self._ref_cache = self.msg_lookup.get_ref(self._references)
-        return self._ref_cache
-
-    def add_pos(self, begin, length, note):
-        tmp_pos = PositionObject(begin, length, note)
-        self.positions.append(tmp_pos)
-        self._set_pos(tmp_pos)
-
-    def _set_pos(self, position):
-        self.position_index = self.position_index | position.get_set
-        if self.max_position is None:
-            self.max_position = position
-        else:
-            self.max_position = max(self.max_position, position)
-
-    def at(self, position):
-        return position in self.position_index
-
-    @property
-    def _position_list(self):
-        tmp_ret = []
-        for p in self.positions:
-            tmp_ret.append(p.items)
-        return tmp_ret
-
-    def copy(self):
-        return self.__class__(
-            self.key,
-            self.name,
-            description=self.description,
-            references=self._references,
-            notes=self.notes,
-            positions=self._position_list)
-    __copy__ = copy
-
-    def remove(self, position):
-        found = False
-        while True:
-            try:
-                self.positions.remove(position)
-                found = True
-            except ValueError as err:
-                if found:
-                    break
-                else:
-                    raise err
-
-        self.position_index.clear()
-        self.max_position = None
-        for pos in self.positions:
-            self._set_pos(pos)
-
-    def key_match(self, key, position=None):
-        if not key == self.key:
-            return False
-        if position is None:
-            return True
-        return position in self.position_index
-
-    def output(self, 
-               template='{message_key}', 
-               reference_template=None,
-               instance_template=None, 
-               reference_join=', ',
-               instance_join=', '):
-        """
-        printed output:
-            message_template keywords:
-                full_key
-                segment_key
-                message_key
-                name
-                description
-                status
-                references (only if reference template != None)
-                instances (only if instance template != None)
-
-            reference_template keywords:
-                url
-                name
-                description
-                key
-
-            instance_template keywords:
-                begin
-                length
-                end
-                note
-                (+ msg template keywords)
-
-        default templates:
-            segment_template = '{segment_key}( {messages} )'
-            message_template = '{message_key}
-        """
-
-        tmp_msg_kwargs = dict(
-            full_key=str(self.key),
-            segment_key=self.key.key1,
-            message_key=self.key.key2,
-            name=self.name,
-            description=self.description,
-            status=self.status.name)
-
-        if '{references}' in template:
-            if reference_template is None:
-                raise AttributeError('Reference list cannot be added without reference template')
-            tmp_references = []
-            for r in self.references():
-                tmp_references.append(reference_template.format(r))
-            tmp_msg_kwargs['references'] = reference_join.join(tmp_references)
-
-        if '{instances}' in template:
-            if instance_template is None:
-                raise AttributeError('Instance list cannot be added without reference template')
-            tmp_positions = []
-            for p in self.positions:
-                tmp_positions.append(p.output(instance_template, **tmp_msg_kwargs))
-            tmp_msg_kwargs['instances'] = instance_join.join(tmp_positions)
-
-        return template.format(**tmp_msg_kwargs)
-
-    def __contains__(self, item):
-        return item in self.position_index
-
-    def __str__(self):
-        return str(self.key)
-
-    def __bool__(self):
-        return self.status != STATUS_CODES.ERROR
-
-    def __len__(self):
-        return len(self.positions)
-
-    
-
-class SinpleMessageHelper(object):
-    """
-    PMH = SimpleMessageHelper(message_lookup, parse_string, segment_definition or key, override_definitions)
-
-    add via string:
-        PMH('key')                           #  position = 0, length = 0
-        PMH('key', position)                 # length = 0
-        PMH('key', position, length)
-        PMH('key', position, length, note)   # adds a note to the msg
-
-    add via dict (with definition):
-        PMH({'key': 'key', ...}, position, length)
-
-    add definition:
-        PMH.define({'key': 'key',...}, 'key', ...}
-
-    check if contains:
-        'key' in PMH
-
-    check if contains at position:
-        PMH.at('key', position) == [True/False]
-
-    combine:
-        PMH += PMH_2
-
-    combine into new:
-        PMH_3 = PMH + PMH_2
-
-    remove key:
-        PMH.remove('key')  # if no position, removes all positions
-        PMH.remove('key', position)  # if position == -1, removes last key
-
-        PMH.remove('segment_key.*')  # if msg = * and no position removes all messages in that segment
-        PMH.remove('*.msg_key')  # if segment = *, and no position, removes all messages of that key in all segments
-
-    list keys:
-        PMH.keys(show_position, show_length)
-            [('key', position, length), (key, position, length), ...]
-
-        PMH.keys(show_position, combine_like=True, show_length)
-            [('segment_key.msg_key', [(position, length), (position, length)]),
-             ('segment_key.msg_key', [(position, length)]), ...]
-
-
-    list_objects:
-        PMH.items() == [msg_obj, msg_pbj, ...]
-        for item in PMH
-
-    get_object:
-        PMH.get(key, position)
-            * if no position, gets last message
-            * if no args, gets worst msg
-
-    printed output:
-        PMH.get_output(key, template='template', join='join_string', header='', footer='')
-            * ordered by:
-                status (worst to best)
-                position (lowest to highest)
-                length (shortest to longest)
-                alpha (segment_key / msg_key)
-
-    bool:
-        if PMH:   # returns true if worst code == OK or WARNING
-
-    len:
-        len(PMH)   #  counts messages
-
-    """
-
-    def __init__(self, message_lookup, parse_string, default_segment, override_definitions=None):
-        """
-        PMH = SimpleMessageHelper(message_lookup, parse_string, segment_definition or key, override_definitions)
-        """
-        self._message_lookup = message_lookup
-        self._parse_string = parse_string
-        self._default_segment = default_segment
-        self._override_definitions = override_definitions
-        self.max_message = None
-        self.last_message = None
-
-    def __call__(self, *args, begin=0, length=0, note=None):
-        """
-        can add:
-            'key', 'key', 'key'
-            {'key': 'key', **key_definition}
-            MessageObject
-            MessageHelper
-        """
-        if not args:
-            raise AttributeError('At least one argument (KEY) must be passed')
-        for arg in args:
-            if isinstance(arg, str):
-                arg = self._key_handler(arg)
-                tmp_rec = self._message_lookup(arg)
-                tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
-                self._add_mo(tmp_rec)
-                return tmp_rec
-            elif isinstance(arg, dict):
-                arg['key'] = self._key_handler(arg['key'])
-                self.define(arg)
-                tmp_rec = self._message_lookup(arg['key'])
-                tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
-                self._add_mo(tmp_rec)
-                return tmp_rec
-            elif isinstance(arg, self.__class__):
-                for item in arg:
-                    self(item)
-                return arg.items()
-            elif isinstance(arg, MessageObject):
-                self._add_mo(arg)
-                return arg
-
-    def _add_mo(self, msg_obj):
-        self.last_message = msg_obj
-        if self.max_message is None:
-            self.max_message = msg_obj
-        else:
-            self.max_message = max(self.max_message, msg_obj)
-        return msg_obj
-
-    def _key_handler(self, key):
-        if key is None:
-            return key
-        return KeyObj.make_key(key, _key1_default=self._default_segment)
-
-    def define(self, *messages):
-        """
-        add definition:
-            PMH.define({'key': 'key',...}, 'key', ...}
-        """
-        self._message_lookup.add(*messages, default_segment=self._default_segment)
-
-    def __contains__(self, item):
-        item = self._key_handler(item)
-        return self.max_message.key == item
-
-    def at(self, key, position=None):
-        key = self._key_handler(key)
-        if position is None:
-            return key in self
-        else:
-            for item in self:
-                if item == key and item.at(position):
-                    return True
-        return False
-
-    def copy(self):
-        tmp_item = self.__class__(
-            message_lookup=self._message_lookup,
-            parse_string=self._parse_string,
-            default_segment=self._default_segment,
-            override_definitions=self._override_definitions)
-        tmp_item.max_message = self.max_message
-        return tmp_item
-    __copy__ = copy
-
-    def __iadd__(self, other):
-        self(other)
-        return self
-
-    def __add__(self, other):
-        tmp_ret = self.copy()
-        tmp_ret(other)
-        return tmp_ret
-
-    def items(self, key=None, position=None):
-        """
-        list_objects:
-            PMH.items() == [msg_obj, msg_pbj, ...]
-            for item in PMH
-
-        """
-        key = self._key_handler(key)
-        if self.max_message.key_match(key=key, position=position):
-            yield self.max_message
-    __iter__ = items
-
-    def remove(self, key=None, position=None):
-        """
-        remove key:
-            PMH.remove('key')  # if no position, removes all positions
-            PMH.remove('key', position)  # if position == -1, removes last key
-
-            PMH.remove('segment_key.*')  # if msg = * and no position removes all messages in that segment
-            PMH.remove('*.msg_key')  # if segment = *, and no position, removes all messages of that key in all segments
-
-        """
-        key = self._key_handler(key)
-        if key is not None and self.max_message.key != key:
-            return
-
-        if position is None:
-            self.max_message = None
-            self.last_message = None
-        else:
-            try:
-                self.max_message.remove(position)
-            except ValueError:
-                pass
-            if len(self.max_message) == 0:
-                self.max_message = None
-                self.last_message = None
-    __del__ = remove
-
-    def keys(self, key=None, position=None, as_string=True):
-        """
-        list_keys:
-            PMH.items() == [key, key, key, ...]
-        """
-        if as_string:
-            for item in self.items(key=key, position=position):
-                yield item.key
-        else:
-            for item in self.items(key=key, position=position):
-                yield str(item.key)
-
-    def get(self, key=None, position=None):
-        """
-        get_object:
-            PMH.get(key, position)
-                * if no position, gets last message
-                * if no args, gets worst msg
-        """
-        key = self._key_handler(key)
-        if self.last_message.match_key(key, position=position):
-            return self.last_message
-        else:
-            return None
-
-    def output(self, key=None, position=None, segment_template=None, message_template=None, reference_template=None,
-               instance_template=None, segment_join=',', message_join=',', reference_join=',', instance_join=',',
-               header=None, footer=None):
-        """
-        printed output:
-            PMH.output(key, template='template', join='join_string', header='', footer='')
-                * ordered by:
-                    status (worst to best)
-                    position (lowest to highest)
-                    length (shortest to longest)
-                    alpha (segment_key / msg_key)
-
-            segment_template keywords:
-                segment_key
-                message_count
-                messages
-
-            message_template keywords:
-                full_key
-                segment_key
-                message_key
-                name
-                description
-                status
-                references (only if reference template != None)
-                instances (only if instance template != None)
-
-            reference_template keywords:
-                url
-                name
-                description
-                key
-
-            instance_template keywords:
-                begin
-                length
-                end
-                note
-                (+ msg template keywords)
-
-        default templates:
-            segment_template = '{segment_key}( {messages} )'
-            message_template = '{message_key}
-        """
-        tmp_ret = []
-        if header:
-            tmp_ret.append(header)
-            tmp_ret.append('\n')
-
-        tmp_messages = []
-        if segment_template is None:
-            for i in self.items(key, position=position):
-                tmp_messages.append(i.output(template=message_template, reference_template=reference_template,
-                                             instance_template=instance_template, reference_join=reference_join,
-                                             instance_join=instance_join))
-            tmp_ret.append(message_join.join(tmp_messages))
-        else:
-            tmp_segs = {}
-            for i in self.items(key, position=position):
-                if i.key_obj.key1 in tmp_segs:
-                    tmp_segs[i.key_obj.key1].append(i)
-                else:
-                    tmp_segs[i.key_obj.key1] = [i]
-            tmp_seg_list = list(tmp_segs.keys())
-            tmp_seg_list.sort()
-            for s in tmp_seg_list:
-                seg_msgs = []
-                for i in tmp_segs[s]:
-                    seg_msgs.append(i.output(template=message_template, reference_template=reference_template,
-                                             instance_template=instance_template, reference_join=reference_join,
-                                             instance_join=instance_join))
-                seg_rec = segment_template.format(
-                    segment_key=s,
-                    message_count=len(seg_msgs),
-                    messages=message_join.join(seg_msgs))
-                tmp_messages.append(seg_rec)
-            tmp_ret.append(segment_join.join(tmp_messages))
-
-        if footer:
-            tmp_ret.append('\n')
-            tmp_ret.append(footer)
-
-        return ''.join(tmp_ret)
-
-    def __bool__(self):
-        """
-        if PMH:   # returns true if worst code == OK or WARNING
-        """
-        return self.max_message.status != STATUS_CODES.ERROR
-
-    def __len__(self):
-        """
-        len(PMH)   #  counts messages
-        """
-        if self.max_message is None:
-            return 1
-        return 0
-
-    def __str__(self):
-        return self.output()
-
-
-class FullMessageHelper(SinpleMessageHelper):
-    """
-    PMH = SimpleMessageHelper(message_lookup, parse_string, segment_definition or key, override_definitions)
-
-    add via string:
-        PMH('key')                           #  position = 0, length = 0
-        PMH('key', position)                 # length = 0
-        PMH('key', position, length)
-        PMH('key', position, length, note)   # adds a note to the msg
-
-    add via dict (with definition):
-        PMH({'key': 'key', ...}, position, length)
-
-    add definition:
-        PMH.define({'key': 'key',...}, 'key', ...}
-
-    check if contains:
-        'key' in PMH
-
-    check if contains at position:
-        PMH.at('key', position) == [True/False]
-
-    combine:
-        PMH += PMH_2
-
-    combine into new:
-        PMH_3 = PMH + PMH_2
-
-    remove key:
-        PMH.remove('key')  # if no position, removes all positions
-        PMH.remove('key', position)  # if position == -1, removes last key
-
-        PMH.remove('segment_key.*')  # if msg = * and no position removes all messages in that segment
-        PMH.remove('*.msg_key')  # if segment = *, and no position, removes all messages of that key in all segments
-
-    list keys:
-        PMH.keys(show_position, show_length)
-            [('key', position, length), (key, position, length), ...]
-
-        PMH.keys(show_position, combine_like=True, show_length)
-            [('segment_key.msg_key', [(position, length), (position, length)]),
-             ('segment_key.msg_key', [(position, length)]), ...]
-
-
-    list_objects:
-        PMH.items() == [msg_obj, msg_pbj, ...]
-        for item in PMH
-
-    get_object:
-        PMH.get(key, position)
-            * if no position, gets last message
-            * if no args, gets worst msg
-
-    printed output:
-        PMH.get_output(key, template='template', join='join_string', header='', footer='')
-            * ordered by:
-                status (worst to best)
-                position (lowest to highest)
-                length (shortest to longest)
-                alpha (segment_key / msg_key)
-
-    bool:
-        if PMH:   # returns true if worst code == OK or WARNING
-
-    len:
-        len(PMH)   #  counts messages
-
-    """
-
-    def __init__(self, message_lookup, parse_string, default_segment, override_definitions=None):
-        super(FullMessageHelper, self).__init__(message_lookup, parse_string, default_segment,
-                                                override_definitions=override_definitions)
-        self.messages = {}
-        self._message_order = []
-
-    def _add_mo(self, msg_obj):
-        super(FullMessageHelper, self)._add_mo(msg_obj)
-        self.messages[msg_obj.key] = msg_obj
-        self._message_order.append(msg_obj.key)
-
-    def __contains__(self, item):
-        item = self._key_handler(item)
-        return item in self.messages
-
-    def items(self, key=None, position=None):
-        """
-        list_objects:
-            PMH.items() == [msg_obj, msg_pbj, ...]
-            for item in PMH
-
-        """
-        for item in self.messages:
-            if item.key_match(key=key, position=position):
-                yield item
-    __iter__ = items
-
-    def remove(self, key=None, position=None):
-        """
-        remove key:
-            PMH.remove('key')  # if no position, removes all positions
-            PMH.remove('key', position)  # if position == -1, removes last key
-
-            PMH.remove('segment_key.*')  # if msg = * and no position removes all messages in that segment
-            PMH.remove('*.msg_key')  # if segment = *, and no position, removes all messages of that key in all segments
-
-        """
-        rem_items = []
-        fix_max = False
-        for item in self.items(key, position=position):
-            if position is None:
-                rem_items.append(item.key)
-                self._message_order.remove(item.key)
-                if item.key == self.max_message.key:
-                    fix_max = True
-            else:
-                try:
-                    item.remove(position)
-                except ValueError:
-                    pass
-                if len(item) == 0:
-                    rem_items.append(item.key)
-                    self._message_order.remove(item.key)
-                    if item.key == self.max_message.key:
-                        fix_max = True
-
-        for i in rem_items:
-            del self.messages[i]
-
-        if fix_max:
-            self.max_message = None
-            for i in self.messages:
-                if self.max_message is None:
-                    self.max_message = i
-                else:
-                    self.max_message = max(self.max_message, i)
-    __del__ = remove
-
-    def get(self, key=None, position=None):
-        """
-        get_object:
-            PMH.get(key, position)
-                * if no position, gets last message
-                * if no args, gets worst msg
-        """
-        if self.last_message.match_key(key, position=position):
-            return self.last_message
-        else:
-            for i in self.items(key, position=position):
-                return i
-        return None
-
-    def __len__(self):
-        return len(self.messages)
-
-
-'''
-    def copy(self):
-        tmp_ret = self.__class__(self.message_lookup, self.parse_str, self.current_segment, local_overrides=self.local_overrides)
-        tmp_ret.segments = deepcopy(self.segments)
-        tmp_ret.max_status = self.max_status
-        tmp_ret.max_length = self.max_length
-        tmp_ret.max_msg = self.max_msg
-        return tmp_ret
-
-    def _add_new(self, msg_key_obj, begin=0, length=0, note=None, **kwargs):
-        try:
-            tmp_msg = self.segments[msg_key_obj.seg_key][msg_key_obj.msg_key]
-        except KeyError:
-            tmp_msg = self.message_lookup(msg_key_obj, local_overrides=self.local_overrides)
-            tmp_msg.message_helper = self
-            self.segments[msg_key_obj.seg_key][msg_key_obj.msg_key] = tmp_msg
-        tmp_msg.instances.add(begin=begin, length=length, note=note)
-        self.update_max(msg_key_obj, length, tmp_msg.status)
-
-        return tmp_msg
-
-    def _add_msg(self, message, begin=0, length=0):
-        if message.key not in self.segments[message.segment_key]:
-            message.message_helper = self
-            self.segments[message.segment_key][message.key] = message
-
-        for i in message:
-            i.message = message
-
-        self.update_max(message.key_obj, length, message.status)
-        return message
-
-    @property
-    def messages(self):
-        for s in self.segments.values():
-            for m in s.values():
-                yield m
-
-    @property
-    def instances(self):
-        if 'instances' not in self._caches:
-            tmp_instances = []
-            for m in self.messages:
-                for i in m:
-                    tmp_instances.append(i)
-            tmp_instances.sort()
-            self._caches['instances'] = tmp_instances
-        return self._caches['instances']
-
-
-    def items(self, key=None, position=None):
-        position = self._check_pos(position)
-        matched = False
-        indexed = False
-        for i in self.instances:
-            if key is None or i.key_match(key):
-                matched = True
-                if position is None:
-                    indexed = True
-                    yield i
-                elif i.begin == position:
-                    indexed = True
-                    yield i
-        if key is not None and not matched:
-            raise KeyError('Message %r not found' % key)
-
-        if position is not None and not indexed:
-            raise IndexError('Message %r not found at position %s' % (key, str(position)))
-
-    def get_message(self, segment, message=None):
-        ms_kwargs = make_message_key(segment, message, default_segment=self.current_segment)
-        return self.segments[ms_kwargs.seg_key][ms_kwargs.msg_key]
-
-    def at(self, key, position):
-        for i in self.items(key):
-            if self._check_pos(position) in i:
-                return True
-        return False
-
-    def remove(self, message_key, position=None):
-        self._caches.clear()
-        position = self._check_pos(position)
-        found_key = False
-        kill_segs = []
-        for seg_key, segment in self.segments.items():
-            kill_msgs = []
-            for msg_key, message in segment.items():
-                if message.key_match(message_key):
-                    found_key = True
-                    if position is None:
-                        kill_msgs.append(msg_key)
-                    else:
-                        message.remove(position)
-                        if len(message) == 0:
-                            kill_msgs.append(msg_key)
-            for m in kill_msgs:
-                del self.segments[seg_key][m]
-            if not self.segments[seg_key]:
-                kill_segs.append(seg_key)
-        for s in kill_segs:
-            del self.segments[s]
-        if not found_key:
-            raise KeyError('Key %r not present in %r' % (message_key, self))
-
-    def keys(self, key=None, inc_message_key=True, inc_segment_key=True):
-        tmp_ret = {}
-        if not inc_message_key and not inc_segment_key:
-            for i in self.items(key):
-                tmp_ret[i.key_obj] = None
-            return list(tmp_ret)
-        elif inc_message_key and inc_segment_key:
-            tmp_key = 'long_key'
-        elif inc_segment_key:
-            tmp_key = 'segment_key'
-        else:
-            tmp_key = 'key'
-        for i in self.items(key):
-            tmp_ret[i.get_str(tmp_key)] = None
-        return list(tmp_ret)
-
-    def info(self, key=None, inc_message_key=True, inc_segment_key=True,
-             inc_position=True, inc_length=True, combine_like=False):
-        if combine_like:
-            tmp_dict = {}
-            for i in self.items(key):
-                tmp_key, tmp_info = i.info(inc_message_key=inc_message_key,
-                                           inc_segment_key=inc_segment_key,
-                                           inc_position=inc_position,
-                                           inc_length=inc_length,
-                                           combine_like=combine_like)
-                if tmp_key in tmp_dict:
-                    tmp_dict[tmp_key].append(tmp_info)
-                else:
-                    tmp_dict[tmp_key] = [tmp_info]
-
-            tmp_ret = []
-            for key, item in tmp_dict.items():
-                tmp_ret.append((key, item))
-            return tmp_ret
-        else:
-            tmp_ret = []
-            for i in self.items(key):
-                tmp_info = i.info(inc_message_key=inc_message_key,
-                                  inc_segment_key=inc_segment_key,
-                                  inc_position=inc_position,
-                                  inc_length=inc_length,
-                                  combine_like=combine_like)
-                tmp_ret.append(tmp_info)
-            return tmp_ret
-
-    def get_output(self, template_or_key=None, join='\n', header=None, footer=None, combine_same=True):
-        tmp_ret = []
-        if header is not None:
-            tmp_ret.append(header)
-
-        if template_or_key == 'seg_keys':
-            for seg_key, msgs in self.segments.items():
-                tmp_msgs = list(msgs.values())
-                tmp_msgs.sort()
-                tmp_keys = []
-                for msg in tmp_msgs:
-                    if len(msg) != 1:
-                        tmp_keys.append('%s(%s)' % (msg.key, len(msg)))
-                    else:
-                        tmp_keys.append(msg.key)
-
-                tmp_str = '%s(%s)' % (seg_key, ', '.join(tmp_keys))
-                tmp_ret.append(tmp_str)
-        else:
-            for i in self:
-                tmp_str = i.get_str(template_or_key)
-                if not combine_same or tmp_str not in tmp_ret:
-                    tmp_ret.append(tmp_str)
-
-        if footer is not None:
-            tmp_ret.append(footer)
-
-        if join is not None:
-            tmp_ret = join.join(tmp_ret)
-
-        return tmp_ret
-
-    def __contains__(self, item):
-        for m in self.messages:
-            if m.key_match(item):
-                return True
-        return False
-
-    def __str__(self):
-        return self.get_output('seg_keys', join=', ')
-
-    def __repr__(self):
-        return 'ParseMessageHelper [%s] --> %s' % (self, self.max_status.name)
-
-'''
-
-
-# Stores Reference Records message_lookup.
-class References(UserDict):
-    def __init__(self, *references):
-        # self.message_lookup = message_lookup
-        self.refs_added = []
-        super(References, self).__init__()
-        if references:
-            self.add(*references)
-
-    def add(self, *references):
-        self.refs_added.clear()
-        for ref in references:
-            if isinstance(ref, dict):
-                ref = ref.copy()
-                key = ref.pop('key', None)
-                if not key:
-                    raise AttributeError('Unable to determine reference key reference: %r' % ref)
-                self[key] = ref
-            elif isinstance(ref, str):
-                self[ref] = {}
-            elif isinstance(ref, self.__class__):
-                self.data.update(ref.data)
-            elif isinstance(ref, (list, tuple)):
-                self.add(*ref)
-        return self.refs_added
-
-    def get_refs(self, *refs):
-        tmp_ret = []
-        for ref in refs:
-            ref = self._make_key(ref)
-            tmp_ret.append(self.data[ref])
-        return tmp_ret
-
-    def output(self, template='', reference_join=', '):
-        """
-        printed output:
-            reference_template keywords:
-                url
-                name
-                description
-                key
-        """
-        if template == '':
-            return template
-        tmp_ret = []
-        for r in self.data:
-            tmp_ret.append(template.format(**r))
-        return reference_join.join(tmp_ret)
-
-    def _make_key(self, key, key_only=True):
-        tmp_ret = {
-            'key': key,
-            'rfc': None,
-            'section': None
-        }
-        if key[0] == '[' and key[-1] == ']':
-            key = key[1:-1].upper()
-            if key[:3] != 'RFC':
-                key = 'RFC' + key
-
-            if '#' in key:
-                key = key.replace('SECTION-', '')
-                tmp_ret['rfc'], tmp_ret['section'] = key.split('#', maxsplit=1)
-            else:
-                tmp_ret['rfc'] = key
-            tmp_ret['key'] = key
-        if key_only:
-            return tmp_ret['key']
-        else:
-            return tmp_ret
-
-    def __getitem__(self, item):
-        item = self._make_key(item)
-        try:
-            return super(References, self).__getitem__(item)
-        except KeyError:
-            raise KeyError('KeyError: %s not in %r' % (item, self))
-
-    def __setitem__(self, key, value):
-        if value:
-            value = value.copy()
-        else:
-            value = {}
-
-        tmp_key = self._make_key(key, False)
-        key = tmp_key['key']
-        value['key'] = key
-        self.refs_added.append(key)
-
-        if tmp_key['rfc'] is not None:
-            base_template = 'https://tools.ietf.org/html/{rfc}{section}'
-            section_template = '#section-{section}'
-
-            if tmp_key['section'] is not None:
-                section = section_template.format(**tmp_key)
-                value['description'] = value.get('description', 'IETF %s Section %s' % (tmp_key['rfc'], tmp_key['section']))
-                value['url'] = value.get('url', base_template.format(rfc=tmp_key['rfc'], section=section))
-                value['name'] = value.get('name', key)
-            else:
-                value['name'] = value.get('name', key)
-                value['description'] = value.get('description', 'IETF %s' % key)
-                value['url'] = value.get('url', base_template.format(rfc=key, section=''))
-
-        else:
-            value['name'] = value.get('name', key.replace('-', ' ').replace('_', ' ').title())
-
-        if key in self:
-            self.data[key].update(value)
-        else:
-            self.data[key] = value
-
-
-class MessageLookup(WildCardMergeDict):
-    fields = (
-        ('name', {'default': '', 'merge': '_merge_combine_string_by_key'}),
-        ('description', {'default': '', 'merge': '_merge_combine_string', 'kwargs': {'rev_order': True}}),
-        ('references', {'default': set(), 'add': '_add_reference_item', 'merge': '_merge_set_unique'}),
-        ('status', STATUS_CODES.ERROR))
-
-    def __init__(self, name, messages=None, references=None):
-        self.name = name
-        self.references = References(self, *make_list(references))
-        super(MessageLookup, self).__init__(*make_list(messages))
-
-    def _add_reference_item(self, key, to_dict, field_name, value, **kwargs):
-        tmp_set = to_dict.get(field_name, set())
-        tmp_set = tmp_set | set((self.references.add(value)))
-        to_dict[field_name] = tmp_set
-
-    def add_references(self, *references):
-        self.references.add(*references)
-
-    def get_references(self, *args):
-        return self.references.get_refs(*args)
-
-    def add_parser(self, parser_class):
-        if parser_class.name is not None:
-            if parser_class.references:
-                self.add_references(*parser_class.references)
-            if parser_class.messages:
-                self.update(*parser_class.messages)
-
-    def get(self, key, overrides=None, as_dict=False, begin=0, length=0, note=''):
-        if as_dict:
-            return super(MessageLookup, self).get(key, overrides=overrides)
-        else:
-            return MessageObject(begin=begin,
-                                 length=length,
-                                 note=note,
-                                 msg_lookup=self,
-                                 **super(MessageLookup, self).get(key, overrides=overrides))
-    __call__ = get
-
-"""
 # Message Record used by MessageLookup
 class ParseMessageRec(object):
 
@@ -2436,7 +1324,7 @@ class ParseMessageRec(object):
         self.key = key
         self.name = name or key.replace('-', ' ').replace('_', ' ').title()
         self.description = description
-        self.status = status or STATUS_CODES.ERROR
+        self.status = status or RESULT_CODES.ERROR
         self._set('segment', segment)
         self.references = References(message_lookup=self.segment.lookup)
         self.update(references=references)
@@ -2597,8 +1485,100 @@ class ParseSegmentRec(object):
     def __repr__(self):
         return self.key
 
-"""
-'''
+
+# Reference Record used by MessageLookup
+class ParseRefRec(object):
+    def __init__(self, key, **kwargs):
+        self.key = key
+        self.name = kwargs.get('name', key.replace('-', ' ').replace('_', ' ').title())
+        self.description = kwargs.get('description', '')
+        self.url = kwargs.get('url', '')
+        self.text = kwargs.get('text', '')
+
+    def __repr__(self):
+        return self.name
+
+    def update(self, **kwargs):
+        for k, i in kwargs.items():
+            setattr(self, k, i)
+
+    def reference_str(self, detailed=False):
+        if detailed:
+            return adv_format('{name}{? (<description>)?}{?\nURL&coln; <url>?}{?\n<text>?}',
+                              name=self.name,
+                              description=self.description,
+                              url=self.url,
+                              text=self.text,
+                              colon=':')
+        else:
+            return adv_format('{name}{? (<description>)?}',
+                              name=self.name,
+                              description=self.description)
+
+
+# Stores Reference Records in both segmet and message records.
+class References(UserDict):
+    def __init__(self, *args, message_lookup=None, **kwargs):
+        self.message_lookup = message_lookup
+        super(References, self).__init__(*args, **kwargs)
+
+    def update(self, *args, **kwargs):
+        for arg in args:
+            if isinstance(arg, dict):
+                if 'key' in arg:
+                    self.__setitem__(*self.make_reference(**arg))
+                else:
+                    for key, value in arg.items():
+                        if isinstance(value, ParseRefRec):
+                            self[key] = value
+                        else:
+                            self.__setitem__(*self.make_reference(key, **value))
+
+            elif isinstance(arg, str):
+                key, value = self.make_reference(arg)
+                self[key] = value
+            elif isinstance(arg, self.__class__):
+                self.data.update(arg.data)
+            elif isinstance(arg, (list, tuple)):
+                self.update(*arg)
+        if kwargs:
+            self.update(kwargs)
+
+    def make_reference(self, key=None, **kwargs):
+        key = key or kwargs.pop('key', None)
+        if key is None:
+            raise AttributeError('No key found in %s' % kwargs)
+        if isinstance(key, dict):
+            key.update(kwargs)
+            kwargs = key
+            key = kwargs.pop('key')
+
+        key, url = make_reference_key(key)
+
+        if url:
+            if 'url' not in kwargs:
+                kwargs['url'] = url
+            if 'description' not in kwargs:
+                kwargs['description'] = 'See %s for more information' % key
+        return key, kwargs
+
+    def __setitem__(self, key, value):
+        if key in self.message_lookup.references:
+            self.data[key] = self.message_lookup.references[key]
+        else:
+            if isinstance(value, dict):
+                junk = value.pop('key', None)
+                if not value:
+                    raise ReferenceNotFoundError(key, self.message_lookup)
+                value = ParseRefRec(key, **value)
+
+            if not isinstance(value, ParseRefRec):
+                raise AttributeError('Invalid Reference Type:  %r' % value)
+
+            self.message_lookup.references[key] = value
+            self.data[key] = value
+
+
 # Used by message lookup and message helper to manage status's
 class StatusHelper(object):
     """
@@ -2621,7 +1601,7 @@ class StatusHelper(object):
         self._overrides.clear()
         self.update(*overrides)
 
-    def update(self, *overrides, default=STATUS_CODES.ERROR, force=True):
+    def update(self, *overrides, default=RESULT_CODES.ERROR, force=True):
         for override in overrides:
             if override is not None:
                 if isinstance(override, (list, tuple)):
@@ -2634,9 +1614,9 @@ class StatusHelper(object):
                         self[override] = default
 
     def __setitem__(self, key, value):
-        if isinstance(key, STATUS_CODES) and isinstance(value, STATUS_CODES):
+        if isinstance(key, RESULT_CODES) and isinstance(value, RESULT_CODES):
             self._overrides[key] = value
-        elif isinstance(key, STATUS_CODES):
+        elif isinstance(key, RESULT_CODES):
             tmp_key = key
             key = value
             value = tmp_key
@@ -2649,7 +1629,7 @@ class StatusHelper(object):
 
         self._overrides[tmp_key] = value
 
-    def get(self, key, local_overrides=None, default=STATUS_CODES.ERROR):
+    def get(self, key, local_overrides=None, default=RESULT_CODES.ERROR):
         local_overrides = local_overrides or {}
         if isinstance(key, (ParseMessageRec, ParseMessage)):
             if key.status is not None:
@@ -2681,11 +1661,10 @@ class StatusHelper(object):
 
     def __contains__(self, key):
         return key in self._overrides
-'''
 
-'''
+
 # Stores all messages, used for lookups
-class MessageLookupOld(object):
+class MessageLookup(object):
     """
     formats:
     messages = [dict()]
@@ -2706,7 +1685,7 @@ class MessageLookupOld(object):
         self.name = name
         self.locked = False
         if error_on_warning:
-            error_on_warning = {STATUS_CODES.WARNING: STATUS_CODES.ERROR}
+            error_on_warning = {RESULT_CODES.WARNING: RESULT_CODES.ERROR}
         else:
             error_on_warning = {}
         self._defaults = dict(
@@ -2733,7 +1712,7 @@ class MessageLookupOld(object):
         # self.set_status_on_message(self._defaults['override_status'])
         self.message_cache.clear()
 
-    def set_overrides(self, *overrides, default=STATUS_CODES.ERROR):
+    def set_overrides(self, *overrides, default=RESULT_CODES.ERROR):
         self.msg_status.update(*overrides, default=default)
 
     def clear(self):
@@ -2948,7 +1927,7 @@ class MessageLookupOld(object):
     def len(self):
         return len(list(self.iter_messages()))
     __len__ = len
-'''
+
 
 MESSAGE_LOOKUP = MessageLookup('base', messages=BASE_PARSING_MESSAGES)
 
@@ -2962,7 +1941,6 @@ def get_message_lookup(msg_lookup=None):
         return MessageLookup(**msg_lookup)
 
 
-'''
 def fix_local_overrides(*overrides):
     """
     accepts in the format of:
@@ -2975,7 +1953,7 @@ def fix_local_overrides(*overrides):
 
     def add_items(add_list, add_status, item_needs_helper):
         for item in make_list(add_list):
-            if not isinstance(item, STATUS_CODES):
+            if not isinstance(item, RESULT_CODES):
                 item = make_message_key(item)
                 if not item.is_exact:
                     item_needs_helper = True
@@ -2992,7 +1970,7 @@ def fix_local_overrides(*overrides):
             for status, items in override.items():
                 needs_helper = add_items(items, status, needs_helper)
         else:
-            status = STATUS_CODES.ERROR
+            status = RESULT_CODES.ERROR
             needs_helper = add_items(override, status, needs_helper)
 
     if needs_helper:
@@ -3001,4 +1979,3 @@ def fix_local_overrides(*overrides):
         return tmp_ret_obj
 
     return tmp_ret
-'''

@@ -111,6 +111,13 @@ class TestCaseCompare(TestCase):
         """
         :param compare_table: table of
             (item_key, compare_item, compare_value),
+        :param limit: item key to limit the test to (or None to not limit it)
+        :param sub_test_key: string to put before the sub-test names
+        :param msg: additional message to add to the end of each item
+        :param check_none:
+            set to True if item should be compared with None (will only use "==" and "!=")
+            set to False will skip comparisons if either item is None
+        :param tests: list containing the comparisons to run.
         :return:
         """
         if tests is None:
@@ -153,6 +160,9 @@ class TestCaseCompare(TestCase):
                     tmp_msg = '\n\n%s:\n%r %s %r\nactual: %r' % (sub_test_str, l_item, test, r_item,
                                                                  _make_actual_compare_str(l_key, l_value, l_item,
                                                                                           r_key, r_value, r_item))
+                    if msg:
+                        tmp_msg += '\n' + msg
+
                     with self.subTest(sub_test_str):
                         self.assertEqual(tmp_exp, tmp_ret, tmp_msg)
                         

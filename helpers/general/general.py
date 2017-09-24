@@ -1,5 +1,5 @@
 from copy import copy, deepcopy
-from collections import UserDict
+from collections import UserDict, UserList
 from string import _string
 
 
@@ -151,15 +151,50 @@ def make_list(obj_in, copy_first=False, deepcopy_first=False, force_list=False):
     if force_list:
         if isinstance(obj_in, list):
             return obj_in
+        if isinstance(obj_in, dict):
+            return [obj_in]
         if hasattr(obj_in, '__iter__'):
             return list(obj_in)
         return [obj_in]
     else:
         if isinstance(obj_in, (list, tuple)):
             return obj_in
+        if isinstance(obj_in, dict):
+            return [obj_in]
         if hasattr(obj_in, '__iter__'):
             return obj_in
         return [obj_in]
+
+
+def make_set(*obj_in, copy_first=False, deepcopy_first=False):
+    tmp_ret = []
+    for obj in obj_in:
+        if obj_in is None:
+            continue
+        if isinstance(obj_in, str):
+            tmp_ret.append(obj)
+            continue
+
+        if copy_first:
+            obj = copy(obj)
+        elif deepcopy_first:
+            obj = deepcopy(obj)
+
+        if isinstance(obj, (set, list, tuple)):
+            tmp_ret.extend(obj)
+        elif hasattr(obj, '__iter__'):
+            tmp_ret.extend(obj)
+        else:
+            tmp_ret.append(obj)
+
+    return set(tmp_ret)
+
+
+def list_get(list_in, index, default=None):
+    try:
+        return list_in[index]
+    except IndexError:
+        return default
 
 
 def copy_none(obj_in):

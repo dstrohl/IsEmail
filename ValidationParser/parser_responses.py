@@ -1,6 +1,6 @@
 __all__ = ['ParseFullResult', 'ParseShortResult']
 
-from ValidationParser.parser_messages import RESULT_CODES
+from ValidationParser.parser_messages import STATUS_CODES
 from copy import deepcopy
 
 
@@ -19,9 +19,9 @@ class ParseShortResult(object):
         self.status = football.max_status
         self.max_message = football._messages.max_msg
 
-        self.error = self.status == RESULT_CODES.ERROR
-        self.ok = self.status == RESULT_CODES.OK
-        self.warning = self.status == RESULT_CODES.WARNING
+        self.error = self.status == STATUS_CODES.ERROR
+        self.ok = self.status == STATUS_CODES.OK
+        self.warning = self.status == STATUS_CODES.WARNING
 
     def __repr__(self):
         return 'ParseResult: %s: [%s] %s' % (self.status.name, self.max_message.key, self.parsed_str)

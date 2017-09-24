@@ -1,12 +1,13 @@
 
 
 from helpers.flag_manager import FlagHelper
-from helpers.general import CompareFieldMixin
+from helpers.general import CompareFieldMixin, make_list
 # from helpers.meta_data import ISEMAIL_RESULT_CODES, META_LOOKUP, ISEMAIL_DNS_LOOKUP_LEVELS
 from helpers.hisatory import HistoryHelper
 from ValidationParser.exceptions import *
 from ValidationParser.trace_helper import TraceHelper, TraceFormatManager
-from ValidationParser.parser_messages import MESSAGE_LOOKUP, ParseMessageHelper, RESULT_CODES, MessageLookup
+from ValidationParser.parser_messages import get_message_lookup, FullMessageHelper, STATUS_CODES, \
+    SinpleMessageHelper
 
 
 class ParsingTracerFormatter(TraceFormatManager):
@@ -48,6 +49,12 @@ class ParsingTracerFormatter(TraceFormatManager):
     _begin_parse.name = 'Begin'
 
     def _end_parse(self, *args, format_str='End: {stage}', **kwargs):
+        if 'results' in kwargs:
+            if isinstance(kwargs['results'], (str, list, tuple)):
+                kwargs['results'] = kwargs['parsing_obj'].fb(kwargs['begin'], *make_list(kwargs['results']))
+            elif isinstance(kwargs['results'], int):
+                kwargs['results'] = kwargs['parsing_obj'].fb(kwargs['begin'], kwargs['results'])
+
         if kwargs.get('raise_error', False):
             tmp_raised = ' -RAISED - '
         else:
@@ -55,7 +62,7 @@ class ParsingTracerFormatter(TraceFormatManager):
 
         results = kwargs['results']
 
-        if results.l == 0 or results.error:
+        if not results:
             format_str = 'End {stage}%s: UN-MATCHED : {results!r}' % tmp_raised
         else:
             format_str = 'End {stage}%s: Found {results.l} "{stage_text}" : {results!r}' % tmp_raised
@@ -110,7 +117,10 @@ class ParseResultFootball(CompareFieldMixin):
             self._history = HistoryHelper(segment, begin=begin, from_string=parse_obj.parse_str)
         else:
             self._history = None
-        self._messages = ParseMessageHelper(parse_obj.message_lookup, parse_obj.parse_str, segment)
+        if parse_obj.verbose >1:
+            self._messages = ParseMessageHelper(parse_obj.message_lookup, parse_obj.parse_str, segment, parse_obj.local_msg_overrides)
+        else:
+            self._messages = ParseSimpleMessageHelper(parse_obj.message_lookup, parse_obj.parse_str, segment, parse_obj.local_msg_overrides)
         self._raise_on_error = self.parse_obj.raise_on_error
         self.error = False
         self.data = {}
@@ -138,6 +148,9 @@ class ParseResultFootball(CompareFieldMixin):
 
     def set_done(self, set_history=False, pass_msg=None, fail_msg=None):
         if set_history:
+            if self._history is None:
+                self._history = HistoryHelper(self.segment, begin=self.begin, from_string=self.parse_obj.parse_str)
+
             self._history.name = self.segment
             self._history.begin = self.begin
             self._history.length = self.length
@@ -170,10 +183,10 @@ class ParseResultFootball(CompareFieldMixin):
 
     @property
     def max_status(self):
-        if self._messages.max_status == RESULT_CODES.UNKNOWN:
+        if self._messages.max_status == STATUS_CODES.UNKNOWN:
             if self._length == 0:
-                return RESULT_CODES.ERROR
-            return RESULT_CODES.OK
+                return STATUS_CODES.ERROR
+            return STATUS_CODES.OK
         return self._messages.max_status
 
     # @property
@@ -202,12 +215,7 @@ class ParseResultFootball(CompareFieldMixin):
         self._messages.remove(msg, position=position)
 
     def __iadd__(self, other):
-        if isinstance(other, int):
-            self.set_length(self.length + other)
-        else:
-            self.merge(other)
-
-        return self
+        return self(other)
 
     def __add__(self, other):
         return self.length + int(other)
@@ -227,6 +235,8 @@ class ParseResultFootball(CompareFieldMixin):
     #             self.error = True
 
     def merge(self, other):
+        if other is None:
+            return
         if isinstance(other, ParseResultFootball):
             self.set_length(self.length + other.length)
             self._messages(other._messages)
@@ -238,7 +248,7 @@ class ParseResultFootball(CompareFieldMixin):
             self.error = not bool(self._messages)
             self.data.update(other.data)
         else:
-            raise AttributeError('Cannot Merge, Not Football instance')
+            raise AttributeError('Cannot Merge, Not Football instance: %r' % other)
 
     def add_message(self, msg, begin=None, length=None, raise_on_error=None):
         if raise_on_error is None:
@@ -249,7 +259,7 @@ class ParseResultFootball(CompareFieldMixin):
             length = self.length
         # self.is_finished = False
         tmp_msg = self._messages(msg, begin=begin, length=length)
-        if self.max_status == RESULT_CODES.ERROR:
+        if self.max_status == STATUS_CODES.ERROR:
             self.set_length(0)
 
         if not tmp_msg:
@@ -275,7 +285,11 @@ class ParseResultFootball(CompareFieldMixin):
         """
 
         for arg in args:
-            if isinstance(arg, ParseResultFootball):
+            if arg is None:
+                return self
+            elif isinstance(arg, bool):
+                return self
+            elif isinstance(arg, ParseResultFootball):
                 self.merge(arg)
             elif isinstance(arg, int):
                 self.set_length(self.length + arg)
@@ -343,44 +357,54 @@ class ParsingObj(object):
     def __init__(self,
                  parse_str=None,
                  verbose=0,
-                 trace_level=-1,
+                 trace_level=None,
                  raise_on_error=False,
                  message_lookup=None,
-                 **msg_lookup_kwargs):
+                 local_msg_overrides=None):
         """
         :param email_in:  the email to parse
         :param verbose:
             * 0 = only return true/false
-            * 1 = return t/f + cleaned email + major reason
+            * 1 = return t/f + major reason
             * 2 = return all
 
         """
-        self.verbose = verbose
         self.raise_on_error = raise_on_error
-        self.trace_level = trace_level
-        if message_lookup is not None:
-            self.message_lookup = message_lookup
-        elif msg_lookup_kwargs:
-            self.message_lookup = MessageLookup(parse_str, **msg_lookup_kwargs)
+        self.verbose = verbose
+
+        if self.verbose < 2 and trace_level is None:
+            self.trace_level = 0
         else:
-            self.message_lookup = MESSAGE_LOOKUP
+            self.trace_level = trace_level or -1
+
+        self.message_lookup = get_message_lookup(message_lookup)
+        self.local_msg_overrides = fix_local_overrides(local_msg_overrides)
         self.flags = FlagHelper()
 
         self.results = None
 
         self.parse_str = None
-        self.parse_str_len = None
+        self._parse_str_len = None
         self.trace = None
         self.full_stage = None
+        self.stage_queue = []
+        self.stage_id = 0
+        self.limit_length = 0
 
         if parse_str is not None:
             self.setup(parse_str)
 
     def setup(self, parse_str):
-        self.parse_str_len = len(parse_str)
+        self._parse_str_len = len(parse_str)
         self.parse_str = parse_str
         self.trace = ParsingTracer(self, self.trace_level)
         self.full_stage = self.trace.get_full_stage
+
+    @property
+    def parse_str_len(self):
+        if self.limit_length:
+            return self.limit_length
+        return self._parse_str_len
 
     @property
     def stage(self):
@@ -395,9 +419,21 @@ class ParsingObj(object):
 
     def begin_stage(self, stage_name, position, **kwargs):
         self.trace.add.begin(stage_name=stage_name, position=position, **kwargs)
+        self.stage_id += 1
+        self.stage_queue.append((self.stage_id, position))
+        # print('begin stage: ', self.stage_id, ' - ', stage_name)
+        return self.stage_id
 
-    def end_stage(self, results, raise_error=False, **kwargs):
-        self.trace.add.end(results=results, raise_error=raise_error, **kwargs)
+    def end_stage(self, results, raise_error=False, stage_id=None, **kwargs):
+        # print('end stage: ', stage_id)
+        if stage_id is None:
+            stage_id, begin = self.stage_queue.pop()
+            self.trace.add.end(results=results, raise_error=raise_error, parsing_obj=self, begin=begin, **kwargs)
+        else:
+            tmp_stage_id = -1
+            while self.stage_queue and tmp_stage_id != stage_id:
+                tmp_stage_id, begin = self.stage_queue.pop()
+                self.trace.add.end(results=results, raise_error=raise_error, parsing_obj=self, begin=begin, **kwargs)
 
     def note(self, note, position=0, **kwargs):
         self.trace.add.note(note=note, position=position, **kwargs)
@@ -408,8 +444,22 @@ class ParsingObj(object):
     def is_last(self, position):
         return int(position) == self.parse_str_len
 
-    def fb(self, position, is_history=False):
-        return ParseResultFootball(self, str(self.stage), int(position), is_history=is_history)
+    def set_limit_len(self, length=0):
+        if length < 0:
+            self.limit_length = max(0, (self._parse_str_len-length))
+        else:
+            self.limit_length = min(length, self._parse_str_len)
+
+    def is_ok(self, check_obj):
+        if isinstance(check_obj, str):
+            return self.message_lookup.get_status(self.stage, check_obj, local_overrides=self.local_msg_overrides) != STATUS_CODES.ERROR
+        return bool(check_obj)
+
+    def fb(self, position, *msgs, is_history=False):
+        tmp_ret = ParseResultFootball(self, str(self.stage), int(position), is_history=is_history)
+        if msgs:
+            tmp_ret(*msgs)
+        return tmp_ret
 
     def __len__(self):
         return self.parse_str_len
@@ -499,17 +549,7 @@ class ParsingObj(object):
                 return i
         return -1
 
-    def next(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, min_error_msg=None, **kwargs):
-        tmp_ret = self.fb(begin)
-        lf_len = len(look_for)
-        exact = False
-        if lf_len > 2 and look_for[0] == '"' and look_for[-1] == '"':
-            exact = True
-            look_for = look_for[1:-1]
-            lf_len -= 2
-            if lf_len == 1:
-                exact = False
-
+    def next_char_in(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, min_error_msg=None, **kwargs):
         try:
             min_count = int(min_count)
         except TypeError:
@@ -518,20 +558,11 @@ class ParsingObj(object):
         try:
             max_count = int(max_count)
         except TypeError:
-            if exact:
-                max_count = self.parse_str_len / lf_len
-            else:
-                max_count = self.parse_str_len
+            max_count = self.parse_str_len
 
-        if lf_len == 1:
-            if min_count == 1 and max_count == 1:
-                if self[begin] == look_for:
-                    return tmp_ret(1)
-                else:
-                    return tmp_ret
         if kwargs:
             looper = self.remaining(begin, **kwargs)
-            if exact or not caps_sensitive:
+            if not caps_sensitive:
                 looper = '.'.join(list(looper))
         else:
             looper = self.slice(begin)
@@ -541,31 +572,94 @@ class ParsingObj(object):
             look_for = look_for.lower()
 
         loop_count = 0
-        ret_count = 0
-        if exact:
-            while len(looper) >= lf_len:
-                if loop_count == max_count:
-                    break
-                if looper[:lf_len] != look_for:
-                    break
-                loop_count += 1
-                ret_count += lf_len
-                looper = looper[lf_len:]
-        else:
-            for ch in looper:
-                if loop_count == max_count:
-                    break
-                if ch not in look_for:
-                    break
-                loop_count += 1
-                ret_count += 1
+        for ch in looper:
+            if loop_count == max_count:
+                break
+            if ch not in look_for:
+                break
+            loop_count += 1
 
         if min_count > loop_count:
-            if min_error_msg is not None:
-                tmp_ret(min_error_msg)
-            return tmp_ret
+            return min_error_msg or 0
 
-        return tmp_ret(ret_count)
+        return loop_count
+
+    def next_string_in(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, min_error_msg=None, **kwargs):
+        lf_len = len(look_for)
+        if lf_len > 2 and look_for[0] == '"' and look_for[-1] == '"':
+            look_for = look_for[1:-1]
+            lf_len -= 2
+
+        try:
+            min_count = int(min_count)
+        except TypeError:
+            min_count = 0
+
+        try:
+            max_count = int(max_count)
+        except TypeError:
+            max_count = self.parse_str_len / lf_len
+
+        if kwargs:
+            looper = self.remaining(begin, **kwargs)
+            looper = '.'.join(list(looper))
+        else:
+            looper = self.slice(begin)
+
+        if not caps_sensitive:
+            looper = looper.lower()
+            look_for = look_for.lower()
+
+        loop_count = 0
+        ret_count = 0
+
+        while len(looper) >= lf_len:
+            if loop_count == max_count:
+                break
+            if looper[:lf_len] != look_for:
+                break
+            loop_count += 1
+            ret_count += lf_len
+            looper = looper[lf_len:]
+
+        if min_count > loop_count:
+            return min_error_msg or 0
+
+        return ret_count
+
+    def next_1_char_in(self, begin, look_for, caps_sensitive=True):
+        if self.at_end(begin):
+            return 0
+        if caps_sensitive:
+            if self[begin] in look_for:
+                return 1
+        else:
+            look_for = look_for.upper()
+            if self[begin].upper() in look_for:
+                return 1
+
+    def next(self, begin, look_for, min_count=None, max_count=None, caps_sensitive=True, min_error_msg=None, **kwargs):
+        lf_len = len(look_for)
+        if lf_len > 2 and look_for[0] == '"' and look_for[-1] == '"':
+            return self.next_string_in(begin,
+                                       look_for,
+                                       min_count=min_count,
+                                       max_count=max_count,
+                                       caps_sensitive=caps_sensitive,
+                                       min_error_msg=min_error_msg,
+                                       **kwargs)
+        elif min_count is not None and min_count == 1 and max_count is not None and max_count == 1 and not kwargs:
+            return self.next_1_char_in(begin, look_for, caps_sensitive=caps_sensitive)
+
+        else:
+            return self.next_char_in(begin,
+                                     look_for,
+                                     min_count=min_count,
+                                     max_count=max_count,
+                                     caps_sensitive=caps_sensitive,
+                                     min_error_msg=min_error_msg,
+                                     **kwargs)
+
     __call__ = next
 
     def next_char(self, begin, look_for, caps_sensitive=False):
@@ -626,3 +720,10 @@ class ParsingObj(object):
     #
     #     return tmp_ret
     #
+
+    def __enter__(self, length_limit):
+        self.set_limit_len(length_limit)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.set_limit_len()
+

@@ -1,132 +1,147 @@
 __all__ = ['BaseParser', 'SingleCharParser', 'CharParser', 'StringParser', 'SubParsersParser',
-           'LoopMixin', 'EnclosedWrapper', 'MaxLenWrapper', 'MinLenWrapper', 'InvalidNextWrapper',
+           'EnclosedWrapper', 'MaxLenWrapper', 'MinLenWrapper', 'InvalidNextWrapper',
            'InvalidStartStopWrapper',
            'FullLengthWrapper', 'MinMaxLenWrapper',
-           'CharNoSegment', 'SingleCharNoSegment', 'StringNoSegment'
+           'CharNoSegment', 'SingleCharNoSegment', 'StringNoSegment',
+           'register_parser'
            ]
 
-from ValidationParser.exceptions import ParsingError, WrapperStop
+from ValidationParser.exceptions import ParsingLocalError, ParsingFatalError
+from ValidationParser.parser_messages import get_message_lookup
 from helpers.general.general import make_list
 import sys
-
-"""
-for correct sub-classing...
-
-NewClass(outmost, outer, inner, base_class)
-
-# **********************************************************************************
-# INNER PARSERS
-# **********************************************************************************
-
-class PHBaseChar(PHBase):
-    look_for = None
-    char_until_char = None
-    min_char_count = None
-    max_char_count = None
-    min_char_count_msg = 'SEGMENT_TOO_SHORT'
-    caps_sensitive = True
-
-class PHBaseSingleChar(PHBaseChar):
-    look_for = None
-    char_until_char = None
-    min_char_count = None
-    max_char_count = None
-    min_char_count_msg = 'SEGMENT_TOO_SHORT'
-    caps_sensitive = True
-
-    min_char_count = 1
-    max_char_count = 1
-
-
-class PHBaseString(PHBaseChar):
-    look_for = None
-    char_until_char = None
-    min_char_count = None
-    max_char_count = None
-    min_char_count_msg = 'SEGMENT_TOO_SHORT'
-    caps_sensitive = True
-
-
-class PHBaseSubParsers(PHBase):
-    operation = 'and'  # ['and'|'or'|'best']
-    parsers = None
-
-# **********************************************************************************
-# OUTER PARSERS
-# **********************************************************************************
-
-class PHSegment(object):
-    is_history_item = True
-    is_segment_item = True
-
-    name = None
-    description = None
-    references = None
-    messages = None
-
-    on_pass_msg = None  # 'VALID'
-    on_fail_msg = None  # 'ERROR'
-
-
-class PHFullLength(object):
-    not_full_length_msg = 'INVALID_CHAR'
-
-
-class PHLoop(object):
-    min_loop = None
-    min_loop_fail_msg = 'TOO_FEW_SEGMENTS'
-    max_loop = None
-    max_loop_fail_msg = 'TOO_MANY_SEGMENTS'
-    max_loop_fail = False
-
-class PHInvalidNext(object):
-    invalid_next_char = None
-    invalid_next_char_msg = 'INVALID_NEXT_CHAR'
-
-
-class PHEnclosed(object):
-    enclosure_start = '"'
-    enclosure_end = '"'
-    skip_quoted = True
-    unclosed_msg = 'UNCLOSED_STRING'
-
-
-class PHMinLen(object):
-    min_length = None
-    min_length_msg = 'SEGMENT_TOO_SHORT'
-
-
-class PHMaxLen(object):
-    max_length = None
-    max_length_msg = 'SEGMENT_TOO_LONG'
-
-
-class PHMinMaxLen(object):
-    min_length = None
-    min_length_msg = 'SEGMENT_TOO_SHORT'
-    max_length = None
-    max_length_msg = 'SEGMENT_TOO_LONG'
-
-
-class PHInvalidStartStop(object):
-    invalid_start_chars = None
-    invlaid_start_chars_msg = 'INVALID_START'
-    invalid_end_chars = None
-    invlaid_end_chars_msg = 'INVALID_END'
-
-
-"""
 
 
 # **********************************************************************************
 # <editor-fold desc="  BASE Parsers  ">
 # **********************************************************************************
 
+# def register_parser(message_lookup=None, run_also=None):
+#     message_lookup = get_message_lookup(message_lookup)
+#     run_this = ['_init'] + make_list(run_also)
+#
+#     def parse_decorator(cls):
+#         for f in run_this:
+#             try:
+#                 func_2 = getattr(cls, f)
+#             except AttributeError:
+#                 pass
+#             else:
+#                 func_2(cls)
+#
+#         message_lookup.add_parser(cls)
+#         return cls
+#     return parse_decorator
 
-class BaseParser(object):
+
+# def register_parsers(register_item, message_lookup=None):
+#     message_lookup = get_message_lookup(message_lookup)
+#
+#     def register_class(cls):
+#         for f in dir(cls):
+#             if f.endswith('_init'):
+#                 try:
+#                     func_2 = getattr(cls, f)
+#                 except AttributeError:
+#                     pass
+#                 else:
+#                     func_2(cls)
+#
+#         message_lookup.add_parser(cls)
+#
+#     if issubclass(register_item, module):
+#         for item in dir(register_item):
+#             if issubclass(item, BaseParser):
+#                 register_item(item)
+#
+#     elif issubclass(register_item, BaseParser):
+#         register_class(register_item)
+
+def register_parser(cls, message_lookup=None):
+    message_lookup = get_message_lookup(message_lookup)
+    for f in dir(cls):
+        if f.endswith('_init'):
+            try:
+                func_2 = getattr(cls, f)
+            except AttributeError:
+                pass
+            else:
+                func_2()
+    message_lookup.add_parser(cls)
+    return cls
+
+# class MetaInitLaunch(type):
+#     def __new__(cls, name, bases, dct):
+#         tmp_ret = type.__new__(cls, name, bases, dct)
+#         try:
+#             if not tmp_ret.name:
+#                 tmp_ret.name = name
+#         except AttributeError:
+#             tmp_ret.name = name
+#         for key in dir(tmp_ret):
+#             if key.endswith('_init'):
+#                 tmp_func = getattr(tmp_ret, key)
+#                 tmp_func(tmp_ret)
+#         return tmp_ret
+
+
+class KwargsOverride(object):
+    def __init__(self, parent, *kwargs):
+        self._parent = [parent]
+        self._data = {}
+
+        self._set_kwargs(*kwargs)
+
+    def _set_kwargs(self, *kwargs, clear=True, save_none=False):
+        if clear:
+            self._data.clear()
+        for k in kwargs:
+            for key, item in k.items():
+                if save_none or item is not None:
+                    self._data[key] = item
+
+    @property
+    def _kwargs(self):
+        return self._data
+
+    def _push(self, parent):
+        self._parent.append(parent)
+    
+    def _pop(self):
+        self._parent.pop()
+
+    def _get_item(self, key):
+        try:
+            return self._data[key]
+        except KeyError:
+            for p in self._parent:
+                try:
+                    return getattr(p, key)
+                except AttributeError:
+                    continue
+        raise AttributeError('Attribute Error, could not find: %s' % key)
+
+    def __getattr__(self, item):
+        return self._get_item(item)
+
+    def __getitem__(self, item):
+        return self._get_item(item)
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+
+    def __contains__(self, item):
+        return item in self._data
+
+
+class BaseParser(object):  #  metaclass=MetaInitLaunch):
+    # _meta_keys = ('_skip_keys', '_args_list')
+    # _skip_keys = []
+    # _args_list = []
+
+    _lookups = None
+    _parser_segment_defs = None
     wrappers = None
-    # inner_parser = None
-
     is_history = True
     is_segment = True
 
@@ -138,160 +153,211 @@ class BaseParser(object):
     on_pass_msg = None  # 'VALID'
     on_fail_msg = None  # 'ERROR'
 
-    def __init__(self, *args, **kwargs):
-
-        self.wrappers = make_list(kwargs.pop('wrappers', self.wrappers), force_list=True)
-        self.messages = make_list(kwargs.pop('messages', self.messages))
-        # self.inner_parser = kwargs.pop('parser', self.inner_parser)
-
-        if kwargs:
-            for key in list(kwargs):
-                setattr(self, key, kwargs.pop(key) or getattr(self, key))
-
-        self._load_parsers()
-
-        # if self.inner_parser is None:
-        #     raise AttributeError('Parser must be defined')
-
-        self._lookups = {}
-        self._parser_segment_defs = {}
-
-        self.name = self.name or self.__class__.__name__
-        self.on_pass_msg = make_list(self.on_pass_msg)
-        self.on_fail_msg = make_list(self.on_fail_msg)
-
-        if self.description is not None:
-            self._parser_segment_defs['description'] = self.description
-        if self.references is not None:
-            self._parser_segment_defs['references'] = self.references
-
-    def _load_parsers(self):
-        for index, wrapper in enumerate(self.wrappers):
-            wrapper = wrapper(self)
-
-            if wrapper.messages:
-                self.messages.extend(make_list(wrapper.messages))
-
-            self.wrappers[index] = wrapper
-
-    def _update_messages(self, parser_obj):
-        if parser_obj.message_lookup.name not in self._lookups:
-            if self.is_segment and self.name:
-                parser_obj.message_lookup.segment(self.name, **self._parser_segment_defs)
-            if self.messages is not None:
-                parser_obj.message_lookup.add(messages=self.messages)
-            self._lookups[parser_obj.message_lookup.name] = None
-
-    def _parse(self, tmp_ret, parse_obj, position, **kwargs):
-        pass
-
-    def _call(self, tmp_ret, parse_obj, position, **kwargs):
-        for wrapper in self.wrappers:
-            try:
-                wrapper.pre_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
-            except WrapperStop as err:
-                return err.results
-
-        try:
-            self._parse(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
-        except WrapperStop as err:
-            return err.results
-
-        for wrapper in reversed(self.wrappers):
-            try:
-                wrapper.post_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
-            except WrapperStop as err:
-                return err.results
-        return tmp_ret
-
-    def __call__(self, parse_obj, position=0, **kwargs):
-        self._update_messages(parse_obj)
-        tmp_err = None
-        position = int(position)
-        # init_position = position
-
-        if self.is_segment:
-            parse_obj.begin_stage(self.name, position=position)
-
-        tmp_ret = parse_obj.fb(position, is_history=self.is_history)
-
-        raise_error = False
-    
-        if parse_obj.at_end(position):
-            return tmp_ret
-
-        try:
-            tmp_ret = self._call(tmp_ret, parse_obj, position, **kwargs)
-
-        except ParsingError as err:
-            tmp_err = err
-            raise_error = True
-            tmp_ret = err.results
-
-        tmp_ret.set_done(set_history=self.is_history, pass_msg=self.on_pass_msg, fail_msg=self.on_fail_msg)
-
-        if self.is_segment:
-            parse_obj.end_stage(tmp_ret, raise_error=raise_error)
-
-        if raise_error:
-            raise tmp_err
-
-        return tmp_ret
-
-    def __repr__(self):
-        return self.name
-
-
-class LoopMixin(object):
     min_loop = 0
     min_loop_fail_msg = 'TOO_FEW_SEGMENTS'
-    max_loop = sys.maxsize
+    max_loop = 0
     max_loop_fail_msg = 'TOO_MANY_SEGMENTS'
     max_loop_fail = False
 
-    def _call(self, tmp_ret, parse_obj, position, **kwargs):
+    raise_error = False
+    should_loop = False
 
-        for wrapper in self.wrappers:
-            try:
-                wrapper.pre_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
-            except WrapperStop as err:
-                return err.results
+    has_pre_wrappers = False
+    has_post_wrappers = False
 
+    initialized = False
+
+    @classmethod
+    def _init(cls):
+        cls.initialized = True
+        cls.wrappers = make_list(cls.wrappers, force_list=True)
+        cls.reversed_wrappers = reversed(cls.wrappers)
+        cls.messages = make_list(cls.messages)
+
+        cls.name = cls.name or cls.__class__.__name__
+        cls.on_pass_msg = make_list(cls.on_pass_msg)
+        cls.on_fail_msg = make_list(cls.on_fail_msg)
+
+        if cls.max_loop is None:
+            cls.max_loop = sys.maxsize
+        if cls.max_loop > 0:
+            cls.should_loop = True
+
+        # if kwargs:
+        #     for key in list(kwargs):
+        #         setattr(cls, key, kwargs.pop(key) or getattr(cls, key))
+
+        for wrapper in cls.wrappers:
+            if wrapper.messages:
+                cls.messages.extend(make_list(wrapper.messages))
+            if wrapper.has_pre:
+                cls.has_pre_wrappers = True
+            if wrapper.has_post:
+                cls.has_post_wrappers = True
+
+        cls._lookups = {}
+        cls._parser_segment_defs = {}
+
+        if cls.description is not None:
+            cls._parser_segment_defs['description'] = cls.description
+        if cls.references is not None:
+            cls._parser_segment_defs['references'] = cls.references
+
+        # cls._subinit()
+        
+    # @classmethod
+    # def _subinit(cls):
+    #     pass
+
+    @classmethod
+    def _update_messages(cls, parser_obj, config):
+        if parser_obj.message_lookup.name not in cls._lookups:
+            if config.is_segment and config.name:
+                parser_obj.message_lookup.segment(config.name, **cls._parser_segment_defs)
+            if config.messages is not None:
+                parser_obj.message_lookup.add(messages=config.messages)
+            cls._lookups[parser_obj.message_lookup.name] = None
+
+    @classmethod
+    def _loop_parse(cls, parse_obj, position, config):
         loop_count = 0
+        loop_stage = parse_obj.begin_stage('loop', position=position)
+        football = parse_obj.fb(position)
+        if parse_obj.at_end(position + football):
+            return football('END_OF_STRING')
 
         while True:
-            tmp_loop = parse_obj.fb(position + tmp_ret)
+            tmp_loop = cls._parse(parse_obj, position + football, config)
 
-            try:
-                self._parse(tmp_loop, parse_obj, position + tmp_ret, **kwargs)
-            except WrapperStop as err:
+            if not parse_obj.is_ok(tmp_loop):
                 break
 
-            if not tmp_loop:
-                break
             loop_count += 1
-            if loop_count > self.max_loop:
-                if self.max_loop_fail:
-                    tmp_ret(self.max_loop_fail_msg)
+
+            if loop_count > config.max_loop:
+                if config.max_loop_fail:
+                    football(config.max_loop_fail_msg)
                 break
             else:
-                tmp_ret += tmp_loop
+                football += tmp_loop
 
-        if loop_count < self.min_loop:
-            tmp_ret(self.min_loop_fail_msg)
+            if parse_obj.at_end(position + football):
+                break
 
-        tmp_ret.data['loop_count'] = loop_count
+        if loop_count < config.min_loop:
+            football(config.min_loop_fail_msg)
 
-        if tmp_ret:
-            for wrapper in reversed(self.wrappers):
-                try:
-                    wrapper.post_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
-                except WrapperStop as err:
-                    return err.results
+        parse_obj.end_stage(football, raise_error=False, stage_id=loop_stage)
+        football.data['loop_count'] = loop_count
+
+        return football
+
+    @classmethod
+    def _parse(cls, parse_obj, position, config):
+        return parse_obj.fb(position)
+
+    @classmethod
+    def run(cls, parse_obj, position=0, **kwargs):
+        if not cls.initialized:
+            cls._init()
+        config = KwargsOverride(cls, kwargs)
+        cls._update_messages(parse_obj, config)
+        segment_stage = None
+        if config.is_segment:
+            segment_stage = parse_obj.begin_stage(config.name, position=position)
+
+        tmp_ret = cls._run(parse_obj, position, config)
+
+        parse_obj.end_stage(tmp_ret, stage_id=segment_stage)
+
+        tmp_ret.set_done(set_history=config.is_history, pass_msg=config.on_pass_msg, fail_msg=config.on_fail_msg)
 
         return tmp_ret
 
+    @classmethod
+    def _run(cls, parse_obj, position, config):
+        tmp_err = None
 
+        football = parse_obj.fb(position, is_history=config.is_history)
+
+        if parse_obj.at_end(position):
+            return football('END_OF_STRING')
+
+        # *********** pre wrapper processing **************************
+        if config.has_pre_wrappers:
+            pre_wrap_stage = parse_obj.begin_stage('pre-parse wrappers', position=position + football)
+            for wrapper in config.wrappers:
+                if wrapper.has_pre:
+                    tmp_loop = wrapper.pre_process(parse_obj, position + football, config)
+                    football += tmp_loop
+                    if not parse_obj.is_ok(tmp_loop):
+                        parse_obj.end_stage(football, raise_error=(tmp_err is not None and config.raise_error))
+                        return football
+
+            parse_obj.end_stage(football, stage_id=pre_wrap_stage, raise_error=False)
+
+        # *********** main processing **************************
+        main_stage = None
+        if cls.wrappers:
+            main_stage = parse_obj.begin_stage('wrapped parse', position=position + football)
+
+        if config.should_loop:
+            main_fb = cls._loop_parse(parse_obj, position + football, config)
+        else:
+            main_fb = cls._parse(parse_obj, position + football, config)
+        football += main_fb
+
+        if cls.wrappers:
+            parse_obj.end_stage(football, stage_id=main_stage)
+
+        if not parse_obj.is_ok(main_stage):
+            return football
+
+        # *********** pre wrapper processing **************************
+        if config.has_post_wrappers:
+            post_wrap_stage = parse_obj.begin_stage('post-parse wrappers', position=position + football)
+
+            for wrapper in reversed(config.wrappers):
+                if wrapper.has_post:
+                    tmp_loop = wrapper.post_process(parse_obj, position + football, config)
+                    football += tmp_loop
+                    if not parse_obj.is_ok(tmp_loop):
+                        return football
+            parse_obj.end_stage(football, stage_id=post_wrap_stage)
+
+        return football
+    
+    @classmethod
+    def __repr__(cls):
+        return cls.name
+
+
+# class LoopMixin(object):
+#     min_loop = 0
+#     min_loop_fail_msg = 'TOO_FEW_SEGMENTS'
+#     max_loop = sys.maxsize
+#     max_loop_fail_msg = 'TOO_MANY_SEGMENTS'
+#     max_loop_fail = False
+#
+#     def _call(self, tmp_ret, parse_obj, position, **kwargs):
+#
+#         for wrapper in self.wrappers:
+#             try:
+#                 wrapper.pre_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
+#             except WrapperStop as err:
+#                 return err.results
+#
+#
+#         if tmp_ret:
+#             for wrapper in reversed(self.wrappers):
+#                 try:
+#                     wrapper.post_process(tmp_ret, parse_obj, position + tmp_ret, **kwargs)
+#                 except WrapperStop as err:
+#                     return err.results
+#
+#         return tmp_ret
+
+@register_parser
 class CharParser(BaseParser):
     look_for = None
     char_until_char = None
@@ -300,76 +366,94 @@ class CharParser(BaseParser):
     min_char_count_msg = 'SEGMENT_TOO_SHORT'
     caps_sensitive = True
 
-    def _parse(self, tmp_ret, parse_obj, position=0, **kwargs):
-        if not parse_obj.at_end(position):
-            tmp_item = parse_obj(position, self.look_for,
-                                 min_count=self.min_char_count,
-                                 max_count=self.max_char_count,
-                                 caps_sensitive=self.caps_sensitive,
-                                 min_error_msg=self.min_char_count_msg)
-            if tmp_item:
-                tmp_ret += tmp_item
-                return
+    @classmethod
+    def _parse(cls, parse_obj, position, config):
+        if parse_obj.at_end(position):
+            return 'END_OF_STRING'
 
-        raise WrapperStop(self, tmp_ret)
+        return parse_obj.next_char_in(position, config.look_for,
+                                      min_count=config.min_char_count,
+                                      max_count=config.max_char_count,
+                                      caps_sensitive=config.caps_sensitive,
+                                      min_error_msg=config.min_char_count_msg)
 
 
-class SingleCharParser(CharParser):
-    min_char_count = 1
-    max_char_count = 1
+@register_parser
+class SingleCharParser(BaseParser):
+    look_for = None
+    caps_sensitive = True
+
+    @classmethod
+    def _parse(cls, parse_obj, position, config):
+        if parse_obj.at_end(position):
+            return 'END_OF_STRING'
+
+        return parse_obj.next_1_char_in(position, config.look_for,
+                                        caps_sensitive=config.caps_sensitive)
 
 
-class StringParser(CharParser):
-    def __init__(self, **kwargs):
-        super(StringParser, self).__init__(**kwargs)
-        if self.look_for[0] != '"':
-            self.look_for = '"' + self.look_for
-        if self.look_for[-1] != '"':
-            self.look_for += '"'
+@register_parser
+class StringParser(BaseParser):
+    look_for = None
+    caps_sensitive = True
+
+    @classmethod
+    def _parse(cls, parse_obj, position, config):
+        if parse_obj.at_end(position):
+            return 'END_OF_STRING'
+
+        return parse_obj.next_string_in(position, config.look_for,
+                                        min_count=config.min_char_count,
+                                        max_count=config.max_char_count,
+                                        caps_sensitive=config.caps_sensitive,
+                                        min_error_msg=config.min_char_count_msg)
 
 
+@register_parser
 class SubParsersParser(BaseParser):
     operation = 'and'  # ['and'|'or'|'best']
     parsers = None
 
-    def __init__(self, **kwargs):
-        super(SubParsersParser, self).__init__(**kwargs)
-        self.parsers = make_list(self.parsers)
-        self.operation = getattr(self, '_' + self.operation)
+    @classmethod
+    def _subinit(cls):
+        # super(SubParsersParser, cls).__init__(**kwargs)
+        cls.parsers = make_list(cls.parsers)
+        cls._operation = getattr(cls, '_' + cls.operation)
 
-    def _and(self, tmp_ret, parse_obj, position, **kwargs):
+    @staticmethod
+    def _and(parse_obj, position, config):
         tmp_and = parse_obj.fb(position)
-        for p in self.parsers:
-            tmp_item = p(parse_obj, position + tmp_and, **kwargs)
 
-            if tmp_item:
+        for p in config.parsers:
+            tmp_item = p.run(parse_obj, position + tmp_and, **config._kwargs)
+            if parse_obj.is_ok(tmp_item):
                 tmp_and += tmp_item
             else:
-                raise WrapperStop(self, tmp_ret(tmp_and, set_length=0))
-        tmp_ret += tmp_and
+                return None
+        return tmp_and
 
-    def _or(self, tmp_ret, parse_obj, position, **kwargs):
-        for p in self.parsers:
-            tmp_item = p(parse_obj, position, **kwargs)
-            if tmp_item:
-                tmp_ret += tmp_item
-                return
-        raise WrapperStop(self, tmp_ret)
+    @staticmethod
+    def _or(parse_obj, position, config):
+        for p in config.parsers:
+            tmp_item = p.run(parse_obj, position, **config._kwargs)
+            if parse_obj.is_ok(tmp_item):
+                return tmp_item
+        return None
 
-    def _best(self, tmp_ret, parse_obj, position, **kwargs):
+    @staticmethod
+    def _best(parse_obj, position, config):
         tmp_best = parse_obj.fb(position)
-        for p in self.parsers:
-            tmp_item = p(parse_obj, position, **kwargs)
+        for p in config.parsers:
+            tmp_item = p.run(parse_obj, position, **config._kwargs)
             tmp_best = tmp_best.max(tmp_item)
-        if tmp_best:
-            tmp_ret += tmp_best
-        else:
-            raise WrapperStop(self, tmp_ret)
+        return tmp_best
 
-    def _parse(self, tmp_ret, parse_obj, position, **kwargs):
-        if parse_obj.at_end(position):
-            raise WrapperStop(self, tmp_ret)
-        self.operation(tmp_ret, parse_obj, position, **kwargs)
+    @classmethod
+    def _parse(cls, parse_obj, position, config):
+        op_stage = parse_obj.begin_stage(cls.operation, position=position)
+        tmp_ret = cls._operation(parse_obj, position, config)
+        parse_obj.end_stage(tmp_ret, stage_id=op_stage)
+        return tmp_ret
 
 # **********************************************************************************
 # </editor-fold>
@@ -382,73 +466,109 @@ class SubParsersParser(BaseParser):
 
 class BaseWrapper(object):
     messages = None
-    _skip_keys = ('messages', 'pre_process', 'post_process')
+    references = None
+    has_pre = False
+    has_post = False
+    # _skip_keys = ('messages', 'pre_process', 'post_process')
 
-    def __init__(self, base_parser):
-        self.base_parser = base_parser
+    @classmethod
+    def pre_process(cls, parse_obj, position, config):
+        if cls.has_pre:
+            config._push(cls)
+            pre_wrap = parse_obj.begin_stage(cls.__name__+'-PRE', position=position)
+            tmp_ret = cls._pre_process(parse_obj, position, config)
+            parse_obj.end_stage(tmp_ret, False, stage_id=pre_wrap)
+            config._pop()
+            return tmp_ret
+        return True
 
-        for key in dir(self):
-            if key[0] != '_' and key not in self._skip_keys and hasattr(base_parser, key):
-                setattr(self, key, getattr(base_parser, key))
+    @classmethod
+    def _pre_process(cls, parse_obj, position, config):
+        return None
 
-    def pre_process(self, tmp_ret, parse_obj, position, **kwargs):
-        pass
+    @classmethod
+    def post_process(cls, parse_obj, position, config):
+        if cls.has_post:
+            config._push(cls)
+            post_wrap = parse_obj.begin_stage(cls.__name__+'-POST', position=position)
+            tmp_ret = cls._post_process(parse_obj, position, config)
+            parse_obj.end_stage(tmp_ret, False, stage_id=post_wrap)
+            config._pop()
+            return tmp_ret
+        return True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        pass
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        return None
 
 
 class FullLengthWrapper(BaseWrapper):
     not_full_length_msg = 'UNPARSED_CONTENT'
+    has_post = True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if parse_obj.at_end(position):
-            raise WrapperStop(self, tmp_ret(self.not_full_length_msg))
-
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if not parse_obj.at_end(position):
+            return config.not_full_length_msg
+        return True
 
 
 class InvalidNextWrapper(BaseWrapper):
     invalid_next_char = None
     invalid_next_char_msg = 'INVALID_NEXT_CHAR'
+    has_post = True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if not parse_obj.at_end(position) and parse_obj[position] in self.invalid_next_char:
-            raise WrapperStop(self, tmp_ret(self.invalid_next_char_msg))
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if not parse_obj.at_end(position) and parse_obj[position] in config.invalid_next_char:
+            return config.invalid_next_char_msg
+        return True
 
 
 class EnclosedWrapper(BaseWrapper):
     enclosure_start = '"'
     enclosure_end = '"'
     skip_quoted = True
-    unclosed_msg = 'UNCLOSED_STRING'
+    unopened_msg = 'UNOPENED_ENCLOSURE'
+    unclosed_msg = 'UNCLOSED_ENCLOSURE'
+    has_pre = True
+    has_post = True
 
-    def pre_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if parse_obj.at_end(position) or parse_obj[position] != self.enclosure_start:
-            raise WrapperStop(self, tmp_ret)
-        tmp_ret(1)
+    @classmethod
+    def _pre_process(cls, parse_obj, position, config):
+        if parse_obj.at_end(position) or parse_obj[position] != config.enclosure_start:
+            return config.unopened_msg
+        return len(config.enclosure_start)
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if parse_obj.at_end(position) or parse_obj[position] != self.enclosure_end:
-            raise WrapperStop(self, tmp_ret(self.unclosed_msg))
-        tmp_ret(1)
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if parse_obj.at_end(position) or parse_obj[position] != config.enclosure_end:
+            return config.unclosed_msg
+        return len(config.enclosure_end)
 
 
 class MinLenWrapper(BaseWrapper):
     min_length = None
     min_length_msg = 'SEGMENT_TOO_SHORT'
+    has_post = True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if tmp_ret.l < self.min_length:
-            raise WrapperStop(self, tmp_ret(self.min_length_msg))
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if position < config.min_length:
+            return config.min_length_msg
+        return True
 
 
 class MaxLenWrapper(BaseWrapper):
     max_length = None
     max_length_msg = 'SEGMENT_TOO_LONG'
+    has_post = True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if tmp_ret.l > self.max_length:
-            raise WrapperStop(self, tmp_ret(self.max_length_msg))
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if position > config.max_length:
+            return config.max_length_msg
+        return True
 
 
 class MinMaxLenWrapper(BaseWrapper):
@@ -456,12 +576,15 @@ class MinMaxLenWrapper(BaseWrapper):
     min_length_msg = 'SEGMENT_TOO_SHORT'
     max_length = None
     max_length_msg = 'SEGMENT_TOO_LONG'
+    has_post = True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if tmp_ret.l > self.max_length:
-            raise WrapperStop(self, tmp_ret(self.max_length_msg))
-        elif tmp_ret.l < self.min_length:
-            raise WrapperStop(self, tmp_ret(self.min_length_msg))
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if position > config.max_length:
+            return config.max_length_msg
+        elif position < config.min_length:
+            return config.min_length_msg
+        return True
 
 
 class InvalidStartStopWrapper(BaseWrapper):
@@ -469,478 +592,45 @@ class InvalidStartStopWrapper(BaseWrapper):
     invalid_start_chars_msg = 'INVALID_START'
     invalid_end_chars = None
     invalid_end_chars_msg = 'INVALID_END'
+    has_pre = True
+    has_post = True
 
-    def pre_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if not parse_obj.at_end(position) and parse_obj[position] in self.invalid_start_chars:
-            raise WrapperStop(self, tmp_ret(self.invalid_start_chars_msg))
+    @classmethod
+    def _pre_process(cls, parse_obj, position, config):
+        if config.invalid_start_chars:
+            if not parse_obj.at_end(position) and parse_obj[position] in config.invalid_start_chars:
+                return config.invalid_start_chars_msg
+        return True
 
-    def post_process(self, tmp_ret, parse_obj, position, **kwargs):
-        if not parse_obj.at_end(position) and parse_obj[position] in self.invalid_end_chars:
-            raise WrapperStop(self, tmp_ret(self.invalid_end_chars_msg))
-
-
+    @classmethod
+    def _post_process(cls, parse_obj, position, config):
+        if config.invalid_end_chars:
+            if not parse_obj.at_end(position) and parse_obj[position] in config.invalid_end_chars:
+                return config.invalid_end_chars_msg
+        return True
 
 # **********************************************************************************
 # </editor-fold>
 # **********************************************************************************
-
-'''
-
-# **********************************************************************************
-# <editor-fold desc="  INNER Parsers  ">
-# **********************************************************************************
-
-
-class PHBase(object):
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
-                valid_args = list(self.__dict__)
-                for v in valid_args:
-                    if v[0] == '_':
-                        valid_args.remove(v)
-                raise AttributeError('Invalid keyword arg: %s, valid args = %r' % (key, valid_args))
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHBaseChar(PHBase):
-    look_for = None
-    char_until_char = None
-    min_char_count = None
-    max_char_count = None
-    min_char_count_msg = 'SEGMENT_TOO_SHORT'
-    caps_sensitive = True
-
-    def __init__(self, look_for=None, **kwargs):
-        self.look_for = look_for or self.look_for
-        super(PHBaseChar, self).__init__(**kwargs)
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        if not parse_obj.at_end(position):
-            return parse_obj(position, cls.look_for,
-                             min_count=cls.min_char_count,
-                             max_count=cls.max_char_count,
-                             caps_sensitive=cls.caps_sensitive,
-                             min_error_msg=cls.min_char_count_msg)
-        else:
-            return parse_obj.fb(position)
-
-
-class PHBaseSingleChar(PHBaseChar):
-    min_char_count = 1
-    max_char_count = 1
-
-
-class PHBaseString(PHBaseChar):
-    __initialized = False
-
-    def __init__(self, look_for=None, **kwargs):
-        self.look_for = look_for or self.look_for
-        super(PHBaseString, self).__init__(**kwargs)
-
-    @classmethod
-    def __init(cls):
-        if not cls.__initialized:
-            cls.__initialized = True
-            if cls.look_for[0] != '"':
-                cls.look_for = '"' + cls.look_for
-            if cls.look_for[-1] != '"':
-                cls.look_for += '"'
-
-    @classmethod
-    def parse(cls, *args, **kwargs):
-        cls.__init()
-        super(PHBaseString, cls).parse(*args, **kwargs)
-        
-
-class PHBaseSubParsers(PHBase):
-    operation = 'and'  # ['and'|'or'|'best']
-    parsers = None
-
-    def __init__(self, *parsers, operation=None, **kwargs):
-        self.parsers = parsers or self.parsers
-        self.operation = operation or self.operation
-        super(PHBaseSubParsers, self).__init__(**kwargs)
-
-    @staticmethod
-    def _and(parse_obj, position=0, *parsers, **kwargs):
-        tmp_ret = parse_obj.fb(position)
-
-        for p in parsers:
-            tmp_item = p(parse_obj, position + tmp_ret, **kwargs)
-
-            if tmp_item:
-                tmp_ret += tmp_item
-            else:
-                return parse_obj.fb(position)
-
-        return tmp_ret
-
-    @staticmethod
-    def _or(parse_obj, position=0, *parsers, **kwargs):
-        for p in parsers:
-            tmp_item = p(parse_obj, position, **kwargs)
-            if tmp_item:
-                return tmp_item
-
-        return parse_obj.fb(position)
-
-    @staticmethod
-    def _best(parse_obj, position=0, *parsers, **kwargs):
-
-        tmp_best = parse_obj.fb(position)
-
-        for p in parsers:
-            tmp_item = p(parse_obj, position, **kwargs)
-            tmp_best = tmp_best.max(tmp_item)
-
-        return tmp_best
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        if cls.operation == 'and':
-            return cls._and(parse_obj, position, *make_list(cls.parsers))
-        elif cls.operation == 'or':
-            return cls._or(parse_obj, position, *make_list(cls.parsers))
-        elif cls.operation == 'best':
-            return cls._best(parse_obj, position, *make_list(cls.parsers))
-
-
-class PHBaseSubSegment(PHBase):
-    segment = None
-
-    @classmethod
-    def parse(cls, *args, **kwargs):
-        return cls.segment(*args, **kwargs)
-
-
-# **********************************************************************************
-# </editor-fold>
-# **********************************************************************************
-
-
-# **********************************************************************************
-# <editor-fold desc="  OUTER PARSERS  ">
-# **********************************************************************************
-
-
-class PHSegment(object):
-    # parser = True
-    is_history_item = True
-    is_segment_item = True
-
-    _lookups = None
-    _parser_segment_defs = None
-
-    name = None
-    description = None
-    references = None
-    messages = None
-
-    on_pass_msg = None  # 'VALID'
-    on_fail_msg = None  # 'ERROR'
-
-    # parse_object = ParsingObj
-    __initialized = False
-
-    def __init__(self, *args, **kwargs):
-        self.__init()
-        super(PHSegment, self).__init__(*args, **kwargs)
-
-    @classmethod
-    def __init(cls):
-        if not cls.__initialized:
-            cls.__initialized = True
-            cls._lookups = {}
-
-            cls.name = cls.name or cls.__class__.__name__
-            cls.on_pass_msg = make_list(cls.on_pass_msg)
-            cls.on_fail_msg = make_list(cls.on_fail_msg)
-            cls._parser_segment_defs = {}
-            if cls.description is not None:
-                cls._parser_segment_defs['description'] = cls.description
-            if cls.references is not None:
-                cls._parser_segment_defs['references'] = cls.references
-
-    @classmethod
-    def _update_messages(cls, parser_obj):
-        cls.__init()
-        if parser_obj.message_lookup.name not in cls._lookups:
-            if cls.is_segment_item and cls.name:
-                parser_obj.message_lookup.segment(cls.name, **cls._parser_segment_defs)
-            if cls.messages is not None:
-                parser_obj.message_lookup.add(messages=cls.messages)
-            cls._lookups[parser_obj.message_lookup.name] = None
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        """
-        must call:
-            cls.super_call(parse_obj, position, **kwargs)
-        """
-        tmp_err = None
-        position = int(position)
-
-        cls._update_messages(parse_obj)
-
-        if cls.is_segment_item:
-            parse_obj.begin_stage(cls.name, position=position)
-
-        raise_error = False
-
-        if not parse_obj.at_end(position):
-            try:
-                tmp_ret = super().parse(parse_obj, position, **kwargs)
-            except ParsingError as err:
-                tmp_err = err
-                raise_error = True
-                tmp_ret = err.results
-        else:
-            tmp_ret = parse_obj.fb(position)
-
-        tmp_ret.set_done(set_history=cls.is_history_item, pass_msg=cls.on_pass_msg, fail_msg=cls.on_fail_msg)
-
-        if cls.is_segment_item:
-            parse_obj.end_stage(tmp_ret, raise_error=raise_error)
-
-        if raise_error:
-            raise tmp_err
-
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHFullLength(object):
-    not_full_length_msg = 'INVALID_CHAR'
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, *args, **kwargs):
-        tmp_ret = super(PHFullLength, cls).parse(parse_obj, position, *args, **kwargs)
-        if tmp_ret.l != len(parse_obj):
-            tmp_ret(cls.not_full_length_msg)
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHLoop(object):
-    parser = True
-    min_loop = None
-    min_loop_fail_msg = 'TOO_FEW_SEGMENTS'
-    max_loop = None
-    max_loop_fail_msg = 'TOO_MANY_SEGMENTS'
-    max_loop_fail = False
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        loop_count = 0
-        tmp_ret = parse_obj.fb(position)
-
-        min_loop = cls.min_loop or 0
-        max_loop = cls.max_loop or sys.maxsize
-
-        while True:
-            tmp_loop = super().parse(parse_obj, position+tmp_ret, **kwargs)
-            if not tmp_loop:
-                break
-            loop_count += 1
-            if loop_count > max_loop:
-                if cls.max_loop_fail:
-                    tmp_ret(cls.max_loop_fail_msg)
-                break
-            else:
-                tmp_ret += tmp_loop
-
-        if loop_count < min_loop:
-            tmp_ret(cls.min_loop_fail_msg)
-
-        tmp_ret.data['loops'] = loop_count
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHInvalidNext(object):
-    invalid_next_char = None
-    invalid_next_char_msg = 'INVALID_NEXT_CHAR'
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        tmp_ret = super().parse(parse_obj, position, **kwargs)
-        if tmp_ret and not parse_obj.at_end(position + 1) and parse_obj[position + 1] in cls.invalid_next_char:
-            tmp_ret(cls.invalid_next_char_msg, set_length=0)
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHEnclosed(object):
-    parser = True
-    enclosure_start = '"'
-    enclosure_end = '"'
-    skip_quoted = True
-    unclosed_msg = 'UNCLOSED_STRING'
-    __initialized = False
-
-    @classmethod
-    def __init(cls):
-        if not cls.__initialized:
-            cls.__initialized = True
-            if not issubclass(cls.enclosure_start.__class__, PHBase):
-                cls.enclosure_start = PHBaseSingleChar(cls.enclosure_start)
-            if not issubclass(cls.enclosure_end.__class__, PHBase):
-                cls.enclosure_end = PHBaseSingleChar(cls.enclosure_end)
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-
-        tmp_ret = cls.enclosure_start(parse_obj, position)
-        if not tmp_ret:
-            return parse_obj.fb(position)
-
-        tmp_ret += super().parse(parse_obj, position + tmp_ret, **kwargs)
-
-        tmp_closed = cls.enclosure_end(parse_obj, position + tmp_ret)
-        tmp_ret += tmp_closed
-
-        if not tmp_closed:
-            tmp_ret(cls.unclosed_msg)
-            tmp_ret.set_length(0)
-
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHMinLen(object):
-    min_length = None
-    min_length_msg = 'SEGMENT_TOO_SHORT'
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        tmp_ret = super().parse(parse_obj, position, **kwargs)
-        # print('checking min length (%s v min %s)' % (tmp_ret.l, cls.min_length))
-        if tmp_ret.l < cls.min_length:
-            # print('%s is smaller than min langth %s' % (tmp_ret.l, cls.min_length))
-            tmp_ret(cls.min_length_msg)
-            # print(repr(tmp_ret))
-
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHMaxLen(object):
-    max_length = None
-    max_length_msg = 'SEGMENT_TOO_LONG'
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        tmp_ret = super().parse(parse_obj, position, **kwargs)
-        if tmp_ret.l > cls.max_length:
-            tmp_ret(cls.max_length_msg)
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHMinMaxLen(object):
-    min_length = None
-    min_length_msg = 'SEGMENT_TOO_SHORT'
-    max_length = None
-    max_length_msg = 'SEGMENT_TOO_LONG'
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        tmp_ret = super().parse(parse_obj, position, **kwargs)
-        if tmp_ret.l > cls.max_length:
-            tmp_ret(cls.max_length_msg)
-        elif tmp_ret.l < cls.min_length:
-            tmp_ret(cls.min_length_msg)
-
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-class PHInvalidStartStop(object):
-    invalid_start_chars = None
-    invlaid_start_chars_msg = 'INVALID_START'
-    invalid_end_chars = None
-    invlaid_end_chars_msg = 'INVALID_END'
-
-    __initialized = True
-    
-    @classmethod
-    def __init(cls):
-        if not cls.__initialized:
-            cls.__initialized = True    
-            if cls.invalid_start_chars is not None and not issubclass(cls.invalid_start_chars.__class__, PHBase):
-                cls.invalid_start_chars = PHBaseChar(cls.invalid_start_chars)
-            if cls.invalid_end_chars is not None and not issubclass(cls.invalid_end_chars.__class__, PHBase):
-                cls.invalid_end_chars = PHBaseChar(cls.invalid_end_chars)
-
-    @classmethod
-    def parse(cls, parse_obj, position=0, **kwargs):
-        cls.__init()
-        tmp_fail = parse_obj.fb(position)
-        tmp_ret = cls.invalid_start_chars(parse_obj, position)
-        if tmp_ret:
-            return tmp_fail(cls.invlaid_start_chars_msg)
-
-        tmp_ret += super().parse(parse_obj, position + tmp_ret, **kwargs)
-
-        tmp_closed = cls.invalid_end_chars(parse_obj, position + tmp_ret)
-        tmp_ret += tmp_closed
-
-        if tmp_closed:
-            return tmp_ret(cls.invlaid_end_chars_msg)
-
-        return tmp_ret
-
-    def __call__(self, *args, **kwargs):
-        return self.parse(*args, **kwargs)
-
-
-
-# **********************************************************************************
-# </editor-fold>
-# **********************************************************************************
-
-'''
 # **********************************************************************************
 # <editor-fold desc="  ShortCutBases  ">
 # **********************************************************************************
 
 
+# @register_parser
 class CharNoSegment(CharParser):
-    inner_parser = CharParser
     is_segment = False
     is_history = False
 
 
+# @register_parser
 class StringNoSegment(StringParser):
-    inner_parser = StringParser
     is_segment = False
     is_history = False
 
 
+# @register_parser
 class SingleCharNoSegment(SingleCharParser):
-    inner_parser = SingleCharParser
     is_segment = False
     is_history = False
 

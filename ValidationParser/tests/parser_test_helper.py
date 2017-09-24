@@ -1,5 +1,5 @@
 from ValidationParser.parser import parse, RETURN_TYPE_LOOKUP
-from ValidationParser.footballs import RESULT_CODES, ParsingObj
+from ValidationParser.footballs import STATUS_CODES, ParsingObj
 from helpers.general import _UNSET, make_list, copy_none
 
 
@@ -13,7 +13,7 @@ PARSER_TEST_ITEM_DEFS = dict(
     parse_all=False,
     parse_script_kwargs={},
     parse_script_parser=None,  # required
-    parse_return_type='short',  # [bool, short, long]
+    parse_verbose=2,  # [bool, short, long]
     
     parse_string=None,  # required
     parse_kwargs={},
@@ -24,7 +24,7 @@ PARSER_TEST_ITEM_DEFS = dict(
                           # if set to 0 will also set the status to ERROR
     contains_parsers=None,  # ['parser_1', 'parser_2'],
     
-    status=RESULT_CODES.OK,  # or other result codes
+    status=STATUS_CODES.OK,  # or other result codes
     
     history_str=None,
     history_level=None,
@@ -34,9 +34,9 @@ PARSER_TEST_ITEM_DEFS = dict(
     data=None)
 
 STATUS_LOOKUP = dict(
-    w = RESULT_CODES.WARNING,
-    e = RESULT_CODES.ERROR,
-    o = RESULT_CODES.OK)
+    w = STATUS_CODES.WARNING,
+    e = STATUS_CODES.ERROR,
+    o = STATUS_CODES.OK)
 
 class ParserTestItem(object):
     def __init__(self, params, default_kwargs=None):
@@ -65,7 +65,7 @@ class ParserTestItem(object):
             def_unparsed_content_msg=None)
 
         self.parse_script_parser = None  # required
-        self.parse_return_type = 'long'  # [bool, short, long]
+        self.parse_verbose = 2  # [bool, short, long]
 
         self.parse_string = None  # required
         self.parse_kwargs = {}
@@ -130,9 +130,9 @@ class ParserTestItem(object):
 
         if self.status is _UNSET:
             if self.parsed_string_len:
-                self.status = RESULT_CODES.OK
+                self.status = STATUS_CODES.OK
             else:
-                self.status = RESULT_CODES.ERROR
+                self.status = STATUS_CODES.ERROR
 
         self._split_messages()
 
@@ -148,7 +148,7 @@ class ParserTestItem(object):
             parse_all=self.parse_all,
             parse_script_kwargs=copy_none(self.parse_script_kwargs),
             parse_script_parser=self.parse_script_parser,  # required
-            parse_return_type=self.parse_return_type,  # [bool, short, long]
+            parse_verbose=self.parse_verbose,  # [bool, short, long]
             parse_string=self.parse_string,  # required
             parse_kwargs=self.parse_kwargs,
             parsed_string=self.parsed_string,  # defaults to parse_str if None
@@ -215,9 +215,9 @@ class ParserTestItem(object):
     def football(self):
         if self._football is _UNSET:
             if self.parse_script_parser is None:
-                self._football = self.parse_script(self.parsing_obj, return_type='football', **self.parse_script_kwargs)
+                self._football = self.parse_script(self.parsing_obj, verbose=3, **self.parse_script_kwargs)
             else:
-                self._football = self.parse_script(self.parsing_obj, self.parse_script_parser, return_type='football', **self.parse_script_kwargs)
+                self._football = self.parse_script(self.parsing_obj, self.parse_script_parser, verbose=3, **self.parse_script_kwargs)
         return self._football
 
     @property
@@ -226,7 +226,7 @@ class ParserTestItem(object):
 
     @property
     def test_name(self):
-        return '%s - %s - %r - %s' % (self.test_id, self.parse_string, self.parse_script_parser, self.parse_return_type)
+        return '%s - %s - %r - %s' % (self.test_id, self.parse_string, self.parse_script_parser, self.parse_verbose)
 
     def _make_msg(self, name, expected, returned):
         return '%s:\n    Expected: %r\n    Returned: %r' % (name, expected, returned)
@@ -300,7 +300,7 @@ class ParserTestItem(object):
             return old_answ
 
     def _test_bool_ret(self, test_return, ret_list, old_answ=True):
-        old_answ = self._test_item('Bool Check', self.status != RESULT_CODES.ERROR, bool(test_return), ret_list, old_answ=old_answ)
+        old_answ = self._test_item('Bool Check', self.status != STATUS_CODES.ERROR, bool(test_return), ret_list, old_answ=old_answ)
         return old_answ
 
     def _test_short_ret(self, test_return, ret_list, old_answ=True):
@@ -344,16 +344,16 @@ class ParserTestItem(object):
         tmp_ret = []
         passed = True
         
-        test_return_obj = RETURN_TYPE_LOOKUP[self.parse_return_type]
+        test_return_obj = RETURN_TYPE_LOOKUP[self.parse_verbose]
         
         test_ret = test_return_obj(self.football)
 
         passed = self._test_bool_ret(test_ret, tmp_ret, passed)                        
         
-        if self.parse_return_type in ['short', 'long']:
+        if self.parse_verbose in ['short', 'long']:
             passed = self._test_short_ret(test_ret, tmp_ret, passed)                        
 
-        if self.parse_return_type == 'long':
+        if self.parse_verbose == 'long':
             passed = self._test_long_ret(test_ret, tmp_ret, passed)
 
         if passed:
@@ -390,9 +390,9 @@ class ParserTests(object):
 
             tmp_test = ParserTestItem(test, tmp_defaults)
 
-            if tmp_test.parse_return_type == 'all':
-                for t in ['bool', 'short', 'long']:
-                    tmp_new_test = tmp_test.copy(parse_return_type=t)
+            if tmp_test.parse_verbose == 'all':
+                for t in range(3):
+                    tmp_new_test = tmp_test.copy(parse_verbose=t)
                     self.tests.append(tmp_new_test)
             else:
                 self.tests.append(tmp_test)
@@ -414,7 +414,7 @@ class ParserTests(object):
             test_ran = False
             if limit_to is None or item.test_id == limit_to:
                 if not item.skip:
-                    if limit_ret_type is None or item.parse_return_type == limit_ret_type:
+                    if limit_ret_type is None or item.parse_verbose == limit_ret_type:
                         tests_ran += 1
                         test_ran = True
                         yield item

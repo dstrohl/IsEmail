@@ -1,7 +1,7 @@
 from unittest import TestCase
-from ValidationParser.tests.parser_test_helper import ParserTests
-from ip_validator.is_ip import is_ipv6, is_ipv4, is_ip
 
+from ValidationParser.is_ip import is_ipv6, is_ipv4, is_ip
+from ValidationParser.tests.parser_test_helper import ParserTests
 
 ipv4_data = {'data': {'ip_version': 'IPv4'}}
 ipv6_data = {'data': {'ip_version': 'IPv6'}}

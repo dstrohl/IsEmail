@@ -180,11 +180,12 @@ class TestParseFootball(TestCaseCompare):
     def fb(*msgs, parse_str='abcdefghijklmnop', po=None, segment='test', begin=0, length=0, max_length=0):
         if po is None:
             po = ParsingObj(parse_str)
-        fb = ParseResultFootball(po, segment, begin)
+        po.begin_stage(segment, begin)
+        fb = po.fb(position=begin, *msgs)
         if max_length:
             fb._max_length = max_length
-        if msgs:
-            fb(*msgs)
+        # if msgs:
+        #     fb(*msgs)
         if length:
             fb.set_length(length)
         return fb
@@ -338,7 +339,7 @@ class TestParseFootball(TestCaseCompare):
         self.assertTrue(tmp_ret)
 
     def test_add_bad_msg(self):
-        po = self.po(locked=True)
+        po = self.po(message_lookup=dict(name='test', locked=True))
         per = self.fb(po=po)
         with self.assertRaises(MessageListLocked):
             per.add('FOOBAR')
