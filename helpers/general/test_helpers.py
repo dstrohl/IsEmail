@@ -1,4 +1,5 @@
 from unittest import TestCase
+from textwrap import wrap
 
 
 class TestCaseApproxString(TestCase):
@@ -59,6 +60,7 @@ def make_msg(expected, returned, header=None, extra_top_lines=1, line_padding=4)
 
     return '\n'.join(tmp_ret)
 
+
 def _compare_(l_obj, r_obj, comp_str):
     if comp_str == '==':
         return l_obj == r_obj
@@ -74,22 +76,82 @@ def _compare_(l_obj, r_obj, comp_str):
         return l_obj <= r_obj
 
 
-def _make_actual_compare_str(l_key, l_value, l_obj, r_key, r_value, r_obj):
-    tmp_ret = 'UNKNOWN'
+def _actual_compare_str(l_obj, r_obj):
+    # tmp_ret = 'UNKNOWN'
     try:
         if l_obj == r_obj:
             tmp_ret = 'EQ'
+        else:
+            try:
+                if l_obj < r_obj:
+                    tmp_ret = 'LT'
+                else:
+                    tmp_ret = 'GT'
+            except TypeError:
+                tmp_ret = 'NE'
     except TypeError:
         tmp_ret = 'UNCOMPARABLE'
-    try:
-        if l_obj < r_obj:
-            tmp_ret = 'LT'
-        else:
-            tmp_ret = 'GT'
-    except TypeError:
-        tmp_ret = 'NE'
 
+    return tmp_ret
+
+
+def _make_actual_compare_str(l_key, l_value, l_obj, r_key, r_value, r_obj):
+    tmp_ret = _actual_compare_str(l_obj, r_obj)
     return '%s (%r) %s %s (%r)' % (l_key, l_value, tmp_ret, r_key, r_value)
+
+
+def _make_display_matrix(l_key, l_value, l_obj, r_key, r_value, r_obj, exp_comp, act_comp, obj_pass, value_pass):
+    """    
+    :param l_key: 
+    :param l_value: 
+    :param l_obj: 
+    :param r_key: 
+    :param r_value: 
+    :param r_obj: 
+    :param exp_comp: 
+    :param act_comp: 
+    :return:
+    
+    Left Key: <key>           | Right Key: <key>
+    Comp Value: <value>       | Comp Value <value>
+                              |
+    foobar                    | snafu       
+         
+    Test ">" Value : Failed
+    Actual Comp    :  "LT"
+    
+    Test ">" Obj   : Passed
+    Actual Comp    :   
+    """
+
+    line_format = '{left:<{fill}} | {right}'
+    test_comp_format = 'Test "{exp_comp:<2}" Value : {pf}'
+    act_comp_format = 'Actual Comp    : {comp}'
+
+    l_repr = repr(l_obj)
+    r_repr = repr(r_obj)
+    l_key_str = 'Left Key: ' + str(l_key)
+    r_key_str = 'Right Key: ' + str(r_key)
+    l_value_str = 'Left Comp: ' + str(l_value)
+    r_value_str = 'Right Comp: ' + str(r_value)
+
+    l_col_len = max(len(l_repr), len(l_key_str), len(l_value_str))
+
+    tmp_ret = [
+        '',
+        line_format.format(left=l_key_str, right=r_key_str, fill=l_col_len),
+        line_format.format(left=l_value_str, right=r_value_str, fill=l_col_len),
+        line_format.format(left='', right='', fill=l_col_len),
+        line_format.format(left=l_repr, right=r_repr, fill=l_col_len),
+        '', 'Value Results',
+        test_comp_format.format(exp_comp=exp_comp, pf=value_pass),
+        act_comp_format.format(comp=_actual_compare_str(l_value, r_value)),
+        '', 'Object Results',
+        test_comp_format.format(exp_comp=act_comp, pf=obj_pass),
+        act_comp_format.format(comp=_actual_compare_str(l_obj, r_obj))
+    ]
+    return '\n'.join(tmp_ret)
+
 
 
 def _fix_limit_str(l_key, r_key, comp_str, limit_str):
@@ -155,17 +217,25 @@ class TestCaseCompare(TestCase):
                     else:
                         sub_test_str = '%s %s %s' % (l_key, test, r_key)
 
-                    tmp_exp = _compare_(l_value, r_value, test)
-                    tmp_ret = _compare_(l_item, r_item, test)
-                    tmp_msg = '\n\n%s:\n%r %s %r\nactual: %r' % (sub_test_str, l_item, test, r_item,
-                                                                 _make_actual_compare_str(l_key, l_value, l_item,
-                                                                                          r_key, r_value, r_item))
-                    if msg:
-                        tmp_msg += '\n' + msg
-
                     with self.subTest(sub_test_str):
-                        self.assertEqual(tmp_exp, tmp_ret, tmp_msg)
-                        
+                        tmp_exp = _compare_(l_value, r_value, test)
+                        tmp_ret = _compare_(l_item, r_item, test)
+                        # tmp_msg = '\n\nTrying %s:\n%r %s %r\n\nactual:\n %r' % (sub_test_str, l_item, test, r_item,
+                        #                                              _make_actual_compare_str(l_key, l_value, l_item,
+                        #                                                                       r_key, r_value, r_item))
+
+                        tmp_msg = _make_display_matrix(
+                            l_key=l_key, l_obj=l_item, l_value=l_value,
+                            r_key=r_key, r_obj=r_item, r_value=r_value,
+                            exp_comp=test, act_comp=test,
+                            obj_pass=tmp_ret, value_pass=tmp_exp
+                        )
+                        if msg:
+                            tmp_msg += '\n' + msg
+
+                        if tmp_exp != tmp_ret:
+                                self.fail(tmp_msg)
+
 
 EXAMPLE_PARAM_DICT = [
     {'name': 'name_1', 'options': [True, False], 'default': True},

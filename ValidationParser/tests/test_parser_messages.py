@@ -1,9 +1,9 @@
-from unittest import TestCase
+from unittest import TestCase, skip, SkipTest
 from ValidationParser.parser_messages import *
 from helpers.general import show_compared_items
 from helpers.general.test_helpers import TestCaseCompare, make_msg
 from ValidationParser.exceptions import MessageListLocked
-from copy import deepcopy
+from copy import deepcopy, copy
 
 
 
@@ -189,8 +189,10 @@ class TestMessageObj(TestCaseCompare):
 
     @classmethod
     def setUpClass(cls):
+        MESSAGE_LOOKUP.clear()
         MESSAGE_LOOKUP.add_references(ref_list)
         MESSAGE_LOOKUP.update(s1_message, s1_warning_message)
+        cls.ml = get_message_lookup()
 
     @classmethod
     def tearDownClass(cls):
@@ -205,6 +207,7 @@ class TestMessageObj(TestCaseCompare):
         self.assertEqual('Segment 1 desc\nSegment 1 warn', tmp_resp.description)
         self.assertEqual(STATUS_CODES.WARNING, tmp_resp.status)
         self.assertEqual('s1.WARNING', str(tmp_resp.key))
+        self.assertTrue(tmp_resp)
 
         tmp_resp = ml('s1.VALID')
         self.assertEqual({'ref_1'}, tmp_resp._references)
@@ -212,6 +215,7 @@ class TestMessageObj(TestCaseCompare):
         self.assertEqual('Segment 1 desc', tmp_resp.description)
         self.assertEqual(STATUS_CODES.OK, tmp_resp.status)
         self.assertEqual('s1.VALID', str(tmp_resp.key))
+        self.assertTrue(tmp_resp)
 
         tmp_resp = ml('s2.VALID')
         self.assertEqual(set(), tmp_resp._references)
@@ -219,38 +223,538 @@ class TestMessageObj(TestCaseCompare):
         self.assertEqual('', tmp_resp.description)
         self.assertEqual(STATUS_CODES.OK, tmp_resp.status)
         self.assertEqual('s2.VALID', str(tmp_resp.key))
+        self.assertTrue(tmp_resp)
+
+        tmp_resp = ml('s2.ERROR')
+        self.assertEqual(set(), tmp_resp._references)
+        self.assertEqual('s2 - ERROR', tmp_resp.name)
+        self.assertEqual('', tmp_resp.description)
+        self.assertEqual(STATUS_CODES.ERROR, tmp_resp.status)
+        self.assertEqual('s2.ERROR', str(tmp_resp.key))
+        self.assertFalse(tmp_resp)
 
     def test_add_pos(self):
-        self.fail()
+        tmp_resp = self.ml('s1.VALID', 10, 5)
+        self.assertEqual({'ref_1'}, tmp_resp._references)
+        self.assertEqual('Segment 1 - Valid Segment', tmp_resp.name)
+        self.assertEqual('Segment 1 desc', tmp_resp.description)
+        self.assertEqual(STATUS_CODES.OK, tmp_resp.status)
+        self.assertEqual('s1.VALID', str(tmp_resp.key))
 
-    def test_at(self):
-        self.fail()
+        self.assertTrue(tmp_resp.at(11))
+        self.assertFalse(tmp_resp.at(16))
+
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 7)
+
+        self.assertTrue(16 in tmp_resp)
+        self.assertEqual(2, len(tmp_resp))
 
     def test_copy(self):
-        self.fail()
+        tmp_resp = self.ml('s1.VALID', 5, 5)
+        self.assertEqual('s1.VALID', str(tmp_resp.key))
+
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 7)
+
+        self.assertTrue(tmp_resp.at(16))
+        self.assertEqual(2, len(tmp_resp))
+
+        tmp_resp_2 = tmp_resp.copy(clear=False)
+        self.assertEqual(2, len(tmp_resp_2))
+
+        tmp_resp_3 = tmp_resp.copy(clear=True)
+        self.assertEqual(1, len(tmp_resp_3))
+        self.assertEqual([(0, 0)], tmp_resp_3._position_list)
 
     def test_remove(self):
-        self.fail()
+        tmp_resp = self.ml('s1.VALID', 5, 5)
+        self.assertEqual('s1.VALID', str(tmp_resp.key))
+
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 7)
+
+        self.assertTrue(tmp_resp.at(16))
+        self.assertEqual(2, len(tmp_resp))
+
+        self.assertTrue(6 in tmp_resp)
+        
+        tmp_resp.remove(5)
+        self.assertEqual(1, len(tmp_resp))
+        
+        self.assertFalse(6 in tmp_resp)
+        self.assertTrue(13 in tmp_resp)
+        
+        tmp_resp.add_pos(15, 10)
+        self.assertEqual(2, len(tmp_resp))
+
+        self.assertFalse(6 in tmp_resp)
+        self.assertTrue(13 in tmp_resp)
+        self.assertTrue(20 in tmp_resp)
+
+        tmp_resp.remove()
+        self.assertEqual(1, len(tmp_resp))
+
+        self.assertFalse(6 in tmp_resp)
+        self.assertTrue(13 in tmp_resp)
+        self.assertFalse(20 in tmp_resp)
+
+        with self.assertRaises(ValueError):
+            tmp_resp.remove(15)
+
+        self.assertEqual(1, len(tmp_resp))
+
+        self.assertFalse(6 in tmp_resp)
+        self.assertTrue(13 in tmp_resp)
+        self.assertFalse(20 in tmp_resp)
+
+        tmp_resp.remove()
+
+        self.assertEqual(1, len(tmp_resp))
+
+        self.assertTrue(0 in tmp_resp, repr(tmp_resp))
+        self.assertFalse(6 in tmp_resp)
+        self.assertFalse(13 in tmp_resp)
+        self.assertFalse(20 in tmp_resp)
 
     def test_key_match(self):
-        self.fail()
+        tmp_resp = self.ml('s1.VALID', 5, 5)
+        self.assertEqual('s1.VALID', str(tmp_resp.key))
 
-    def test_contains(self):
-        self.fail()
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 7)
 
-    def test_len(self):
-        self.fail()
+        self.assertTrue(tmp_resp.at(16))
+        self.assertEqual(2, len(tmp_resp))
+
+        self.assertTrue(6 in tmp_resp)
+
+        self.assertTrue(tmp_resp.key_match('*.VALID'))
+        self.assertTrue(tmp_resp.key_match('s1.VALID'))
+        self.assertTrue(tmp_resp.key_match('s1.*'))
+        self.assertTrue(tmp_resp.key_match('*.*'))
+        self.assertTrue(tmp_resp.key_match('*.*', 12))
+        self.assertTrue(tmp_resp.key_match('*.*', 5))
+
+        self.assertFalse(tmp_resp.key_match('*.ERROR'))
+        self.assertFalse(tmp_resp.key_match('s2.VALID'))
+        self.assertFalse(tmp_resp.key_match('s2.*'))
+        self.assertFalse(tmp_resp.key_match('*.*', 10))
+        self.assertFalse(tmp_resp.key_match('*.*', 1))
 
     def test_str(self):
-        self.fail()
+        tmp_resp = self.ml('s1.VALID', 5, 5)
+        self.assertEqual('s1.VALID', str(tmp_resp))
 
-    def test_bool(self):
-        self.fail()
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 7)
 
-    def test_output(self):
-        self.fail()
+        self.assertTrue(tmp_resp.at(16))
+        self.assertEqual(2, len(tmp_resp))
+
+        self.assertTrue(6 in tmp_resp)
+
+        self.assertEqual('s1.VALID [(5, 5), (12, 7)]', repr(tmp_resp))
+
+    def test_max(self):
+        tmp_resp = self.ml('s1.VALID', 5, 5)
+        self.assertEqual('s1.VALID', str(tmp_resp))
+
+        self.assertEqual(1, len(tmp_resp))
+        tmp_resp.add_pos(12, 3)
+
+        self.assertEqual(2, len(tmp_resp))
+
+        self.assertEqual(12, tmp_resp.max_position)
+
+    def test_compare(self):
+
+        TESTS = [
+            (1, self.ml('s1.ERROR', 5, 5), 1),
+            (2, self.ml('s1.SEGMENT_TOO_LONG', 10, 5), 2),
+            (3, self.ml('s2.ERROR', 5, 5), 3),
+            (4, self.ml('s23.SEGMENT_TOO_LONG', 5, 5), 4),
+
+            (5, self.ml('s1.WARNING', 10, 5), 6),
+            (6, self.ml('s1.DEPRECATED', 5, 5), 5),
+
+            (7, self.ml('s1.VALID', 5, 5), 8),
+            (8, self.ml('s1.VALID', 1, 2), 7),
+        ]
+
+        self.assertComparisons(TESTS)
 
 
+
+
+"""
+class TestPycharm(TestCase):
+    def test_pycharm(self):
+        with self.subTest('test'):
+            self.assertEqual(True, False)
+
+    def test_pycharm_works(self):
+        self.assertEqual(True, False)
+"""
+
+class TestSimpleMessageHelper(TestCase):
+
+    def make_mh(self, message_lookup=None,
+                msg_defs=None,
+                init_messages=None,
+                def_seg='s1',
+                parse_string='abcdefghijklmnop',
+                override_defs=None,
+                **lookup_kwargs):
+        ml = message_lookup or get_message_lookup(**lookup_kwargs)
+        mh = SinpleMessageHelper(ml, parse_string=parse_string, default_segment=def_seg, override_definitions=override_defs)
+        init_defs_len = len(ml)
+        init_len = 0
+
+        if msg_defs:
+            msg_defs = make_list(msg_defs)
+            mh.define(*msg_defs)
+            init_defs_len += len(msg_defs)
+
+        if init_messages:
+            init_messages = make_list(init_messages)
+            for m in init_messages:
+                mh(*make_list(m))
+            init_len = 1
+
+        self.assertEqual(init_len, len(mh), repr(mh))
+        self.assertEqual(init_defs_len, len(ml))
+
+        return mh
+
+    def test_empty(self):
+        mh = self.make_mh()
+        self.assertEqual(0, len(mh))
+        self.assertFalse(mh)
+
+    def test_call_key_undefined(self):
+        with self.assertRaises(KeyError):
+            mh = self.make_mh(init_messages='foobar')
+
+    def test_call_def(self):
+        mh = self.make_mh(init_messages='VALID')
+        self.assertTrue('s1.VALID' in mh)
+        self.assertTrue('VALID' in mh)
+
+        mh({'key': 's3.FOOBAR'})
+        self.assertTrue('s3.FOOBAR' in mh)
+        self.assertFalse('FOOBAR' in mh)
+        mh({'key': 'SNAFU'})
+        self.assertTrue('s1.SNAFU' in mh)
+        self.assertTrue('SNAFU' in mh)
+        self.assertFalse('s1.VALID' in mh)
+        self.assertFalse('VALID' in mh)
+        self.assertFalse('s1.VALID' in mh)
+
+    def test_check_max(self):
+
+        mh = self.make_mh(init_messages='WARNING')
+        self.assertTrue('s1.WARNING' in mh)
+        self.assertTrue('WARNING' in mh)
+
+        mh('VALID')
+        self.assertTrue('s1.WARNING' in mh)
+        self.assertTrue('WARNING' in mh)
+
+        mh('ERROR')
+        self.assertTrue('s1.ERROR' in mh)
+        self.assertTrue('ERROR' in mh)
+
+    def test_call_mh(self):
+        mh_e = self.make_mh(init_messages='ERROR')
+        self.assertTrue('ERROR' in mh_e)
+        self.assertTrue(mh_e)
+
+        mh_v = self.make_mh(init_messages='VALID')
+        self.assertTrue('VALID' in mh_v)
+        self.assertTrue(mh_v)
+
+        mh_w = self.make_mh(init_messages='WARNING')
+        self.assertTrue('WARNING' in mh_w)
+        self.assertTrue(mh_v)
+
+        mh_w(mh_v)
+        self.assertTrue('s1.WARNING' in mh_w)
+        self.assertTrue('WARNING' in mh_w)
+
+        mh_w(mh_e)
+        self.assertTrue('s1.ERROR' in mh_w, repr(mh_w))
+        self.assertTrue('ERROR' in mh_w)
+
+    def test_define(self):
+        mh = self.make_mh()
+
+        with self.assertRaises(KeyError):
+            mh('FOOBAR')
+
+        mh.define({'key': 'foobar'})
+        self.assertFalse('FOOBAR' in mh)
+        mh('FOOBAR')
+        self.assertTrue('FOOBAR' in mh)
+
+    def test_at(self):
+        mh = self.make_mh()
+        mh('VALID', begin=5, length=10, note='my note')
+        self.assertTrue(mh.at('VALID'))
+        self.assertTrue(mh.at('VALID', 7))
+        self.assertFalse(mh.at('VALID', 21))
+
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertFalse(mh.at('VALID'))
+        self.assertFalse(mh.at('VALID', 7))
+        self.assertFalse(mh.at('VALID', 11))
+        self.assertTrue(mh.at('ERROR'))
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertFalse(mh.at('ERROR', 7))
+
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertFalse(mh.at('VALID'))
+        self.assertFalse(mh.at('VALID', 7))
+        self.assertFalse(mh.at('VALID', 11))
+        self.assertTrue(mh.at('ERROR'))
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertFalse(mh.at('ERROR', 7))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+    def test_copy(self):
+        mh = self.make_mh(init_messages='VALID')
+        mh_2 = copy(mh)
+        mh_3 = mh.copy()
+
+        self.assertTrue('VALID' in mh_2)
+        self.assertTrue('VALID' in mh_3)
+
+        mh('ERROR')
+
+        self.assertFalse('VALID' in mh)
+        self.assertTrue('VALID' in mh_2)
+        self.assertTrue('VALID' in mh_3)
+        self.assertFalse('ERROR' in mh_2)
+        self.assertFalse('ERROR' in mh_3)
+
+    def test_iadd(self):
+        mh_e = self.make_mh(init_messages='ERROR')
+        self.assertTrue('ERROR' in mh_e)
+
+        mh_v = self.make_mh(init_messages='VALID')
+        self.assertTrue('VALID' in mh_v)
+
+        mh_w = self.make_mh(init_messages='WARNING')
+        self.assertTrue('WARNING' in mh_w)
+
+        mh_w += mh_v
+        self.assertTrue('s1.WARNING' in mh_w)
+        self.assertTrue('WARNING' in mh_w)
+
+        mh_w += mh_e
+        self.assertTrue('s1.ERROR' in mh_w)
+        self.assertTrue('ERROR' in mh_w)
+
+    def test_add(self):
+        mh_e = self.make_mh(init_messages='ERROR')
+        self.assertTrue('ERROR' in mh_e)
+
+        mh_v = self.make_mh(init_messages='VALID')
+        self.assertTrue('VALID' in mh_v)
+
+        mh_w = self.make_mh(init_messages='WARNING')
+        self.assertTrue('WARNING' in mh_w)
+
+        mh_2 = mh_w + mh_v
+        self.assertTrue('s1.WARNING' in mh_2)
+        self.assertTrue('WARNING' in mh_2)
+
+        mh_3 = mh_w + mh_e
+        self.assertTrue('s1.ERROR' in mh_3)
+        self.assertTrue('ERROR' in mh_3)
+
+    def test_items(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=10, length=5)
+        self.assertTrue('ERROR' in mh)
+
+        tmp_ret = list(mh.items())
+
+        self.assertEqual(1, len(tmp_ret))
+        self.assertEqual('s1.ERROR', str(tmp_ret[0]))
+
+        tmp_ret = list(mh.items('ERROR'))
+
+        self.assertEqual(1, len(tmp_ret))
+        self.assertEqual('s1.ERROR', str(tmp_ret[0]))
+
+        tmp_ret = list(mh.items(position=13))
+
+        self.assertEqual(1, len(tmp_ret), repr(tmp_ret))
+        self.assertEqual('s1.ERROR', str(tmp_ret[0]))
+
+        tmp_ret = list(mh.items('ERROR', position=13))
+
+        self.assertEqual(1, len(tmp_ret))
+        self.assertEqual('s1.ERROR', str(tmp_ret[0]))
+
+        # no return
+        tmp_ret = list(mh.items('VALID'))
+        self.assertEqual(0, len(tmp_ret))
+
+        tmp_ret = list(mh.items(position=6))
+        self.assertEqual(0, len(tmp_ret))
+
+        tmp_ret = list(mh.items('ERROR', position=2))
+        self.assertEqual(0, len(tmp_ret))
+
+        tmp_ret = list(mh.items('VALID', position=12))
+        self.assertEqual(0, len(tmp_ret))
+
+    def test_remove(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        mh.remove()
+        self.assertEqual(0, len(mh))
+        self.assertFalse(mh)
+
+    def test_remove_key(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        with self.assertRaises(KeyError):
+            mh.remove(key='VALID')
+
+        mh.remove(key='ERROR')
+        self.assertEqual(0, len(mh))
+        self.assertFalse(mh)
+
+    def test_remove_pos(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        with self.assertRaises(IndexError):
+            mh.remove(position=99)
+
+        mh.remove(position=14)
+        self.assertEqual(1, len(mh))
+        self.assertTrue(mh)
+
+        mh.remove(position=4)
+        self.assertEqual(0, len(mh))
+        self.assertFalse(mh)
+
+    def test_remove_key_pos(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        with self.assertRaises(IndexError):
+            mh.remove(key='ERROR', position=99)
+
+        mh.remove(key='ERROR', position=14)
+        self.assertEqual(1, len(mh))
+        self.assertTrue(mh)
+
+        mh.remove(key='ERROR', position=4)
+        self.assertEqual(0, len(mh))
+        self.assertFalse(mh)
+
+    def test_keys(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=10, length=5)
+        self.assertTrue('ERROR' in mh)
+
+        tmp_ret = list(mh.keys())
+        self.assertTrue(isinstance(tmp_ret[0], KeyObj))
+        self.assertEqual('s1.ERROR', str(tmp_ret[0]))
+
+        tmp_ret = list(mh.keys(as_string=True))
+        self.assertTrue(isinstance(tmp_ret[0], str))
+        self.assertEqual('s1.ERROR', tmp_ret[0])
+
+    def test_get(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=10, length=5)
+        self.assertTrue('ERROR' in mh)
+
+        tmp_ret = mh.get()
+        self.assertEqual('s1.ERROR', str(tmp_ret))
+
+        tmp_ret = mh.get('ERROR')
+
+        self.assertEqual('s1.ERROR', str(tmp_ret))
+
+        tmp_ret = mh.get(position=13)
+
+        self.assertEqual('s1.ERROR', str(tmp_ret))
+
+        tmp_ret = mh.get('ERROR', position=13)
+
+        self.assertEqual('s1.ERROR', str(tmp_ret))
+
+        # no return
+        tmp_ret = mh.get('VALID')
+        self.assertIsNone(tmp_ret)
+
+        tmp_ret = mh.get(position=6)
+        self.assertIsNone(tmp_ret)
+
+        tmp_ret = mh.get('ERROR', position=2)
+        self.assertIsNone(tmp_ret)
+
+        tmp_ret = mh.get('VALID', position=12)
+        self.assertIsNone(tmp_ret)
+
+    def test_str(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        self.assertEqual('s1 (ERROR)', str(mh))
+
+    def test_repr(self):
+        mh = self.make_mh()
+        mh('ERROR', begin=12, length=10, note='my note')
+        self.assertTrue(mh.at('ERROR', 16))
+        mh('ERROR', begin=0, length=5, note='my note2')
+        self.assertTrue(mh.at('ERROR', 16))
+        self.assertTrue(mh.at('ERROR', 2))
+
+        self.assertEqual(2, len(mh.get('ERROR')))
+
+        self.assertEqual('s1 [ERROR (12, 10), (0, 5)]', repr(mh))
 
 
 '''

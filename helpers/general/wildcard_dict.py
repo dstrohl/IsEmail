@@ -42,52 +42,62 @@ class MsgKeyObj(KeyObj):
         return tmp_ret
 '''
 
+
 class KeyObj(object):
-    _key1_default = '*'
-    _key2_default = '*'
+    _key1_default = None
+    _key2_default = None
     _key_field = 'key'
     _key1_function = 'lower'
     _key2_function = 'upper'
 
     def __init__(self, *keys, **kwargs):
+        self.key1 = '*'
+        self.key2 = '*'
+
         self.key_data = {}
         if kwargs:
             for attr, value in kwargs.items():
                 if hasattr(self, attr):
                     setattr(self, attr, value)
-        self.key1 = self._key1_default
-        self.key2 = self._key2_default
+
         if self._key1_function is not None:
-            self._key1_function = getattr(str, self._key1_function)
+            self._fix_key1 = getattr(str, self._key1_function)
         if self._key2_function is not None:
-            self._key2_function = getattr(str, self._key2_function)
+            self._fix_key2 = getattr(str, self._key2_function)
+
+        if self._key1_default is not None and self._key2_default is not None:
+            raise AttributeError('Only one key default can be set')
+
+        if self._key1_default is not None:
+            self._key1_default = self._fix_key1(self._key1_default)
+        if self._key2_default is not None:
+            self._key2_default = self._fix_key2(self._key2_default)
+
         self.update(*keys)
 
+    def _fix_key1(self, key):
+        return key
+
+    def _fix_key2(self, key):
+        return key
+
     def _set_key1(self, key1):
-        if self._iskey(key1):
-            key1 = self._key1_function(key1)
-            if not self.has_key1:
-                if self._key1_function:
-                    self.key1 = key1
-                else:
-                    self.key1 = key1
+        if key1 != '*':
+            key1 = self._fix_key1(key1)
+            if self.key1 == '*':
+                self.key1 = key1
             elif self.key1 != key1:
                 raise AttributeError('Unable to update, mis-matched keys: %s -> %s' % (self.key1, key1))
-        elif not self.has_key1 and self._key1_default:
-            self.key1 = self._key1_function(self._key1_default)
 
     def _set_key2(self, key2):
-        if self._iskey(key2):
-            key2 = self._key2_function(key2)
-            if not self.has_key2:
-                if self._key2_function:
-                    self.key2 = key2
-                else:
-                    self.key2 = key2
+        if key2 != '*':
+            key2 = self._fix_key2(key2)
+            if self.key2 == '*':
+                self.key2 = key2
             elif self.key2 != key2:
                 raise AttributeError('Unable to update, mis-matched keys: %s -> %s' % (self.key2, key2))
-        elif not self.has_key2 and self._key2_default:
-            self.key2 = self._key2_function(self._key2_default)
+            # elif not self.has_key2 and self._key2_default:
+            #     self.key2 = self._key2_function(self._key2_default)
 
     @staticmethod
     def _iskey(key):
@@ -100,7 +110,14 @@ class KeyObj(object):
                 try:
                     key1, key2 = key.split('.')
                 except ValueError:
-                    raise AttributeError('Unable to parse key: %r (no "." found)' % key)
+                    if self._key1_default is not None:
+                        self.update('%s.%s' % (self._key1_default, key))
+                        found_key = True
+                    elif self._key2_default is not None:
+                        self.update('%s.%s' % (key, self._key2_default))
+                        found_key = True
+                    else:
+                        raise AttributeError('Unable to parse key: %r (no "." found)' % key)
                 except AttributeError:
                     if key is None:
                         continue
@@ -534,10 +551,10 @@ class WildCardMergeDict(object):
 
     def get(self, key, overrides=None):
         key = self._key_handler(key)
-        if not key.is_exact:
-            raise AttributeError('Can only "GET" exact keys.  (%s passed)' % key)
+        # if not key.is_exact:
+        #     raise AttributeError('Can only "GET" exact keys.  (%s passed)' % key)
         tmp_ret = self[key]
-        tmp_ret['key'] = key
+        # tmp_ret['key'] = key
         self._merge_rec(key, from_rec=overrides, to_rec=tmp_ret, tmp_dict=None)
         return tmp_ret
     __call__ = get
@@ -608,7 +625,7 @@ class WildCardMergeDict(object):
         self._data.clear()
         self.update(self._defaults)
 
-    def update(self, *args):
+    def update(self, *args, default_key1=None, default_key2=None):
         for arg in args:
             if isinstance(arg, (list, tuple)):
                 self.update(*arg)
@@ -618,8 +635,10 @@ class WildCardMergeDict(object):
                     key = arg.pop(self._key_field)
                 except KeyError:
                     raise KeyError('Key %r is not in dict %r' % (self._key_field, arg))
+                key = self._key_handler(key, _key1_default=default_key1, _key2_default=default_key2)
                 self[key] = arg
             elif isinstance(arg, str):
+                arg = self._key_handler(arg, _key1_default=default_key1, _key2_default=default_key2)
                 self[arg] = {}
             else:
                 raise TypeError('item cannot be updated: %r' % arg)

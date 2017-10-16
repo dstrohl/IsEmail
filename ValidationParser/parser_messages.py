@@ -1,5 +1,6 @@
 from enum import IntEnum, Enum
-from helpers.general import make_list, adv_format, AutoAddDict, CompareFieldMixin, make_set, list_get
+from helpers.general import make_list, adv_format, AutoAddDict, CompareFieldMixin, make_set, list_get, ListFormatter, \
+    ListFormatSpec, make_list_formatter, find_keys
 from collections import UserDict, namedtuple, UserList
 from copy import deepcopy
 from ValidationParser.exceptions import MessageListLocked, MessageNotFoundError, SegmentNotFoundError, \
@@ -129,14 +130,21 @@ from helpers.general.wildcard_dict import KeyObj, WildCardMergeDict
 #             return False
 #
 
+'''
+class STATUS_CODES(IntEnum):
+    UNKNOWN = -1
+    SKIP = 0
+    OK = 1
+    WARNING = 50
+    ERROR = 99
+'''
 
 class STATUS_CODES(IntEnum):
-    OK = 3
-    WARNING = 2
-    ERROR = 1
     UNKNOWN = 99
     SKIP = 98
-
+    OK = 90
+    WARNING = 50
+    ERROR = 1
 
 STATUS_CODE_DICT = dict(
     OK=STATUS_CODES.OK,
@@ -1367,10 +1375,12 @@ class PositionObject(CompareFieldMixin):
         self.begin = begin
         self.length = length
         self.end = begin + length
-        self.note = note
+        self.note = note or ''
 
     def at(self, position):
         return self.begin <= position <= self.end
+
+    __contains__ = at
 
     def __str__(self):
         return '%s / %s' % (self.begin, self.length)
@@ -1412,6 +1422,14 @@ class PositionObject(CompareFieldMixin):
         if isinstance(other, self.__class__):
             return self._compare_eng_((self.begin, self.length), (other.begin, other.length))
 
+    def get_dict(self, **kwargs):
+        kwargs.update(
+            begin=self.begin,
+            length=self.length,
+            end=self.end,
+            note=self.note)
+        return kwargs
+
     def output(self, template='', **msg_template_kwargs):
         """
         printed output:
@@ -1422,16 +1440,53 @@ class PositionObject(CompareFieldMixin):
                 note
                 (+ msg template keywords)
         """
-        return template.format(
-            begin=self.begin,
-            length=self.length,
-            end=self.end,
-            note=self.note,
-            **msg_template_kwargs)
+        return template.format(**self.get_dict(**msg_template_kwargs))
+
+    def __repr__(self):
+        return '%s, %s' % (self.begin, self.length)
+
+
+class PositionList(object):
+
+    def __init__(self):
+        self.positions = []
+        self.begins = {}
+        self.position_index = {}
+        self.max_position = None
+        self.max_begin = None
+        self.empty = True
+        self.default_pos = PositionObject(0, 0, 'No Records')
+
+    def add(self, begin, length=0, note=None):
+        if isinstance(begin, PositionObject):
+            tmp_pos = begin
+        elif isinstance(begin, (list, tuple, self.__class__)):
+            for p in begin:
+                self.add(p)
+            return
+        else:
+            tmp_pos = PositionObject(begin, length, note)
+        self.positions.append(tmp_pos)
+        self._set_pos(tmp_pos)
+
+    def _set_pos(self, position):
+        if position == (0, 0):
+            self.position_index = self.position_index | {0}
+        else:
+            self.position_index = self.position_index | position.get_set
+        if self.max_position is None:
+            self.max_position = position
+        else:
+            self.max_position = max(self.max_position, position)
+
+    def at(self, position, as_begin=False):
+        return position in self.position_index
+
+
 
 
 class MessageObject(CompareFieldMixin):
-    _compare_fields = ('status', 'key', 'max_pos')
+    _compare_fields = ('status', 'key', 'max_position')
 
     def __init__(self, key=None, name=None, description='', status=None, references=None, begin=0, length=0, note='',
                  msg_lookup=None, positions=None):
@@ -1440,7 +1495,7 @@ class MessageObject(CompareFieldMixin):
         self.position_index = set()
         self.max_position = None
         self.key = key
-        self.name = name
+        self.name = name or str(key).replace('_', ' ').replace('.', ' - ')
         self.status = status or STATUS_CODES.ERROR
         self.description = description
         self._references = references or set()
@@ -1456,13 +1511,23 @@ class MessageObject(CompareFieldMixin):
             self._ref_cache = self.msg_lookup.get_ref(self._references)
         return self._ref_cache
 
-    def add_pos(self, begin, length, note):
-        tmp_pos = PositionObject(begin, length, note)
+    def add_pos(self, begin, length=0, note=None):
+        if isinstance(begin, PositionObject):
+            tmp_pos = begin
+        elif isinstance(begin, (list, tuple)):
+            for p in begin:
+                self.add_pos(p)
+            return
+        else:
+            tmp_pos = PositionObject(begin, length, note)
         self.positions.append(tmp_pos)
         self._set_pos(tmp_pos)
 
     def _set_pos(self, position):
-        self.position_index = self.position_index | position.get_set
+        if position == (0, 0):
+            self.position_index = self.position_index | {0}
+        else:
+            self.position_index = self.position_index | position.get_set
         if self.max_position is None:
             self.max_position = position
         else:
@@ -1478,46 +1543,120 @@ class MessageObject(CompareFieldMixin):
             tmp_ret.append(p.items)
         return tmp_ret
 
-    def copy(self):
+    def copy(self, clear=True):
+        if clear:
+            tmp_pos_list = None
+        else:
+            tmp_pos_list = self._position_list
+
         return self.__class__(
             self.key,
             self.name,
             description=self.description,
             references=self._references,
-            notes=self.notes,
-            positions=self._position_list)
+            positions=tmp_pos_list)
     __copy__ = copy
 
-    def remove(self, position):
-        found = False
-        while True:
-            try:
-                self.positions.remove(position)
-                found = True
-            except ValueError as err:
-                if found:
-                    break
-                else:
-                    raise err
+    def remove(self, position=None, use_begin=False):
+        if position is None:
+            self.positions.clear()
+        else:
+            remove_indexes = []
+            if use_begin:
+                for index, item in enumerate(self.positions):
+                    if item.begin == position:
+                        remove_indexes.append(index)
+            else:
+                for index, item in enumerate(self.positions):
+                    if position in item:
+                        remove_indexes.append(index)
+            if not remove_indexes:
+                raise IndexError('%s not in list' % position)
 
+        if not self.positions:
+            self.add_pos(0, 0)
         self.position_index.clear()
         self.max_position = None
         for pos in self.positions:
             self._set_pos(pos)
 
-    def key_match(self, key, position=None):
-        if not key == self.key:
-            return False
+    def key_match(self, key=None, position=None):
+        if key is not None:
+            if not key == self.key:
+                return False
         if position is None:
             return True
         return position in self.position_index
 
-    def output(self, 
-               template='{message_key}', 
-               reference_template=None,
-               instance_template=None, 
-               reference_join=', ',
-               instance_join=', '):
+    def get_dict(self,
+                 key=None,
+                 position=None,
+                 keys=None,
+                 reference_format=None,
+                 instance_format=None):
+        """
+         printed output:
+             message_template keywords:
+                 full_key
+                 segment_key
+                 message_key
+                 name
+                 description
+                 status
+                 references (only if reference template != None)
+                 instances (only if instance template != None)
+
+             reference_template keywords:
+                 url
+                 name
+                 description
+                 key
+
+             instance_template keywords:
+                 begin
+                 length
+                 end
+                 note
+                 (+ msg template keywords)
+
+         default templates:
+             message_template = '{message_key}
+         """
+        if not self.key_match(key, position):
+            return None
+
+        tmp_ret = dict(
+            full_key=str(self.key),
+            segment_key=self.key.key1,
+            message_key=self.key.key2,
+            name=self.name,
+            description=self.description,
+            status=self.status.name)
+
+        if keys is None or 'references' in keys:
+            if reference_format is None:
+                raise AttributeError('Reference list cannot be added without reference format')
+            reference_format = make_list_formatter(reference_format)
+            for r in self.references():
+                reference_format(r)
+            tmp_ret['references'] = reference_format.as_str()
+
+        if keys is None or 'instances' in keys:
+            if instance_format is None:
+                raise AttributeError('Instance list cannot be added without instance format')
+            instance_format = make_list_formatter(instance_format)
+            for p in self.positions:
+                instance_format.append(p.get_dict(**tmp_ret))
+            tmp_ret['instances'] = instance_format.as_str()
+
+        return tmp_ret
+
+    def output(self,
+               message_format='{full_key}',
+               key=None,
+               position=None,
+               reference_format=None,
+               instance_format=None):
         """
         printed output:
             message_template keywords:
@@ -1544,35 +1683,24 @@ class MessageObject(CompareFieldMixin):
                 (+ msg template keywords)
 
         default templates:
-            segment_template = '{segment_key}( {messages} )'
             message_template = '{message_key}
         """
 
-        tmp_msg_kwargs = dict(
-            full_key=str(self.key),
-            segment_key=self.key.key1,
-            message_key=self.key.key2,
-            name=self.name,
-            description=self.description,
-            status=self.status.name)
+        tmp_msg_keys = find_keys(message_format)
 
-        if '{references}' in template:
-            if reference_template is None:
-                raise AttributeError('Reference list cannot be added without reference template')
-            tmp_references = []
-            for r in self.references():
-                tmp_references.append(reference_template.format(r))
-            tmp_msg_kwargs['references'] = reference_join.join(tmp_references)
+        tmp_msg_kwargs = self.get_dict(
+            key,
+            position=position,
+            keys=tmp_msg_keys,
+            reference_format=reference_format,
+            instance_format=instance_format)
 
-        if '{instances}' in template:
-            if instance_template is None:
-                raise AttributeError('Instance list cannot be added without reference template')
-            tmp_positions = []
-            for p in self.positions:
-                tmp_positions.append(p.output(instance_template, **tmp_msg_kwargs))
-            tmp_msg_kwargs['instances'] = instance_join.join(tmp_positions)
+        return message_format.format(**tmp_msg_kwargs)
 
-        return template.format(**tmp_msg_kwargs)
+    def __repr__(self):
+        tmp_msg_temp = '{full_key} [{instances}]'
+        tmp_inst_temp = '({begin}, {length})'
+        return self.output(tmp_msg_temp, instance_format=tmp_inst_temp)
 
     def __contains__(self, item):
         return item in self.position_index
@@ -1584,6 +1712,8 @@ class MessageObject(CompareFieldMixin):
         return self.status != STATUS_CODES.ERROR
 
     def __len__(self):
+        if self.max_position is None:
+            return 0
         return len(self.positions)
 
     
@@ -1681,15 +1811,16 @@ class SinpleMessageHelper(object):
         for arg in args:
             if isinstance(arg, str):
                 arg = self._key_handler(arg)
-                tmp_rec = self._message_lookup(arg)
-                tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
+                tmp_rec = self._message_lookup(arg, begin=begin, length=length, note=note, overrides=self._override_definitions)
+                # tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
                 self._add_mo(tmp_rec)
                 return tmp_rec
             elif isinstance(arg, dict):
                 arg['key'] = self._key_handler(arg['key'])
                 self.define(arg)
-                tmp_rec = self._message_lookup(arg['key'])
-                tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
+                # tmp_rec = self._message_lookup(arg['key'])
+                # tmp_rec = MessageObject(begin=begin, length=length, note=note, **tmp_rec)
+                tmp_rec = self._message_lookup(arg['key'], begin=begin, length=length, note=note, overrides=self._override_definitions)
                 self._add_mo(tmp_rec)
                 return tmp_rec
             elif isinstance(arg, self.__class__):
@@ -1701,16 +1832,23 @@ class SinpleMessageHelper(object):
                 return arg
 
     def _add_mo(self, msg_obj):
-        self.last_message = msg_obj
         if self.max_message is None:
             self.max_message = msg_obj
         else:
-            self.max_message = max(self.max_message, msg_obj)
+            if self.max_message.key == msg_obj.key:
+                if len(msg_obj) > 0:
+                    self.max_message.add_pos(msg_obj.positions)
+            else:
+                self.max_message = min(self.max_message, msg_obj)
+        self.last_message = self.max_message
         return msg_obj
 
     def _key_handler(self, key):
         if key is None:
             return key
+        if isinstance(key, str) and '.' not in key:
+            key = self._default_segment + '.' + key
+
         return KeyObj.make_key(key, _key1_default=self._default_segment)
 
     def define(self, *messages):
@@ -1718,19 +1856,21 @@ class SinpleMessageHelper(object):
         add definition:
             PMH.define({'key': 'key',...}, 'key', ...}
         """
-        self._message_lookup.add(*messages, default_segment=self._default_segment)
+        self._message_lookup.update(*messages, default_key1=self._default_segment)
 
     def __contains__(self, item):
+        if self.max_message is None:
+            return item is None
         item = self._key_handler(item)
         return self.max_message.key == item
 
-    def at(self, key, position=None):
+    def at(self, key=None, position=None):
         key = self._key_handler(key)
         if position is None:
             return key in self
         else:
             for item in self:
-                if item == key and item.at(position):
+                if item.key_match(key=key, position=position):
                     return True
         return False
 
@@ -1753,73 +1893,90 @@ class SinpleMessageHelper(object):
         tmp_ret(other)
         return tmp_ret
 
-    def items(self, key=None, position=None):
+    def items(self, key=None, position=None, raises=False):
         """
         list_objects:
             PMH.items() == [msg_obj, msg_pbj, ...]
             for item in PMH
 
         """
-        key = self._key_handler(key)
-        if self.max_message.key_match(key=key, position=position):
-            yield self.max_message
+        found_msg = False
+        if self.max_message is not None:
+            key = self._key_handler(key)
+            if self.max_message.key_match(key=key, position=position):
+                found_msg = True
+                yield self.max_message
+            if not found_msg and raises:
+                if self.max_message.key == key:
+                    raise IndexError('Position %s not found' % position)
+                else:
+                    raise KeyError('Key %s not found' % key)
+        elif raises:
+            raise KeyError('No messages')
+
     __iter__ = items
 
-    def remove(self, key=None, position=None):
+    def remove(self, key=None, position=None, raises=False):
         """
         remove key:
             PMH.remove('key')  # if no position, removes all positions
-            PMH.remove('key', position)  # if position == -1, removes last key
 
             PMH.remove('segment_key.*')  # if msg = * and no position removes all messages in that segment
             PMH.remove('*.msg_key')  # if segment = *, and no position, removes all messages of that key in all segments
-
         """
         key = self._key_handler(key)
-        if key is not None and self.max_message.key != key:
-            return
+        if self.max_message is not None:
+            if self.max_message.key_match(key=key, position=position):
+                if position is not None:
+                    self.max_message.remove(position)
+            elif key is not None:
+                raise KeyError('Key %s not found' % key)
+            elif position is not None:
+                raise IndexError('Position %s not found' % position)
 
-        if position is None:
-            self.max_message = None
-            self.last_message = None
-        else:
-            try:
-                self.max_message.remove(position)
-            except ValueError:
-                pass
-            if len(self.max_message) == 0:
+            if position is None or len(self.max_message) == 0:
                 self.max_message = None
                 self.last_message = None
-    __del__ = remove
 
-    def keys(self, key=None, position=None, as_string=True):
+        elif raises:
+            raise KeyError('No messages')
+
+
+    def keys(self, key=None, position=None, as_string=False):
         """
         list_keys:
             PMH.items() == [key, key, key, ...]
         """
         if as_string:
             for item in self.items(key=key, position=position):
-                yield item.key
+                yield str(item.key)
         else:
             for item in self.items(key=key, position=position):
-                yield str(item.key)
+                yield item.key
 
     def get(self, key=None, position=None):
         """
         get_object:
             PMH.get(key, position)
-                * if no position, gets last message
+                * if no position, gets worst msg
                 * if no args, gets worst msg
+                * if no key, gets worst at that position
         """
-        key = self._key_handler(key)
-        if self.last_message.match_key(key, position=position):
-            return self.last_message
-        else:
+        if self.max_message is None:
             return None
+        else:
+            key = self._key_handler(key)
+            try:
+                return min(self.items(key=key, position=position))
+            except ValueError:
+                return None
 
-    def output(self, key=None, position=None, segment_template=None, message_template=None, reference_template=None,
-               instance_template=None, segment_join=',', message_join=',', reference_join=',', instance_join=',',
-               header=None, footer=None):
+    def output(self, key=None, position=None,
+               message_format='{message_key}',
+               reference_format=None,
+               instance_format=None,
+               segment_format='{segment_key} ({messages})'):
+
         """
         printed output:
             PMH.output(key, template='template', join='join_string', header='', footer='')
@@ -1861,6 +2018,44 @@ class SinpleMessageHelper(object):
             segment_template = '{segment_key}( {messages} )'
             message_template = '{message_key}
         """
+        if segment_format is None and message_format is None:
+            raise AttributeError('You must specify a format for either the segment or messages')
+
+        message_format = make_list_formatter(message_format)
+        segment_format = make_list_formatter(segment_format)
+        reference_format = make_list_formatter(reference_format)
+        instance_format = make_list_formatter(instance_format)
+
+        if segment_format is None:
+            for i in self.items(key, position=position):
+                message_format.append(i.get_dict(keys=message_format.keys,
+                                                 reference_format=reference_format,
+                                                 instance_format=instance_format))
+
+            return str(message_format)
+        else:
+            tmp_segs = {}
+            for i in self.items(key, position=position):
+                if i.key.key1 in tmp_segs:
+                    tmp_segs[i.key.key1].append(i)
+                else:
+                    tmp_segs[i.key.key1] = [i]
+            tmp_seg_list = list(tmp_segs.keys())
+            tmp_seg_list.sort()
+            for s in tmp_seg_list:
+                message_format.clear()
+                for i in tmp_segs[s]:
+                    message_format.append(i.get_dict(keys=message_format.keys,
+                                                     reference_format=reference_format,
+                                                     instance_format=instance_format))
+                segment_format.append(dict(
+                    segment_key=s,
+                    message_count=len(message_format),
+                    messages=message_format.as_str()))
+
+            return segment_format.as_str()
+
+    """
         tmp_ret = []
         if header:
             tmp_ret.append(header)
@@ -1900,23 +2095,29 @@ class SinpleMessageHelper(object):
             tmp_ret.append(footer)
 
         return ''.join(tmp_ret)
-
+        """
     def __bool__(self):
         """
         if PMH:   # returns true if worst code == OK or WARNING
         """
-        return self.max_message.status != STATUS_CODES.ERROR
+        return self.max_message is not None
 
     def __len__(self):
         """
         len(PMH)   #  counts messages
         """
         if self.max_message is None:
-            return 1
-        return 0
+            return 0
+        return 1
 
     def __str__(self):
         return self.output()
+
+    def __repr__(self):
+        return self.output(
+            message_format='{message_key} {instances}',
+            instance_format='({begin}, {length})',
+            segment_format='{segment_key} [{messages}]')
 
 
 class FullMessageHelper(SinpleMessageHelper):
@@ -2413,15 +2614,25 @@ class MessageLookup(WildCardMergeDict):
             if parser_class.messages:
                 self.update(*parser_class.messages)
 
-    def get(self, key, overrides=None, as_dict=False, begin=0, length=0, note=''):
+    def get(self, key, begin=0, length=0, note='', overrides=None, as_dict=False):
+
+        key = self._key_handler(key)
+        if not key.is_exact:
+            raise AttributeError('Can only "GET" exact keys.  (%s passed)' % key)
+        tmp_ret = self[key]
+        tmp_ret['key'] = key
+
+        self._merge_rec(key, from_rec=overrides, to_rec=tmp_ret, tmp_dict=None)
+
         if as_dict:
-            return super(MessageLookup, self).get(key, overrides=overrides)
+            return tmp_ret
         else:
             return MessageObject(begin=begin,
                                  length=length,
                                  note=note,
                                  msg_lookup=self,
-                                 **super(MessageLookup, self).get(key, overrides=overrides))
+                                 **tmp_ret)
+
     __call__ = get
 
 """

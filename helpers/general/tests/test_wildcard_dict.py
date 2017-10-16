@@ -1,9 +1,15 @@
-from unittest import TestCase
+from unittest import TestCase, SkipTest
 from helpers.general.wildcard_dict import *
 from helpers.general import show_compared_items
 from helpers.general.test_helpers import TestCaseCompare, make_msg
 from copy import deepcopy, copy
+from pprint import pformat
 
+
+def print_results(expected, returned):
+    expected = pformat(expected, indent=4)
+    returned = pformat(returned, indent=4)
+    return '\n\nExpected:\n%s\n\nReturned:\n%s' % (expected, returned)
 
 def parse_key_args(*args, as_key1=True):
     if as_key1:
@@ -380,6 +386,45 @@ class TestKeyObj(TestCaseCompare):
         self.assertFalse(kt.is_exact)
         self.assertTrue(kt.is_any)
 
+    def test_def1(self):
+        kt = KeyObj('*', _key1_default='s1')
+        self.assertEqual(str(kt), 's1.*')
+
+        kt = KeyObj('bar', _key1_default='s1')
+        self.assertEqual(str(kt), 's1.BAR')
+
+        kt = KeyObj('k1.*', _key1_default='s1')
+        self.assertEqual(str(kt), 'k1.*')
+
+        kt = KeyObj('*.k2', _key1_default='s1')
+        self.assertEqual(str(kt), '*.K2')
+
+        kt = KeyObj('k1.k2', _key1_default='s1')
+        self.assertEqual(str(kt), 'k1.K2')
+
+        kt = KeyObj('*.*', _key1_default='s1')
+        self.assertEqual(str(kt), '*.*')
+
+    def test_def2(self):
+        kt = KeyObj('*', _key2_default='s1')
+        self.assertEqual(str(kt), '*.S1')
+
+        kt = KeyObj('foo', _key2_default='s1')
+        self.assertEqual(str(kt), 'foo.S1')
+
+        kt = KeyObj('k1.*', _key2_default='s1')
+        self.assertEqual(str(kt), 'k1.*')
+
+        kt = KeyObj('*.k2', _key2_default='s1')
+        self.assertEqual(str(kt), '*.K2')
+
+        kt = KeyObj('k1.k2', _key2_default='s1')
+        self.assertEqual(str(kt), 'k1.K2')
+
+        kt = KeyObj('*.*', _key2_default='s1')
+        self.assertEqual(str(kt), '*.*')
+
+
     def test_mt(self):
         kt = KeyObj()
         self.assertEqual(kt.key1, '*')
@@ -740,10 +785,9 @@ class TestWildcardDictBasic(TestCase):
         LIMIT_LOOP = None
         # LIMIT_LOOP = 'any'
 
-
         if LIMIT_TO is not None or LIMIT_LOOP is not None:
             with self.subTest('LIMITED TEST'):
-                self.fail()
+                raise SkipTest('Limited Test')
 
         for index, req, resp_key, override, data, return_any_data, return_partial_raise, return_full_raise in TESTS:
             if LIMIT_TO is None or LIMIT_TO == index:
@@ -775,11 +819,15 @@ class TestWildcardDictBasic(TestCase):
                         elif not override:
                             with self.subTest('#%s - %s - td[%s]' % (index, req_type, req)):
                                 tmp_ret = td[req]
-                                self.assertEqual(tmp_ret, expected)
+                                if tmp_ret != expected:
+                                    self.fail(print_results(tmp_ret, expected))
+                                # self.assertEqual(tmp_ret, expected)
                         else:
                             with self.subTest('#%s - %s - td.get(%s, OV)' % (index, req_type, req)):
                                 tmp_ret = td.get(req, override)
-                                self.assertEqual(tmp_ret, expected)
+                                if tmp_ret != expected:
+                                    self.fail(print_results(tmp_ret, expected))
+                                # self.assertEqual(tmp_ret, expected)
 
     def test_replace_list(self):
         td = WCMTest()
